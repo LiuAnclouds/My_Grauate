@@ -1,0 +1,1778 @@
+{
+  "document_id": "W9k1d9OIfoW9bDxQKe9cwOGdnPe",
+  "generated_at": "2026-03-22T23:47:13+08:00",
+  "scanned_blocks": 2643,
+  "editable_blocks": 1449,
+  "candidate_updates": 14,
+  "annotation_count": 334,
+  "matched_annotations": 95,
+  "satisfied_annotations": 207,
+  "unmatched_annotations": [
+    {
+      "位置": "GNNPlus 论文深度笔记 @L3",
+      "原文片段": "这份笔记以 [GNNPlus.pdf](article/GNNPlus.pdf) 为依据重写，目标是形成一份适合飞书阅读的自用研究笔记。",
+      "建议动作": "quote_block",
+      "强度等级": "high",
+      "作用说明": "这是收束句或总判断句，更适合在飞书中落为引用块以形成明显停顿。",
+      "Feishu 落地样式": "引用块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L3",
+      "原文片段": "自用研究笔记",
+      "建议动作": "bold",
+      "强度等级": "high",
+      "作用说明": "这段内容已经承担关键判断或关键对比，应在飞书中保持明显强调。",
+      "Feishu 落地样式": "文本粗体"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L4",
+      "原文片段": "写法上尽量保持三点：结构收敛、解释扎实、重点突出。",
+      "建议动作": "quote_block",
+      "强度等级": "high",
+      "作用说明": "这是收束句或总判断句，更适合在飞书中落为引用块以形成明显停顿。",
+      "Feishu 落地样式": "引用块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L4",
+      "原文片段": "结构收敛、解释扎实、重点突出",
+      "建议动作": "bold",
+      "强度等级": "high",
+      "作用说明": "这段内容已经承担关键判断或关键对比，应在飞书中保持明显强调。",
+      "Feishu 落地样式": "文本粗体"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L5",
+      "原文片段": "论文原文要点",
+      "建议动作": "inline_code",
+      "强度等级": "medium",
+      "作用说明": "模型名、字段名或符号名更适合用行内代码样式与普通叙述区分。",
+      "Feishu 落地样式": "行内代码"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L5",
+      "原文片段": "理解性解释",
+      "建议动作": "inline_code",
+      "强度等级": "medium",
+      "作用说明": "模型名、字段名或符号名更适合用行内代码样式与普通叙述区分。",
+      "Feishu 落地样式": "行内代码"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L5",
+      "原文片段": "合理推断",
+      "建议动作": "inline_code",
+      "强度等级": "medium",
+      "作用说明": "模型名、字段名或符号名更适合用行内代码样式与普通叙述区分。",
+      "Feishu 落地样式": "行内代码"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L72",
+      "原文片段": "$G=(V,\\mathcal E,X,E)$ 分别表示节点集合、边集合、节点特征和边特征；",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L73",
+      "原文片段": "$\\phi^l(\\cdot)$ 是第 $l$ 层的消息函数，决定一条边上传什么；",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L74",
+      "原文片段": "$\\mathrm{AGG}^l(\\cdot)$ 负责把来自邻居的消息汇聚成 $m_v^l$；",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L75",
+      "原文片段": "$\\mathrm{UPDATE}^l(\\cdot)$ 把旧表示和聚合结果变成新的节点表示。",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L280",
+      "原文片段": "$V$ 是节点集合；",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L281",
+      "原文片段": "$\\mathcal{E}$ 是边集合；",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L282",
+      "原文片段": "$X$ 是节点特征矩阵；",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L283",
+      "原文片段": "$E$ 是边特征矩阵。",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L295",
+      "原文片段": "$\\phi^l(\\cdot)$ 是第 $l$ 层的消息函数，决定一条边上到底传什么；",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L296",
+      "原文片段": "$m_v^l$ 是聚合后的邻域消息；",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L297",
+      "原文片段": "$h_v^l$ 是更新后的节点表示；",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L298",
+      "原文片段": "$e_{uv}$ 表示边 $(u,v)$ 的关系信息。",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L394",
+      "原文片段": "$x_v^{\\mathrm{RWSE}}$ 是随机游走结构编码；",
+      "建议动作": "bullet_list",
+      "强度等级": "medium",
+      "作用说明": "这是平级观察或平级结论，适合用普通分点提升扫描效率。",
+      "Feishu 落地样式": "无序列表"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L49",
+      "原文片段": "| 概念 | 作用 | 在本文中的角色 | | --- | --- | --- | | graph-level task | 一张图对应一个预测目标 | 论文标题和主体叙述的任务边界 | | node-level task | 节点对应预测目标 | 用来解释标题与部分 benchmark 之间的差异 | | readout / pooling | 把节点表示汇总成图表示 | 决定 graph prediction 如何形成 | | message passing | 邻域聚合再更新节点表示 | classic GNN 和 GNN+ 的共同骨架 | | edge feature | 边携带的关系语义 | 决定消息是否包含关系信息 | | PE / RWSE | 结构位置编码 | 提供节点的结构身份 |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L103",
+      "原文片段": "| 模型 | 核心机制 | 主要优势 | 主要短板 | | --- | --- | --- | --- | | GCN | 归一化邻域聚合 | 结构简单、训练稳定、计算便宜 | 深层时容易过平滑 | | GIN | 邻域求和后接强非线性 MLP | 结构判别能力更强 | 若 block 设计不完整，训练稳定性和泛化容易受限 | | GatedGCN | 用门控为不同邻居分配不同权重 | 邻域建模更自适应 | 架构更复杂，但仍属于 classic GNN |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L138",
+      "原文片段": "| 模型 | 代表的设计倾向 | 在本文中的作用 | | --- | --- | --- | | GCN | 稳定、平滑、低成本传播 | 检验最基础 classic GNN 是否被低估 | | GIN | 聚合后强表达变换 | 检验表达型 classic GNN 的潜力 | | GatedGCN | 自适应邻域加权 | 检验较强 message passing 模型的上限 |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L148",
+      "原文片段": "| 背景词 | 含义 | 与本文的关系 | | --- | --- | --- | | over-smoothing | 层数加深后节点表示逐渐趋同 | classic GNN 常被批评“深了就不行” | | over-squashing | 远距离信息在传播中被压缩进有限维表示 | GT 被认为更擅长处理长程依赖的理论背景之一 | | expressiveness | 区分不同结构模式的能力 | 用来解释 GIN、GatedGCN 等模型为何更强 |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 3. 增强前提 @L206",
+      "原文片段": "| 模块 | 作用 | 在 block 中的位置 | | --- | --- | --- | | PE | 提供结构身份信息 | 输入端 | | Edge | 把关系语义写入消息 | message passing 内部 | | Normalization | 控制层间分布漂移 | 传播输出之后 | | Dropout | 减少过拟合和共适应 | 激活之后 | | Residual | 稳定深层传播与梯度流 | 主分支与旧表示相加 | | FFN | 强化逐层特征加工 | block 末端 |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 三、Question&Study > 2. 核心主张 @L245",
+      "原文片段": "| 层面 | 内容 | 性质判断 | | --- | --- | --- | | 方法层 | 统一构造 GNN+ block | 系统装配创新，不是新算子创新 | | 实证层 | 在 14 个 benchmark 上重评估 GCN / GIN / GatedGCN | 本文最强的贡献之一 | | 评测层 | 对齐 GraphGPS 风格协议、重训 GT、报告均值方差与速度 | 提高了结论的公平性和可信度 |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L316",
+      "原文片段": "| 层次 | 本文比较的对象 | | --- | --- | | 传播核心 | GCN / GIN / GatedGCN | | block 配置 | 是否接入 Edge、PE、Norm、Residual、Dropout、FFN | | 任务头 | graph head 或 node head |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L356",
+      "原文片段": "| 模型 | 代表的设计倾向 | 在本文中的作用 | | --- | --- | --- | | GCN | 稳定、平滑、低成本传播 | 检验最基础 classic GNN 是否被低估 | | GIN | 聚合后强表达变换 | 检验表达型 classic GNN 的潜力 | | GatedGCN | 自适应邻域加权 | 检验较强 message passing 模型的上限 |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L451",
+      "原文片段": "| 模块组 | 主要补什么 | 为什么在本文里重要 | | --- | --- | --- | | PE + Edge | 结构身份与关系语义 | 让消息不再只有节点属性 | | BN + Residual + Dropout | 深层训练稳定性与泛化 | 让 classic GNN 具备 modern block 的可训练性 | | FFN | 逐层特征深加工 | 让每一层不只会传播，还会加工表示 |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L473",
+      "原文片段": "| benchmark 家族 | 数据集 | #graphs | Avg. #nodes | Avg. #edges | prediction level | 指标 | 说明 | | --- | --- | ---: | ---: | ---: | --- | --- | --- | | GNN Benchmark | ZINC | 12,000 | 23.2 | 24.9 | graph regression | MAE | 分子图，预测 constrained solubility | | GNN Benchmark | MNIST | 70,000 | 70.6 | 564.5 | graph classification | Accuracy | 图像超像素图，10 类分类 | | GNN Benchmark | CIFAR10 | 60,000 | 117.6 | 941.1 | graph classification | Accuracy | 图像超像素图，10 类分类 | | GNN Benchmark | PATTERN | 14,000 | 118.9 | 3,039.3 | inductive node classification | Accuracy | SBM 合成图，子图模式识别 | | GNN Benchmark | CLUSTER | 12,000 | 117.2 | 2,150.9 | inductive node classification | Accuracy | SBM 合成图，cluster ID 推断 | | LRGB | Peptides-func | 15,535 | 150.9 | 307.3 | graph classification | Avg. Precision | 肽分子图，10 个功能标签 | | LRGB | Peptides-struct | 15,535 | 150.9 | 307.3 | graph regression | MAE | 肽分子图，11 个 3D 结构属性 | | LRGB | PascalVOC-SP | 11,355 | 479.4 | 2,710.5 | inductive node classification | F1 score | Pascal VOC 超像素图 | | LRGB | COCO-SP | 123,286 | 476.9 | 2,693.7 | inductive node classification | F1 score | COCO 超像素图 | | LRGB | MalNet-Tiny | 5,000 | 1,410.3 | 2,859.9 | graph classification | Accuracy | Android FCG，预测软件类型 | | OGB | ogbg-molhiv | 41,127 | 25.5 | 27.5 | graph classification | AUROC | HIV inhibition 二分类 | | OGB | ogbg-molpcba | 437,929 | 26.0 | 28.1 | graph classification | Avg. Precision | 128-task 分子性质预测 | | OGB | ogbg-ppa | 158,100 | 243.4 | 2,266.1 | graph classification | Accuracy | 蛋白关联网络，37 类分类 | | OGB | ogbg-code2 | 452,741 | 125.2 | 124.2 | graph classification | F1 score | Python AST，预测函数名前 5 个 subtokens |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L497",
+      "原文片段": "| baseline 家族 | 代表对象 | 在本文中的作用 | | --- | --- | --- | | classic GNN | GCN / GIN / GatedGCN 及其 GNN+ 版本 | 检验 classic GNN 在完整 block 下的上限 | | GT 与相关强模型 | GT / SAN / GraphGPS / Graphormer / Exphormer / GRIT 等 | 检验与当时主流强基线的相对位置 | | 附录额外比较对象 | LDP / HRN / MTGCN / CO-GNN 等 | 检验 GNN+ 是否只是“换个对手就赢” |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L505",
+      "原文片段": "| 项目 | 设置 | | --- | --- | | 参考协议 | 主要跟随 GraphGPS 的训练和搜索空间 | | 优化器 | AdamW | | 学习率搜索 | {0.0001, 0.0005, 0.001} | | Dropout 搜索 | {0.05, 0.1, 0.15, 0.2, 0.3} | | 深度搜索 | 3 到 20 层 | | 二值模块搜索 | Edge / BN / Residual / FFN / RWSE 是否启用 | | 结果统计 | 5 个随机种子，报告均值和标准差 | | 运行环境 | 8 × RTX 3090，PyG 实现 |",
+      "建议动作": "table_candidate",
+      "强度等级": "high",
+      "作用说明": "这是连续管道表格，应优先转换为真实 Feishu 表格，避免继续依赖文本对齐。",
+      "Feishu 落地样式": "真实表格块"
+    }
+  ],
+  "pending_annotations": [
+    {
+      "位置": "GNNPlus 论文深度笔记 @L3",
+      "期望动作": "quote_block",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "high",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L3",
+      "期望动作": "bold",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "high",
+      "证据": "Annotation excerpt could not be located in the current Feishu block tree.",
+      "修复建议": "Check whether the target sentence was manually rewritten or moved, then regenerate annotations.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L3",
+      "期望动作": "inline_code",
+      "当前飞书状态": "text: | 本地论文 | [GNNPlus.pdf](article/GNNPlus.pdf) |",
+      "问题类型": "style_not_applied",
+      "严重等级": "medium",
+      "证据": "Matched excerpt still needs `inline_code` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L4",
+      "期望动作": "quote_block",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "high",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L4",
+      "期望动作": "bold",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "high",
+      "证据": "Annotation excerpt could not be located in the current Feishu block tree.",
+      "修复建议": "Check whether the target sentence was manually rewritten or moved, then regenerate annotations.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L5",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 内容",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L5",
+      "期望动作": "inline_code",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Annotation excerpt could not be located in the current Feishu block tree.",
+      "修复建议": "Check whether the target sentence was manually rewritten or moved, then regenerate annotations.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L5",
+      "期望动作": "inline_code",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Annotation excerpt could not be located in the current Feishu block tree.",
+      "修复建议": "Check whether the target sentence was manually rewritten or moved, then regenerate annotations.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 @L5",
+      "期望动作": "inline_code",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Annotation excerpt could not be located in the current Feishu block tree.",
+      "修复建议": "Check whether the target sentence was manually rewritten or moved, then regenerate annotations.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 一、前言 > 1. 论文定位 @L25",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: 这篇论文更适合放在 baseline 纠偏、系统重评估、工程增强整合 这一类工作里理解，而不是当作新传播算子论文来读。它",
+      "问题类型": "style_not_applied",
+      "严重等级": "high",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 一、前言 > 1. 论文定位 @L29",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 本文提出的不是新的 GNN 范式，而是一种更完整的 classic GNN 参与比较方式，并据此重新评估 classic",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 一、前言 > 2. 阅读主线 @L35",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 在当前主流 graph benchmark 上，classic GNN 长期显得不如 GT，并不一定是因为 messag",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 一、前言 > 2. 阅读主线 @L39",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 问题主线：社区为什么会默认 classic GNN 弱于 GT，这个默认认识是否建立在对称比较上。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 一、前言 > 2. 阅读主线 @L40",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 方法主线：GNN+ 究竟补了哪些部件，使 classic GNN 从“传播层”升级为“完整 block”。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 一、前言 > 2. 阅读主线 @L41",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 证据主线：主文结果、消融、敏感性分析和附录补充，是否真的足以支撑“classic GNN 可以成为强 baselin",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L72",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L73",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L74",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L75",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L95",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 论文真正比较的是 classic GNN block 在一组图学习 benchmark 上是否被低估。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L97",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: 这一点很重要，因为它决定了本文的阅读重心不能只盯在某一个数据集类型上，而要看统一 block 在不同任务头下的表现。",
+      "问题类型": "style_not_applied",
+      "严重等级": "medium",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L126",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • GCN 强调 稳定传播。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L127",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • GIN 强调 聚合后的强表达变换。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L128",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • GatedGCN 强调 邻居贡献并不等权。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L132",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: GCN",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L133",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • GIN 把重心从“传播是否平滑”转到了“聚合后能不能做强判别”。它先尽量保留邻域信息总和，再交给 MLP 做非线性加",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L133",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • GIN 把重心从“传播是否平滑”转到了“聚合后能不能做强判别”。它先尽量保留邻域信息总和，再交给 MLP 做非线性加",
+      "问题类型": "style_not_applied",
+      "严重等级": "medium",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L134",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: GatedGCN",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 3. 增强前提 @L168",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: 这篇论文最有价值的地方，不是提出了一个全新的图神经网络算子，而是系统说明了：在 graph benchmark 上，cl",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 3. 增强前提 @L169",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: 这篇论文最有价值的地方，不是提出了一个全新的图神经网络算子，而是系统说明了：在 graph benchmark 上，cl",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 3. 增强前提 @L171",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: 这篇论文最有价值的地方，不是提出了一个全新的图神经网络算子，而是系统说明了：在 graph benchmark 上，cl",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 3. 增强前提 @L192",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: 结构位置编码",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 3. 增强前提 @L193",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: classic GNN",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 三、Question&Study > 2. 核心主张 @L239",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 在 graph-level 相关 benchmark 上，如果 classic GNN 也被构造成完整、现代、可公平比较",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L280",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L281",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L282",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L283",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L295",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L296",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L297",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L298",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L368",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: 这篇论文的方法论创新有一个非常明确的边界：它不是在发明新的 message passing 核心，而是在把 classi",
+      "问题类型": "style_not_applied",
+      "严重等级": "high",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L394",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "missing_block",
+      "问题类型": "target_not_found",
+      "严重等级": "medium",
+      "证据": "Expected list or quote block is no longer stably matched in the document.",
+      "修复建议": "Check whether this paragraph was split or merged after import.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L395",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: PE",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L396",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: message passing",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L397",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: Residual",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L401",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 输入端先补结构身份，传播阶段显式纳入关系信息，传播后再做稳定化、残差连接和逐层特征加工。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L430",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 节点只有属性、没有结构身份",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L431",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 消息只有邻居特征、没有关系语义",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L461",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 传播核心不重写",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L462",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • block 设计重构",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L463",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 比较协议重评估",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L520",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 直接拿文献数字横比通常不公平。不同论文的搜索空间、训练轮数、硬件、随机种子、预处理和 stopping criter",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L521",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 如果只重调 classic GNN，不重调 GT，结论仍然会不稳。因为那样只能说明“GNN 被调强了”，还不能说明“",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L521",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 如果只重调 classic GNN，不重调 GT，结论仍然会不稳。因为那样只能说明“GNN 被调强了”，还不能说明“",
+      "问题类型": "style_not_applied",
+      "严重等级": "medium",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L522",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 如果重训结果反而不如原论文数字，保留更强原始数字，会让本文结论更保守。这意味着作者并不是刻意压低对手来抬高 GNN+",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L526",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 覆盖面：14 个数据集横跨三类 benchmark，而不是只挑容易赢的场景。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L527",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 对称性：classic GNN 和 GT 被放进相近的搜索空间里比较。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L528",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 完整性：不仅报准确率，也报均值方差和训练速度。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L532",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: 如果把这一节压成一句话，它真正要解决的是：后面所有“GNN+ 很强”的结果，到底是模型本身强，还是比较方式终于像样了。",
+      "问题类型": "style_not_applied",
+      "严重等级": "high",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L540",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 对应主文 Table 2，p.5。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L576",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 三类 classic GNN 都出现了结构性提升，不是个别数据集上的偶然变好。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L577",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • GCN 和 GIN 的提升幅度尤其大，说明过去很多看起来像“范式差距”的现象，实际上混入了大量配置差距。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L578",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • GatedGCN+ 在 MNIST、CIFAR10、PATTERN、CLUSTER 上都进入很靠前的位置，说明 cl",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L579",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 这一组结果最能支撑 baseline 纠偏这一主张，即 classic GNN 的弱势并不一定来自 message ",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L579",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 这一组结果最能支撑 baseline 纠偏这一主张，即 classic GNN 的弱势并不一定来自 message ",
+      "问题类型": "style_not_applied",
+      "严重等级": "high",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L579",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 这一组结果最能支撑 baseline 纠偏这一主张，即 classic GNN 的弱势并不一定来自 message ",
+      "问题类型": "style_not_applied",
+      "严重等级": "high",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L580",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 但这张表主要说明的是中小规模 benchmark 上的比较问题，还不能推出 classic GNN 对 GT 的优势",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L580",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 但这张表主要说明的是中小规模 benchmark 上的比较问题，还不能推出 classic GNN 对 GT 的优势",
+      "问题类型": "style_not_applied",
+      "严重等级": "medium",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L582",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: classic GNN",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.2 Table 3：LRGB @L586",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 对应主文 Table 3，p.6。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.2 Table 3：LRGB @L620",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • GCN+ 在 Peptides-func 和 Peptides-struct 上拿到第一。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.2 Table 3：LRGB @L621",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • GatedGCN+ 在 MalNet-Tiny 上拿到第一，在 PascalVOC-SP 和 COCO-SP 上也明",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.2 Table 3：LRGB @L622",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 这说明增强后的 message-passing GNN 并没有在长程依赖 benchmark 上天然掉队。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.2 Table 3：LRGB @L623",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 这组结果最重要的价值，是打破“只要是长程依赖任务，GT 就一定更强”的经验定势。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.2 Table 3：LRGB @L624",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 但它仍不能推出 classic GNN 已经在理论上解决了 over-squashing 或长程依赖问题，它首先是一",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.2 Table 3：LRGB @L624",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 但它仍不能推出 classic GNN 已经在理论上解决了 over-squashing 或长程依赖问题，它首先是一",
+      "问题类型": "style_not_applied",
+      "严重等级": "medium",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.2 Table 3：LRGB @L624",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 但它仍不能推出 classic GNN 已经在理论上解决了 over-squashing 或长程依赖问题，它首先是一",
+      "问题类型": "style_not_applied",
+      "严重等级": "medium",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.3 Table 4：OGB @L630",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 对应主文 Table 4，p.7。带 † 的模型使用了额外预训练数据，仅供参考，不参与同口径排序。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.3 Table 4：OGB @L659",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • GatedGCN+ 在 ogbg-molpcba、ogbg-ppa 上拿到很强结果，在 ogbg-molhiv 上也",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.3 Table 4：OGB @L660",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 效率优势非常直接：相较 GraphGPS，GCN+ 在 ogbg-molhiv 上约是 16s vs 96s，在 o",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.3 Table 4：OGB @L661",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 这张表最能支撑“classic GNN 依然具有很高性能-效率比”这一现实判断。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.3 Table 4：OGB @L661",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 这张表最能支撑“classic GNN 依然具有很高性能-效率比”这一现实判断。",
+      "问题类型": "style_not_applied",
+      "严重等级": "high",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.3 Table 4：OGB @L661",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 这张表最能支撑“classic GNN 依然具有很高性能-效率比”这一现实判断。",
+      "问题类型": "style_not_applied",
+      "严重等级": "high",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.3 Table 4：OGB @L662",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 如果只看实际工程可用性，它甚至比 Table 2 和 Table 3 更重要。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.3 Table 4：OGB @L663",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 但它仍不能说明 classic GNN 在所有大规模任务上都会稳定优于 GT，也不能说明无需预训练或结构先验就能全面",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.3 Table 4：OGB @L663",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 但它仍不能说明 classic GNN 在所有大规模任务上都会稳定优于 GT，也不能说明无需预训练或结构先验就能全面",
+      "问题类型": "style_not_applied",
+      "严重等级": "medium",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "四、Work > 4. 主结果 > 4.3 Table 4：OGB @L663",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 但它仍不能说明 classic GNN 在所有大规模任务上都会稳定优于 GT，也不能说明无需预训练或结构先验就能全面",
+      "问题类型": "style_not_applied",
+      "严重等级": "medium",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.1 Table 5：GNN Benchmark 消融 @L673",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 对应主文 Table 5，p.7。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.1 Table 5：GNN Benchmark 消融 @L701",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • Norm 和 Residual 在一些数据集上几乎是“有它才训得起来”的级别。最典型的是 CLUSTER：对 GCN",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.1 Table 5：GNN Benchmark 消融 @L702",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • FFN 对 GIN+ 尤其关键。MNIST 上去掉 FFN 后，GIN+ 从 98.285 直接掉到 11.350；",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.1 Table 5：GNN Benchmark 消融 @L703",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • PE 和 Edge 呈现出比较强的任务条件性。ZINC 上 GatedGCN+ 去掉 PE 从 0.077 恶化到 ",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L709",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 对应主文 Table 6，p.8。",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L737",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • Edge 在分子图、蛋白图和超像素图里是高敏感模块。最极端的例子是 ogbg-ppa：去掉 Edge 后，GCN+ ",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L738",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • Normalization 在大规模数据集上更重要。在 CIFAR10、COCO-SP 和若干 OGB 数据集上，去",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L739",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • Dropout 和 Residual 共同决定了深层训练是否稳定。最佳 dropout 往往集中在 0.1 ~ 0.",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L740",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • FFN 和 PE 都具有明显的模型与规模条件性。FFN 对 GCN+ 和 GIN+ 更关键，而 PE 在中小规模结构",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L755",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 深度敏感性与 dropout 敏感性（Figure 3 / Figure 4）：Figure 3 显示 GNN+ 在",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L756",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 固定配置结果（Appendix Table 14）：GNN+(fixed) 在 9 个数据集上的结果与 best t",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L757",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 额外 baseline：快线性图分类模型（Appendix Table 15 / Table 16）：GCN+ 在大",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L758",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 额外 baseline：缓解 over-smoothing / over-squashing 的专门模型（Appen",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 1. 核心结论 @L770",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: 在当前主流 graph benchmark 上，经过系统增强的 classic GNN 可以匹配甚至超过当时的 SOTA",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 2. 主要判断 @L776",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • classic GNN 在 graph benchmark 上长期存在被低估的情况。这个“被低估”并不是抽象评价，而",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 2. 主要判断 @L777",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • GT 的优势并不是无条件、绝对性的。尤其在 LRGB 和 OGB 上，增强后的 classic GNN 不仅没有天然",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 2. 主要判断 @L778",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 在很多图任务中，系统增强比单纯追逐更复杂的新范式更重要。本文最有说服力的地方，不是提出了某个神奇模块，而是说明“完整",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 3. 可借鉴点 @L784",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 先把 baseline 做完整，再讨论范式优劣。 这篇论文最值得借鉴的不是某个单模块，而是一种比较原则：如果 bas",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 3. 可借鉴点 @L785",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 把图模型看成完整 block，而不是只看传播核。 传播规则当然重要，但 PE、Edge、Norm、Residual、",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 3. 可借鉴点 @L786",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 结果分析要同时看性能、稳定性和效率。 本文最有说服力的地方之一，是没有把比较收缩成单一精度数字，而是连同均值方差、训",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 4. 局限与改进 @L799",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 理论解释还不够闭合。 现在主结论更多仍然建立在系统实证而不是严格理论解释上，尤其是对 long-range depe",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 4. 局限与改进 @L800",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 任务范围仍然有限。 当前 benchmark 虽然已经很广，但仍然主要集中在标准图学习数据集上，是否能稳定外推到真实",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 4. 局限与改进 @L800",
+      "期望动作": "highlight_color",
+      "当前飞书状态": "text: • 任务范围仍然有限。 当前 benchmark 虽然已经很广，但仍然主要集中在标准图学习数据集上，是否能稳定外推到真实",
+      "问题类型": "style_not_applied",
+      "严重等级": "medium",
+      "证据": "Matched excerpt still needs `highlight_color` styling in Feishu.",
+      "修复建议": "Apply the missing inline emphasis at the matched location and rerun preview.",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 4. 局限与改进 @L801",
+      "期望动作": "bullet_list",
+      "当前飞书状态": "text: • 组件交互还有进一步细化空间。 论文已经说明不同模块有分工，但“哪类任务最依赖哪组组件、组件之间是否存在稳定组合规律”",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "medium",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 五、Conclusion > 5. 全文概括 @L811",
+      "期望动作": "quote_block",
+      "当前飞书状态": "text: GNN+ 的真正贡献不是发明新传播核，而是把 classic GNN 以完整 modern block 的形态重新放回公",
+      "问题类型": "block_type_mismatch",
+      "严重等级": "high",
+      "证据": "The matched block is still plain text instead of the expected list or quote block.",
+      "修复建议": "Current script records this for review; block-type conversion may still need manual follow-up.",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 一、前言 > 1. 论文定位 @L11",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "native_table=1x2, pipe_rows=11",
+      "问题类型": "table_rebuild_required",
+      "严重等级": "high",
+      "证据": "检测到残余 Markdown 管道表格，或只命中了部分原生表格。",
+      "修复建议": "删除当前位置的残余表格文本并重建为原生 Feishu table block。",
+      "可否自动修复": "鏄?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 1. 基本任务 @L49",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L103",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L138",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 2. 基线模型 @L148",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 二、前备知识 > 3. 增强前提 @L206",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 三、Question&Study > 2. 核心主张 @L245",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L316",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 1. 规则 @L356",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 2. 方法论创新 @L451",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L473",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L497",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    },
+    {
+      "位置": "GNNPlus 论文深度笔记 > 四、Work > 3. 实验设计 @L505",
+      "期望动作": "table_candidate",
+      "当前飞书状态": "section_not_found",
+      "问题类型": "location_miss",
+      "严重等级": "high",
+      "证据": "Feishu 块树中没有找到与该位置路径一致的标题范围。",
+      "修复建议": "检查标题路径是否漂移，确认该表格是否被移动到别处。",
+      "可否自动修复": "鍚?"
+    }
+  ],
+  "action_counts": {
+    "annotation-inline_code": 1,
+    "annotation-highlight_color": 12,
+    "table-candidate-rebuild": 1
+  },
+  "skip_counts": {},
+  "table_notes": [
+    "Preserved native table at 四、Work > 4. 主结果 > 4.1 Table 2：GNN Benchmark @L542.",
+    "Preserved native table at 四、Work > 4. 主结果 > 4.2 Table 3：LRGB @L588.",
+    "Preserved native table at 四、Work > 4. 主结果 > 4.3 Table 4：OGB @L632.",
+    "Preserved native table at 四、Work > 5. 补充分析 > 5.1 Table 5：GNN Benchmark 消融 @L675.",
+    "Preserved native table at 四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L711.",
+    "Preserved native table at 四、Work > 5. 补充分析 > 5.2 Table 6：LRGB 与 OGB 消融 @L744."
+  ],
+  "candidates": [
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "VJpMdVnFEowPePxhiDbcmy1xnfA",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-inline_code"
+      ],
+      "before": "| 本地论文 | [GNNPlus.pdf](article/GNNPlus.pdf) |",
+      "after": "| 本地论文 | [GNNPlus.pdf](article/GNNPlus.pdf) |",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "GWwwdsEqVo8vlExLSspcPjzdnTg",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "这篇论文更适合放在 baseline 纠偏、系统重评估、工程增强整合 这一类工作里理解，而不是当作新传播算子论文来读。它真正要解决的问题不是“再发明一个更复杂的图模型”，而是重新回答一个更基础的...",
+      "after": "这篇论文更适合放在 baseline 纠偏、系统重评估、工程增强整合 这一类工作里理解，而不是当作新传播算子论文来读。它真正要解决的问题不是“再发明一个更复杂的图模型”，而是重新回答一个更基础的...",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "LOfSd1AGeoFYSKxFLeGcX13JnSc",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "这一点很重要，因为它决定了本文的阅读重心不能只盯在某一个数据集类型上，而要看统一 block 在不同任务头下的表现。",
+      "after": "这一点很重要，因为它决定了本文的阅读重心不能只盯在某一个数据集类型上，而要看统一 block 在不同任务头下的表现。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "TdUHdpgUxohkZbxJrDJcSkuenVc",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "• GIN 把重心从“传播是否平滑”转到了“聚合后能不能做强判别”。它先尽量保留邻域信息总和，再交给 MLP 做非线性加工，所以常被视为表达能力更强的 classic GNN。",
+      "after": "• GIN 把重心从“传播是否平滑”转到了“聚合后能不能做强判别”。它先尽量保留邻域信息总和，再交给 MLP 做非线性加工，所以常被视为表达能力更强的 classic GNN。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "DI2wdunG4ostZ8xLKbicn2Kgnbb",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "这篇论文的方法论创新有一个非常明确的边界：它不是在发明新的 message passing 核心，而是在把 classic GNN 升级成完整 modern graph block。",
+      "after": "这篇论文的方法论创新有一个非常明确的边界：它不是在发明新的 message passing 核心，而是在把 classic GNN 升级成完整 modern graph block。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "D50mdqqkaomxMBxEGVhcw40dnLb",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "• 如果只重调 classic GNN，不重调 GT，结论仍然会不稳。因为那样只能说明“GNN 被调强了”，还不能说明“比较本身公平了”。",
+      "after": "• 如果只重调 classic GNN，不重调 GT，结论仍然会不稳。因为那样只能说明“GNN 被调强了”，还不能说明“比较本身公平了”。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "HEbHdxducoseS6xRdINcMVSEnbc",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "如果把这一节压成一句话，它真正要解决的是：后面所有“GNN+ 很强”的结果，到底是模型本身强，还是比较方式终于像样了。",
+      "after": "如果把这一节压成一句话，它真正要解决的是：后面所有“GNN+ 很强”的结果，到底是模型本身强，还是比较方式终于像样了。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "Fojtd1BccosTMBxv71ocx0LHnjh",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "• 这一组结果最能支撑 baseline 纠偏这一主张，即 classic GNN 的弱势并不一定来自 message passing 本身，而可能来自“没有被完整增强”。",
+      "after": "• 这一组结果最能支撑 baseline 纠偏这一主张，即 classic GNN 的弱势并不一定来自 message passing 本身，而可能来自“没有被完整增强”。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "K18yd8nD4oRHlexHroscbhLvnwd",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "• 但这张表主要说明的是中小规模 benchmark 上的比较问题，还不能推出 classic GNN 对 GT 的优势具有普适性。",
+      "after": "• 但这张表主要说明的是中小规模 benchmark 上的比较问题，还不能推出 classic GNN 对 GT 的优势具有普适性。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "LGHRdKLcqo1utlxXtcVcg3sQnmc",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "• 但它仍不能推出 classic GNN 已经在理论上解决了 over-squashing 或长程依赖问题，它首先是一条经验结论。",
+      "after": "• 但它仍不能推出 classic GNN 已经在理论上解决了 over-squashing 或长程依赖问题，它首先是一条经验结论。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "LLkfde5FMo9MBhx2vzeckphpnsb",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "• 这张表最能支撑“classic GNN 依然具有很高性能-效率比”这一现实判断。",
+      "after": "• 这张表最能支撑“classic GNN 依然具有很高性能-效率比”这一现实判断。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "R3nBdOAeZoMD5oxU9vtcvyY4nCg",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "• 但它仍不能说明 classic GNN 在所有大规模任务上都会稳定优于 GT，也不能说明无需预训练或结构先验就能全面替代 GT。",
+      "after": "• 但它仍不能说明 classic GNN 在所有大规模任务上都会稳定优于 GT，也不能说明无需预训练或结构先验就能全面替代 GT。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "update_text_elements",
+      "block_id": "U6UidJ32toB1NuxdckMcxzPgn8g",
+      "block_type": 2,
+      "block_type_name": "text",
+      "actions": [
+        "annotation-highlight_color"
+      ],
+      "before": "• 任务范围仍然有限。 当前 benchmark 虽然已经很广，但仍然主要集中在标准图学习数据集上，是否能稳定外推到真实工业图、异构图、动态图等场景，还不能直接下结论。",
+      "after": "• 任务范围仍然有限。 当前 benchmark 虽然已经很广，但仍然主要集中在标准图学习数据集上，是否能稳定外推到真实工业图、异构图、动态图等场景，还不能直接下结论。",
+      "meta": {}
+    },
+    {
+      "proposal_type": "replace_pipe_table",
+      "block_id": "W9k1d9OIfoW9bDxQKe9cwOGdnPe",
+      "block_type": 1,
+      "block_type_name": "page",
+      "actions": [
+        "table-candidate-rebuild"
+      ],
+      "before": "table | | 论文标题 | Can Classic GNNs Be Strong Baselines for Graph-level Tasks? | | | 副标题 | Simple Architectures Meet Excellence | | | 作者 | Yuankai Luo, Lei Shi, Xiao-Ming Wu | | | 单位 | Beihang University；The Hong Kong Polytechnic University |",
+      "after": "native table 12x2",
+      "meta": {
+        "location": "GNNPlus 论文深度笔记 > 一、前言 > 1. 论文定位 @L11",
+        "start_index": 2,
+        "end_index": 14,
+        "rows": [
+          [
+            "项目",
+            "内容"
+          ],
+          [
+            "论文标题",
+            "Can Classic GNNs Be Strong Baselines for Graph-level Tasks?"
+          ],
+          [
+            "副标题",
+            "Simple Architectures Meet Excellence"
+          ],
+          [
+            "作者",
+            "Yuankai Luo, Lei Shi, Xiao-Ming Wu"
+          ],
+          [
+            "单位",
+            "Beihang University；The Hong Kong Polytechnic University"
+          ],
+          [
+            "会议信息",
+            "ICML 2025, PMLR 267"
+          ],
+          [
+            "arXiv",
+            "arXiv:2502.09263"
+          ],
+          [
+            "本地论文",
+            "GNNPlus.pdf"
+          ],
+          [
+            "项目代码",
+            "LUOyk1999/GNNPlus"
+          ],
+          [
+            "实现框架",
+            "PyG"
+          ],
+          [
+            "实验硬件",
+            "单工作站，8 张 RTX 3090"
+          ],
+          [
+            "代码许可证",
+            "MIT License"
+          ]
+        ]
+      }
+    }
+  ]
+}

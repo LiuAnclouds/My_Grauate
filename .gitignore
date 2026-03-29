@@ -1,0 +1,9 @@
+/other
+/.claude
+/.idea
+/experiment/dataset
+/experiment/outputs
+/article_code/GeneralDyG-main/dataset
+/article_code/GeneralDyG-main/model
+/.git
+!.gitignore
