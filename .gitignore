@@ -5,5 +5,15 @@
 /experiment/outputs
 /article_code/GeneralDyG-main/dataset
 /article_code/GeneralDyG-main/model
+__pycache__/
+*.pyc
+*.pyo
+article/__pycache__/
+article/feishu-backups/
+article/*.feishu-*.json
+article/*.feishu-*.md
+article/*.format-annotations.json
+article/*.format-annotations.md
+/*.zip
 /.git
 !.gitignore

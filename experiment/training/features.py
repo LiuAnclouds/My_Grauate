@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from tqdm.auto import tqdm
 
 from experiment.eda.analysis import compute_degree_arrays, compute_temporal_core
 from experiment.eda.data_loader import PhaseData, load_phase
@@ -398,36 +399,47 @@ def build_hybrid_feature_normalizer(
     z_means: list[float] = []
     z_stds: list[float] = []
 
-    for feature_idx, feature_name in enumerate(feature_names):
-        mode = _feature_normalization_type(feature_name)
-        column = x_train[:, feature_idx].astype(np.float32, copy=False)
-        if mode == "identity":
-            continue
-        if mode == "raw":
-            valid = column[column != -1.0]
-            if valid.size == 0:
-                median = 0.0
-                mean = 0.0
-                std = 1.0
-            else:
-                median = float(np.median(valid))
-                filled = np.where(column == -1.0, median, column)
-                mean = float(np.mean(filled))
-                std = _stable_std(float(np.std(filled)))
-            raw_indices.append(feature_idx)
-            raw_medians.append(median)
-            raw_means.append(mean)
-            raw_stds.append(std)
-            continue
-        if mode == "log":
-            transformed = np.log1p(np.clip(column, 0.0, None))
-            log_indices.append(feature_idx)
-            log_means.append(float(np.mean(transformed)))
-            log_stds.append(_stable_std(float(np.std(transformed))))
-            continue
-        z_indices.append(feature_idx)
-        z_means.append(float(np.mean(column)))
-        z_stds.append(_stable_std(float(np.std(column))))
+    with tqdm(
+        total=len(feature_names),
+        desc=f"feature_norm:{phase}",
+        unit="feat",
+        dynamic_ncols=True,
+        leave=False,
+    ) as normalizer_pbar:
+        for feature_idx, feature_name in enumerate(feature_names):
+            mode = _feature_normalization_type(feature_name)
+            column = x_train[:, feature_idx].astype(np.float32, copy=False)
+            if mode == "identity":
+                normalizer_pbar.update(1)
+                continue
+            if mode == "raw":
+                valid = column[column != -1.0]
+                if valid.size == 0:
+                    median = 0.0
+                    mean = 0.0
+                    std = 1.0
+                else:
+                    median = float(np.median(valid))
+                    filled = np.where(column == -1.0, median, column)
+                    mean = float(np.mean(filled))
+                    std = _stable_std(float(np.std(filled)))
+                raw_indices.append(feature_idx)
+                raw_medians.append(median)
+                raw_means.append(mean)
+                raw_stds.append(std)
+                normalizer_pbar.update(1)
+                continue
+            if mode == "log":
+                transformed = np.log1p(np.clip(column, 0.0, None))
+                log_indices.append(feature_idx)
+                log_means.append(float(np.mean(transformed)))
+                log_stds.append(_stable_std(float(np.std(transformed))))
+                normalizer_pbar.update(1)
+                continue
+            z_indices.append(feature_idx)
+            z_means.append(float(np.mean(column)))
+            z_stds.append(_stable_std(float(np.std(column))))
+            normalizer_pbar.update(1)
 
     return HybridFeatureNormalizerState(
         mode="hybrid",
@@ -469,25 +481,34 @@ def _build_neighbor_features(
     out_den = np.maximum(outdegree.astype(np.float32, copy=False), 1.0)
 
     col = 0
-    for reducer in ("mean", "max", "missing_ratio"):
-        for feature_idx in range(RAW_FEATURE_COUNT):
-            values = x[:, feature_idx] if reducer != "missing_ratio" else missing_mask[:, feature_idx]
-            in_center_values = values[src]
-            out_center_values = values[dst]
-            if reducer == "mean" or reducer == "missing_ratio":
-                in_result = _bincount_float(dst, in_center_values, data.num_nodes) / in_den
-                out_result = _bincount_float(src, out_center_values, data.num_nodes) / out_den
-            else:
-                in_result = np.full(data.num_nodes, -np.inf, dtype=np.float32)
-                out_result = np.full(data.num_nodes, -np.inf, dtype=np.float32)
-                np.maximum.at(in_result, dst, in_center_values.astype(np.float32, copy=False))
-                np.maximum.at(out_result, src, out_center_values.astype(np.float32, copy=False))
-                in_result[indegree == 0] = 0.0
-                out_result[outdegree == 0] = 0.0
-            matrix[:, col] = in_result
-            matrix[:, col + RAW_FEATURE_COUNT] = out_result
-            col += 1
-        col += RAW_FEATURE_COUNT
+    with tqdm(
+        total=3 * RAW_FEATURE_COUNT,
+        desc=f"neighbor_features:{phase_dir.name}",
+        unit="feat",
+        dynamic_ncols=True,
+        leave=False,
+    ) as neighbor_pbar:
+        for reducer in ("mean", "max", "missing_ratio"):
+            neighbor_pbar.set_postfix(reducer=reducer, refresh=False)
+            for feature_idx in range(RAW_FEATURE_COUNT):
+                values = x[:, feature_idx] if reducer != "missing_ratio" else missing_mask[:, feature_idx]
+                in_center_values = values[src]
+                out_center_values = values[dst]
+                if reducer == "mean" or reducer == "missing_ratio":
+                    in_result = _bincount_float(dst, in_center_values, data.num_nodes) / in_den
+                    out_result = _bincount_float(src, out_center_values, data.num_nodes) / out_den
+                else:
+                    in_result = np.full(data.num_nodes, -np.inf, dtype=np.float32)
+                    out_result = np.full(data.num_nodes, -np.inf, dtype=np.float32)
+                    np.maximum.at(in_result, dst, in_center_values.astype(np.float32, copy=False))
+                    np.maximum.at(out_result, src, out_center_values.astype(np.float32, copy=False))
+                    in_result[indegree == 0] = 0.0
+                    out_result[outdegree == 0] = 0.0
+                matrix[:, col] = in_result
+                matrix[:, col + RAW_FEATURE_COUNT] = out_result
+                col += 1
+                neighbor_pbar.update(1)
+            col += RAW_FEATURE_COUNT
     del matrix
     return neighbor_path.name, neighbor_spans
 
@@ -497,175 +518,195 @@ def build_phase_feature_artifacts(
     outdir: Path = FEATURE_OUTPUT_ROOT,
     build_neighbor: bool = True,
 ) -> dict[str, Any]:
-    data = load_phase(phase, repo_root=REPO_ROOT)
-    phase_dir = ensure_dir(outdir / phase)
-    core_groups, _ = _group_definition()
-    core_spans = _allocate_group_spans(core_groups)
-    core_path = phase_dir / "core_features.npy"
-    core = np.lib.format.open_memmap(
-        core_path,
-        mode="w+",
-        dtype=np.float32,
-        shape=(data.num_nodes, core_spans["time"]["end"]),
-    )
+    with tqdm(
+        total=12,
+        desc=f"build_features:{phase}",
+        unit="step",
+        dynamic_ncols=True,
+    ) as phase_pbar:
+        data = load_phase(phase, repo_root=REPO_ROOT)
+        phase_dir = ensure_dir(outdir / phase)
+        core_groups, _ = _group_definition()
+        core_spans = _allocate_group_spans(core_groups)
+        core_path = phase_dir / "core_features.npy"
+        core = np.lib.format.open_memmap(
+            core_path,
+            mode="w+",
+            dtype=np.float32,
+            shape=(data.num_nodes, core_spans["time"]["end"]),
+        )
+        phase_pbar.set_postfix(nodes=data.num_nodes, edges=data.num_edges, refresh=False)
+        phase_pbar.update(1)
 
-    x = np.asarray(data.x, dtype=np.float32)
-    missing_mask = (x == -1).astype(np.float32, copy=False)
-    indegree, outdegree, total_degree = compute_degree_arrays(data)
-    temporal = compute_temporal_core(data)
-    first_active = temporal["first_active"].astype(np.int32, copy=False)
-    last_active = temporal["last_active"].astype(np.int32, copy=False)
-    active_span = temporal["active_span"].astype(np.int32, copy=False)
-    time_windows = _build_edge_time_windows(data.edge_timestamp)
-    node_time_bucket = _assign_node_time_bucket(first_active, time_windows)
+        x = np.asarray(data.x, dtype=np.float32)
+        missing_mask = (x == -1).astype(np.float32, copy=False)
+        indegree, outdegree, total_degree = compute_degree_arrays(data)
+        temporal = compute_temporal_core(data)
+        first_active = temporal["first_active"].astype(np.int32, copy=False)
+        last_active = temporal["last_active"].astype(np.int32, copy=False)
+        active_span = temporal["active_span"].astype(np.int32, copy=False)
+        time_windows = _build_edge_time_windows(data.edge_timestamp)
+        node_time_bucket = _assign_node_time_bucket(first_active, time_windows)
+        phase_pbar.update(1)
 
-    src = data.edge_index[:, 0]
-    dst = data.edge_index[:, 1]
-    background_mask = np.isin(data.y, (2, 3))
+        src = data.edge_index[:, 0]
+        dst = data.edge_index[:, 1]
+        background_mask = np.isin(data.y, (2, 3))
 
-    col = 0
-    core[:, col : col + RAW_FEATURE_COUNT] = x
-    col += RAW_FEATURE_COUNT
+        col = 0
+        core[:, col : col + RAW_FEATURE_COUNT] = x
+        col += RAW_FEATURE_COUNT
 
-    core[:, col : col + RAW_FEATURE_COUNT] = missing_mask
-    col += RAW_FEATURE_COUNT
+        core[:, col : col + RAW_FEATURE_COUNT] = missing_mask
+        col += RAW_FEATURE_COUNT
 
-    core[:, col] = np.sum(missing_mask, axis=1, dtype=np.float32)
-    col += 1
+        core[:, col] = np.sum(missing_mask, axis=1, dtype=np.float32)
+        col += 1
+        phase_pbar.update(1)
 
-    for left, right in STRONG_PAIRS:
-        core[:, col] = (x[:, left] + x[:, right]) / 2.0
-        core[:, col + 1] = np.abs(x[:, left] - x[:, right])
-        col += 2
+        for left, right in STRONG_PAIRS:
+            core[:, col] = (x[:, left] + x[:, right]) / 2.0
+            core[:, col + 1] = np.abs(x[:, left] - x[:, right])
+            col += 2
 
-    indegree_f = indegree.astype(np.float32, copy=False)
-    outdegree_f = outdegree.astype(np.float32, copy=False)
-    total_degree_f = total_degree.astype(np.float32, copy=False)
-    core[:, col] = indegree_f
-    core[:, col + 1] = outdegree_f
-    core[:, col + 2] = total_degree_f
-    core[:, col + 3] = outdegree_f / (indegree_f + 1.0)
-    core[:, col + 4] = indegree_f / (outdegree_f + 1.0)
-    col += 5
+        indegree_f = indegree.astype(np.float32, copy=False)
+        outdegree_f = outdegree.astype(np.float32, copy=False)
+        total_degree_f = total_degree.astype(np.float32, copy=False)
+        core[:, col] = indegree_f
+        core[:, col + 1] = outdegree_f
+        core[:, col + 2] = total_degree_f
+        core[:, col + 3] = outdegree_f / (indegree_f + 1.0)
+        core[:, col + 4] = indegree_f / (outdegree_f + 1.0)
+        col += 5
+        phase_pbar.update(1)
 
-    for edge_type in range(1, NUM_EDGE_TYPES + 1):
-        mask_t = data.edge_type == edge_type
-        core[:, col] = np.bincount(dst[mask_t], minlength=data.num_nodes).astype(np.float32, copy=False)
-        core[:, col + 1] = np.bincount(src[mask_t], minlength=data.num_nodes).astype(np.float32, copy=False)
-        col += 2
+        for edge_type in range(1, NUM_EDGE_TYPES + 1):
+            mask_t = data.edge_type == edge_type
+            core[:, col] = np.bincount(dst[mask_t], minlength=data.num_nodes).astype(np.float32, copy=False)
+            core[:, col + 1] = np.bincount(src[mask_t], minlength=data.num_nodes).astype(np.float32, copy=False)
+            col += 2
+        phase_pbar.update(1)
 
-    bg_out_mask = background_mask[dst]
-    bg_in_mask = background_mask[src]
-    bg_out_count = np.bincount(src[bg_out_mask], minlength=data.num_nodes).astype(np.float32, copy=False)
-    bg_in_count = np.bincount(dst[bg_in_mask], minlength=data.num_nodes).astype(np.float32, copy=False)
-    bg_total_count = bg_in_count + bg_out_count
-    core[:, col] = bg_in_count
-    core[:, col + 1] = bg_out_count
-    core[:, col + 2] = bg_total_count
-    core[:, col + 3] = bg_in_count / (indegree_f + 1.0)
-    core[:, col + 4] = bg_out_count / (outdegree_f + 1.0)
-    core[:, col + 5] = bg_total_count / (total_degree_f + 1.0)
-    core[:, col + 6] = (bg_total_count > 0).astype(np.float32, copy=False)
-    col += 7
+        bg_out_mask = background_mask[dst]
+        bg_in_mask = background_mask[src]
+        bg_out_count = np.bincount(src[bg_out_mask], minlength=data.num_nodes).astype(np.float32, copy=False)
+        bg_in_count = np.bincount(dst[bg_in_mask], minlength=data.num_nodes).astype(np.float32, copy=False)
+        bg_total_count = bg_in_count + bg_out_count
+        core[:, col] = bg_in_count
+        core[:, col + 1] = bg_out_count
+        core[:, col + 2] = bg_total_count
+        core[:, col + 3] = bg_in_count / (indegree_f + 1.0)
+        core[:, col + 4] = bg_out_count / (outdegree_f + 1.0)
+        core[:, col + 5] = bg_total_count / (total_degree_f + 1.0)
+        core[:, col + 6] = (bg_total_count > 0).astype(np.float32, copy=False)
+        col += 7
+        phase_pbar.update(1)
 
-    for edge_type in range(1, NUM_EDGE_TYPES + 1):
-        mask_t = data.edge_type == edge_type
-        mask_bg_in = mask_t & bg_in_mask
-        mask_bg_out = mask_t & bg_out_mask
-        core[:, col] = np.bincount(dst[mask_bg_in], minlength=data.num_nodes).astype(np.float32, copy=False)
-        core[:, col + 1] = np.bincount(src[mask_bg_out], minlength=data.num_nodes).astype(np.float32, copy=False)
-        col += 2
+        for edge_type in range(1, NUM_EDGE_TYPES + 1):
+            mask_t = data.edge_type == edge_type
+            mask_bg_in = mask_t & bg_in_mask
+            mask_bg_out = mask_t & bg_out_mask
+            core[:, col] = np.bincount(dst[mask_bg_in], minlength=data.num_nodes).astype(np.float32, copy=False)
+            core[:, col + 1] = np.bincount(src[mask_bg_out], minlength=data.num_nodes).astype(np.float32, copy=False)
+            col += 2
+        phase_pbar.update(1)
 
-    core[:, col] = first_active.astype(np.float32, copy=False)
-    core[:, col + 1] = last_active.astype(np.float32, copy=False)
-    core[:, col + 2] = active_span.astype(np.float32, copy=False)
-    col += 3
-
-    window_total_counts: list[np.ndarray] = []
-    for window in time_windows:
-        if window["window_idx"] == NUM_TIME_WINDOWS:
-            mask_w = (data.edge_timestamp >= window["start_day"]) & (
-                data.edge_timestamp <= window["end_day"]
-            )
-        else:
-            mask_w = (data.edge_timestamp >= window["start_day"]) & (
-                data.edge_timestamp < window["end_day"] + 1
-            )
-        in_count = np.bincount(dst[mask_w], minlength=data.num_nodes).astype(np.float32, copy=False)
-        out_count = np.bincount(src[mask_w], minlength=data.num_nodes).astype(np.float32, copy=False)
-        total_count = in_count + out_count
-        window_total_counts.append(total_count)
-        core[:, col] = in_count
-        core[:, col + 1] = out_count
-        core[:, col + 2] = total_count
+        core[:, col] = first_active.astype(np.float32, copy=False)
+        core[:, col + 1] = last_active.astype(np.float32, copy=False)
+        core[:, col + 2] = active_span.astype(np.float32, copy=False)
         col += 3
-    early_total = window_total_counts[0] + window_total_counts[1]
-    late_total = window_total_counts[2] + window_total_counts[3]
-    core[:, col] = (early_total + 1.0) / (late_total + 1.0)
-    col += 1
-    del core
 
-    neighbor_file = None
-    neighbor_spans: dict[str, dict[str, Any]] = {}
-    if build_neighbor:
-        neighbor_file, neighbor_spans = _build_neighbor_features(
-            data=data,
-            phase_dir=phase_dir,
-            indegree=indegree,
-            outdegree=outdegree,
-            x=x,
-            missing_mask=missing_mask,
-        )
+        window_total_counts: list[np.ndarray] = []
+        for window in time_windows:
+            if window["window_idx"] == NUM_TIME_WINDOWS:
+                mask_w = (data.edge_timestamp >= window["start_day"]) & (
+                    data.edge_timestamp <= window["end_day"]
+                )
+            else:
+                mask_w = (data.edge_timestamp >= window["start_day"]) & (
+                    data.edge_timestamp < window["end_day"] + 1
+                )
+            in_count = np.bincount(dst[mask_w], minlength=data.num_nodes).astype(np.float32, copy=False)
+            out_count = np.bincount(src[mask_w], minlength=data.num_nodes).astype(np.float32, copy=False)
+            total_count = in_count + out_count
+            window_total_counts.append(total_count)
+            core[:, col] = in_count
+            core[:, col + 1] = out_count
+            core[:, col + 2] = total_count
+            col += 3
+        early_total = window_total_counts[0] + window_total_counts[1]
+        late_total = window_total_counts[2] + window_total_counts[3]
+        core[:, col] = (early_total + 1.0) / (late_total + 1.0)
+        col += 1
+        del core
+        phase_pbar.update(1)
 
-    graph_meta = {}
-    graph_meta.update(
-        _write_graph_arrays(
-            phase_dir=phase_dir,
-            prefix="out",
-            centers=src,
-            neighbors=dst,
-            edge_type=data.edge_type,
-            edge_timestamp=data.edge_timestamp,
-            num_nodes=data.num_nodes,
-        )
-    )
-    graph_meta.update(
-        _write_graph_arrays(
-            phase_dir=phase_dir,
-            prefix="in",
-            centers=dst,
-            neighbors=src,
-            edge_type=data.edge_type,
-            edge_timestamp=data.edge_timestamp,
-            num_nodes=data.num_nodes,
-        )
-    )
-    graph_dir = ensure_dir(phase_dir / "graph")
-    first_active_file = graph_dir / "first_active.npy"
-    node_time_bucket_file = graph_dir / "node_time_bucket.npy"
-    np.save(first_active_file, first_active)
-    np.save(node_time_bucket_file, node_time_bucket)
+        neighbor_file = None
+        neighbor_spans: dict[str, dict[str, Any]] = {}
+        if build_neighbor:
+            neighbor_file, neighbor_spans = _build_neighbor_features(
+                data=data,
+                phase_dir=phase_dir,
+                indegree=indegree,
+                outdegree=outdegree,
+                x=x,
+                missing_mask=missing_mask,
+            )
+        phase_pbar.update(1)
 
-    manifest = {
-        "phase": phase,
-        "num_nodes": data.num_nodes,
-        "num_edges": data.num_edges,
-        "core_file": core_path.name,
-        "neighbor_file": neighbor_file,
-        "core_groups": core_spans,
-        "neighbor_groups": neighbor_spans,
-        "graph_meta": {
-            "dir": "graph",
-            "files": graph_meta,
-            "first_active_file": first_active_file.name,
-            "node_time_bucket_file": node_time_bucket_file.name,
-            "num_edge_types": NUM_EDGE_TYPES,
-            "num_relations": NUM_EDGE_TYPES * 2,
-            "max_day": int(data.edge_timestamp.max()),
-            "time_windows": time_windows,
-        },
-    }
-    write_json(phase_dir / "feature_manifest.json", manifest)
+        graph_meta = {}
+        graph_meta.update(
+            _write_graph_arrays(
+                phase_dir=phase_dir,
+                prefix="out",
+                centers=src,
+                neighbors=dst,
+                edge_type=data.edge_type,
+                edge_timestamp=data.edge_timestamp,
+                num_nodes=data.num_nodes,
+            )
+        )
+        phase_pbar.update(1)
+        graph_meta.update(
+            _write_graph_arrays(
+                phase_dir=phase_dir,
+                prefix="in",
+                centers=dst,
+                neighbors=src,
+                edge_type=data.edge_type,
+                edge_timestamp=data.edge_timestamp,
+                num_nodes=data.num_nodes,
+            )
+        )
+        phase_pbar.update(1)
+        graph_dir = ensure_dir(phase_dir / "graph")
+        first_active_file = graph_dir / "first_active.npy"
+        node_time_bucket_file = graph_dir / "node_time_bucket.npy"
+        np.save(first_active_file, first_active)
+        np.save(node_time_bucket_file, node_time_bucket)
+        phase_pbar.update(1)
+
+        manifest = {
+            "phase": phase,
+            "num_nodes": data.num_nodes,
+            "num_edges": data.num_edges,
+            "core_file": core_path.name,
+            "neighbor_file": neighbor_file,
+            "core_groups": core_spans,
+            "neighbor_groups": neighbor_spans,
+            "graph_meta": {
+                "dir": "graph",
+                "files": graph_meta,
+                "first_active_file": first_active_file.name,
+                "node_time_bucket_file": node_time_bucket_file.name,
+                "num_edge_types": NUM_EDGE_TYPES,
+                "num_relations": NUM_EDGE_TYPES * 2,
+                "max_day": int(data.edge_timestamp.max()),
+                "time_windows": time_windows,
+            },
+        }
+        write_json(phase_dir / "feature_manifest.json", manifest)
+        phase_pbar.update(1)
     return manifest
 
 
@@ -675,12 +716,19 @@ def build_feature_artifacts(
     build_neighbor: bool = True,
 ) -> dict[str, Any]:
     summary: dict[str, Any] = {}
-    for phase in phases:
-        summary[phase] = build_phase_feature_artifacts(
-            phase=phase,
-            outdir=outdir,
-            build_neighbor=build_neighbor,
-        )
+    with tqdm(
+        phases,
+        desc="build_features:phases",
+        unit="phase",
+        dynamic_ncols=True,
+    ) as phase_pbar:
+        for phase in phase_pbar:
+            phase_pbar.set_postfix(current=phase, refresh=False)
+            summary[phase] = build_phase_feature_artifacts(
+                phase=phase,
+                outdir=outdir,
+                build_neighbor=build_neighbor,
+            )
     return summary
 
 

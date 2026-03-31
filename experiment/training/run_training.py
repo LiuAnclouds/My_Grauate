@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
+from tqdm.auto import tqdm
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -383,58 +384,78 @@ def run_build_features(args: argparse.Namespace) -> None:
 
 
 def run_train_lightgbm(args: argparse.Namespace) -> None:
-    split, train_ids, val_ids, external_ids = _prepare_split_ids(args)
-    phase1_y, phase2_y = _load_labels_for_splits(split)
-    feature_groups = default_feature_groups(args.model)
-    phase1_store = FeatureStore("phase1", feature_groups, outdir=args.feature_dir)
-    phase2_store = FeatureStore("phase2", feature_groups, outdir=args.feature_dir)
+    with tqdm(
+        total=3,
+        desc=f"prepare:{args.model}",
+        unit="step",
+        dynamic_ncols=True,
+    ) as prep_pbar:
+        split, train_ids, val_ids, external_ids = _prepare_split_ids(args)
+        prep_pbar.update(1)
+        phase1_y, phase2_y = _load_labels_for_splits(split)
+        feature_groups = default_feature_groups(args.model)
+        prep_pbar.update(1)
+        phase1_store = FeatureStore("phase1", feature_groups, outdir=args.feature_dir)
+        phase2_store = FeatureStore("phase2", feature_groups, outdir=args.feature_dir)
+        prep_pbar.update(1)
 
     run_dir = _model_run_dir(args.outdir, args.model, args.run_name)
     val_predictions: list[np.ndarray] = []
     external_predictions: list[np.ndarray] = []
     metrics: list[dict[str, Any]] = []
 
-    for seed in args.seeds:
-        set_global_seed(seed)
-        seed_dir = ensure_dir(run_dir / f"seed_{seed}")
-        model = LightGBMExperiment(
-            model_name=args.model,
-            seed=seed,
-            feature_groups=feature_groups,
-        )
-        fit_metrics = model.fit(
-            train_store=phase1_store,
-            train_ids=train_ids,
-            train_labels=phase1_y[train_ids],
-            val_ids=val_ids,
-            val_labels=phase1_y[val_ids],
-        )
-        val_prob = model.predict_proba(phase1_store, val_ids)
-        external_prob = model.predict_proba(phase2_store, external_ids)
-        val_auc = safe_auc(phase1_y[val_ids], val_prob)
-        external_auc = safe_auc(phase2_y[external_ids], external_prob)
-        model.save(seed_dir, feature_names=phase1_store.feature_names)
-        save_prediction_npz(seed_dir / "phase1_val_predictions.npz", val_ids, phase1_y[val_ids], val_prob)
-        save_prediction_npz(
-            seed_dir / "phase2_external_predictions.npz",
-            external_ids,
-            phase2_y[external_ids],
-            external_prob,
-        )
-        val_predictions.append(val_prob)
-        external_predictions.append(external_prob)
-        metrics.append(
-            {
-                "seed": seed,
-                "val_auc": val_auc,
-                "external_auc": external_auc,
-                "best_iteration": fit_metrics["best_iteration"],
-            }
-        )
-        print(
-            f"[{args.model}] seed={seed} phase1_val_auc={val_auc:.6f} "
-            f"phase2_external_auc={external_auc:.6f}"
-        )
+    with tqdm(
+        args.seeds,
+        desc=f"train:{args.model}:seeds",
+        unit="seed",
+        dynamic_ncols=True,
+    ) as seed_pbar:
+        for seed in seed_pbar:
+            set_global_seed(seed)
+            seed_dir = ensure_dir(run_dir / f"seed_{seed}")
+            model = LightGBMExperiment(
+                model_name=args.model,
+                seed=seed,
+                feature_groups=feature_groups,
+            )
+            fit_metrics = model.fit(
+                train_store=phase1_store,
+                train_ids=train_ids,
+                train_labels=phase1_y[train_ids],
+                val_ids=val_ids,
+                val_labels=phase1_y[val_ids],
+            )
+            val_prob = model.predict_proba(phase1_store, val_ids)
+            external_prob = model.predict_proba(phase2_store, external_ids)
+            val_auc = safe_auc(phase1_y[val_ids], val_prob)
+            external_auc = safe_auc(phase2_y[external_ids], external_prob)
+            model.save(seed_dir, feature_names=phase1_store.feature_names)
+            save_prediction_npz(seed_dir / "phase1_val_predictions.npz", val_ids, phase1_y[val_ids], val_prob)
+            save_prediction_npz(
+                seed_dir / "phase2_external_predictions.npz",
+                external_ids,
+                phase2_y[external_ids],
+                external_prob,
+            )
+            val_predictions.append(val_prob)
+            external_predictions.append(external_prob)
+            metrics.append(
+                {
+                    "seed": seed,
+                    "val_auc": val_auc,
+                    "external_auc": external_auc,
+                    "best_iteration": fit_metrics["best_iteration"],
+                }
+            )
+            seed_pbar.set_postfix(
+                val_auc=f"{val_auc:.4f}",
+                external_auc=f"{external_auc:.4f}",
+                refresh=False,
+            )
+            tqdm.write(
+                f"[{args.model}] seed={seed} phase1_val_auc={val_auc:.6f} "
+                f"phase2_external_auc={external_auc:.6f}"
+            )
 
     val_avg_path = _save_average_predictions(
         run_dir=run_dir,
@@ -506,23 +527,32 @@ def _make_graph_contexts(
 
 
 def run_train_graph(args: argparse.Namespace) -> None:
-    split, train_ids, val_ids, external_ids = _prepare_split_ids(args)
-    feature_groups = default_feature_groups(args.model)
-    graph_config = _build_graph_model_config(args)
-    feature_normalizer_state = None
-    if graph_config.feature_norm == "hybrid":
-        feature_normalizer_state = build_hybrid_feature_normalizer(
-            phase="phase1",
-            selected_groups=feature_groups,
-            train_ids=train_ids,
-            outdir=args.feature_dir,
-        )
+    with tqdm(
+        total=3,
+        desc=f"prepare:{args.model}",
+        unit="step",
+        dynamic_ncols=True,
+    ) as prep_pbar:
+        split, train_ids, val_ids, external_ids = _prepare_split_ids(args)
+        feature_groups = default_feature_groups(args.model)
+        graph_config = _build_graph_model_config(args)
+        prep_pbar.update(1)
+        feature_normalizer_state = None
+        if graph_config.feature_norm == "hybrid":
+            feature_normalizer_state = build_hybrid_feature_normalizer(
+                phase="phase1",
+                selected_groups=feature_groups,
+                train_ids=train_ids,
+                outdir=args.feature_dir,
+            )
+        prep_pbar.update(1)
 
-    phase1_context, phase2_context = _make_graph_contexts(
-        args.feature_dir,
-        args.model,
-        feature_normalizer_state=feature_normalizer_state,
-    )
+        phase1_context, phase2_context = _make_graph_contexts(
+            args.feature_dir,
+            args.model,
+            feature_normalizer_state=feature_normalizer_state,
+        )
+        prep_pbar.update(1)
     run_dir = _model_run_dir(args.outdir, args.model, args.run_name)
     input_dim = phase1_context.feature_store.input_dim
     num_relations = phase1_context.graph_cache.num_relations
@@ -535,62 +565,83 @@ def run_train_graph(args: argparse.Namespace) -> None:
         TemporalRelationGraphSAGEExperiment if args.model == "m5_temporal_graphsage" else RelationGraphSAGEExperiment
     )
 
-    for seed in args.seeds:
-        set_global_seed(seed)
-        seed_dir = ensure_dir(run_dir / f"seed_{seed}")
-        experiment = experiment_cls(
-            model_name=args.model,
-            seed=seed,
-            input_dim=input_dim,
-            num_relations=num_relations,
-            max_day=global_max_day,
-            feature_groups=phase1_context.feature_store.selected_groups,
-            hidden_dim=args.hidden_dim,
-            num_layers=len(args.fanouts),
-            rel_dim=args.rel_dim,
-            fanouts=list(args.fanouts),
-            batch_size=args.batch_size,
-            epochs=args.epochs,
-            device=args.device,
-            graph_config=graph_config,
-            feature_normalizer_state=feature_normalizer_state,
-        )
-        fit_metrics = experiment.fit(
-            context=phase1_context,
-            train_ids=train_ids,
-            val_ids=val_ids,
-        )
-        val_prob = experiment.predict_proba(phase1_context, val_ids, batch_seed=seed + 1000)
-        external_prob = experiment.predict_proba(phase2_context, external_ids, batch_seed=seed + 2000)
-        val_auc = safe_auc(phase1_context.labels[val_ids], val_prob)
-        external_auc = safe_auc(phase2_context.labels[external_ids], external_prob)
-        experiment.save(seed_dir)
-        save_prediction_npz(
-            seed_dir / "phase1_val_predictions.npz",
-            val_ids,
-            phase1_context.labels[val_ids],
-            val_prob,
-        )
-        save_prediction_npz(
-            seed_dir / "phase2_external_predictions.npz",
-            external_ids,
-            phase2_context.labels[external_ids],
-            external_prob,
-        )
-        val_predictions.append(val_prob)
-        external_predictions.append(external_prob)
-        metrics.append(
-            {
-                "seed": seed,
-                "val_auc": val_auc,
-                "external_auc": external_auc,
-                "best_epoch": fit_metrics["best_epoch"],
-            }
-        )
-        print(
-            f"[{args.model}] seed={seed} phase1_val_auc={val_auc:.6f} "
-            f"phase2_external_auc={external_auc:.6f}"
-        )
+    with tqdm(
+        args.seeds,
+        desc=f"train:{args.model}:seeds",
+        unit="seed",
+        dynamic_ncols=True,
+    ) as seed_pbar:
+        for seed in seed_pbar:
+            set_global_seed(seed)
+            seed_dir = ensure_dir(run_dir / f"seed_{seed}")
+            experiment = experiment_cls(
+                model_name=args.model,
+                seed=seed,
+                input_dim=input_dim,
+                num_relations=num_relations,
+                max_day=global_max_day,
+                feature_groups=phase1_context.feature_store.selected_groups,
+                hidden_dim=args.hidden_dim,
+                num_layers=len(args.fanouts),
+                rel_dim=args.rel_dim,
+                fanouts=list(args.fanouts),
+                batch_size=args.batch_size,
+                epochs=args.epochs,
+                device=args.device,
+                graph_config=graph_config,
+                feature_normalizer_state=feature_normalizer_state,
+            )
+            fit_metrics = experiment.fit(
+                context=phase1_context,
+                train_ids=train_ids,
+                val_ids=val_ids,
+            )
+            val_prob = experiment.predict_proba(
+                phase1_context,
+                val_ids,
+                batch_seed=seed + 1000,
+                progress_desc=f"{args.model}:seed{seed}:phase1_val",
+            )
+            external_prob = experiment.predict_proba(
+                phase2_context,
+                external_ids,
+                batch_seed=seed + 2000,
+                progress_desc=f"{args.model}:seed{seed}:phase2_external",
+            )
+            val_auc = safe_auc(phase1_context.labels[val_ids], val_prob)
+            external_auc = safe_auc(phase2_context.labels[external_ids], external_prob)
+            experiment.save(seed_dir)
+            save_prediction_npz(
+                seed_dir / "phase1_val_predictions.npz",
+                val_ids,
+                phase1_context.labels[val_ids],
+                val_prob,
+            )
+            save_prediction_npz(
+                seed_dir / "phase2_external_predictions.npz",
+                external_ids,
+                phase2_context.labels[external_ids],
+                external_prob,
+            )
+            val_predictions.append(val_prob)
+            external_predictions.append(external_prob)
+            metrics.append(
+                {
+                    "seed": seed,
+                    "val_auc": val_auc,
+                    "external_auc": external_auc,
+                    "best_epoch": fit_metrics["best_epoch"],
+                }
+            )
+            seed_pbar.set_postfix(
+                val_auc=f"{val_auc:.4f}",
+                external_auc=f"{external_auc:.4f}",
+                refresh=False,
+            )
+            tqdm.write(
+                f"[{args.model}] seed={seed} phase1_val_auc={val_auc:.6f} "
+                f"phase2_external_auc={external_auc:.6f}"
+            )
 
     val_avg_path = _save_average_predictions(
         run_dir=run_dir,

@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm.auto import tqdm
 
 from experiment.training.common import (
     ensure_dir,
@@ -252,6 +253,115 @@ def sample_relation_subgraph(
     )
 
 
+def _sample_single_seed_subgraph(
+    graph: GraphCache,
+    seed: int,
+    fanouts: list[int],
+    rng: np.random.Generator,
+    snapshot_end: int | None = None,
+) -> SampledSubgraph:
+    seed = int(seed)
+    ordered_nodes = [seed]
+    global_to_local = {seed: 0}
+    frontier = np.asarray([seed], dtype=np.int32)
+    edge_src: list[int] = []
+    edge_dst: list[int] = []
+    rel_ids: list[int] = []
+    edge_timestamp: list[int] = []
+
+    in_ptr = graph.in_ptr
+    in_neighbors = graph.in_neighbors
+    in_edge_type = graph.in_edge_type
+    in_edge_timestamp = graph.in_edge_timestamp
+    out_ptr = graph.out_ptr
+    out_neighbors = graph.out_neighbors
+    out_edge_type = graph.out_edge_type
+    out_edge_timestamp = graph.out_edge_timestamp
+    num_edge_types = graph.num_edge_types
+
+    for fanout in fanouts:
+        if frontier.size == 0:
+            break
+        next_nodes: list[int] = []
+        for center in frontier.tolist():
+            center = int(center)
+            center_local = global_to_local[center]
+
+            in_start = int(in_ptr[center])
+            in_end = int(in_ptr[center + 1])
+            in_time_slice = np.asarray(in_edge_timestamp[in_start:in_end])
+            in_choice = _sample_edge_indices(
+                edge_timestamp=in_time_slice,
+                fanout=fanout,
+                rng=rng,
+                snapshot_end=snapshot_end,
+            )
+            if in_choice.size:
+                selected_neighbors = np.asarray(in_neighbors[in_start:in_end])[in_choice]
+                selected_types = np.asarray(in_edge_type[in_start:in_end])[in_choice]
+                selected_times = in_time_slice[in_choice]
+                for src, edge_type, edge_time in zip(
+                    selected_neighbors.tolist(),
+                    selected_types.tolist(),
+                    selected_times.tolist(),
+                    strict=True,
+                ):
+                    src_local = global_to_local.get(src)
+                    if src_local is None:
+                        src_local = len(ordered_nodes)
+                        global_to_local[src] = src_local
+                        ordered_nodes.append(src)
+                    next_nodes.append(src)
+                    edge_src.append(src_local)
+                    edge_dst.append(center_local)
+                    rel_ids.append(int(edge_type - 1))
+                    edge_timestamp.append(int(edge_time))
+
+            out_start = int(out_ptr[center])
+            out_end = int(out_ptr[center + 1])
+            out_time_slice = np.asarray(out_edge_timestamp[out_start:out_end])
+            out_choice = _sample_edge_indices(
+                edge_timestamp=out_time_slice,
+                fanout=fanout,
+                rng=rng,
+                snapshot_end=snapshot_end,
+            )
+            if out_choice.size:
+                selected_neighbors = np.asarray(out_neighbors[out_start:out_end])[out_choice]
+                selected_types = np.asarray(out_edge_type[out_start:out_end])[out_choice]
+                selected_times = out_time_slice[out_choice]
+                for src, edge_type, edge_time in zip(
+                    selected_neighbors.tolist(),
+                    selected_types.tolist(),
+                    selected_times.tolist(),
+                    strict=True,
+                ):
+                    src_local = global_to_local.get(src)
+                    if src_local is None:
+                        src_local = len(ordered_nodes)
+                        global_to_local[src] = src_local
+                        ordered_nodes.append(src)
+                    next_nodes.append(src)
+                    edge_src.append(src_local)
+                    edge_dst.append(center_local)
+                    rel_ids.append(int(edge_type - 1 + num_edge_types))
+                    edge_timestamp.append(int(edge_time))
+
+        if next_nodes:
+            frontier = np.unique(np.asarray(next_nodes, dtype=np.int32))
+        else:
+            frontier = np.empty(0, dtype=np.int32)
+
+    return SampledSubgraph(
+        node_ids=np.asarray(ordered_nodes, dtype=np.int32),
+        edge_src=np.asarray(edge_src, dtype=np.int64),
+        edge_dst=np.asarray(edge_dst, dtype=np.int64),
+        rel_ids=np.asarray(rel_ids, dtype=np.int64),
+        edge_timestamp=np.asarray(edge_timestamp, dtype=np.int64),
+        target_local_idx=np.asarray([0], dtype=np.int64),
+    )
+
+
 def sample_batched_relation_subgraphs(
     graph: GraphCache,
     seed_nodes: np.ndarray,
@@ -283,9 +393,9 @@ def sample_batched_relation_subgraphs(
     node_offset = 0
 
     for subgraph_id, seed in enumerate(seeds.tolist()):
-        subgraph = sample_relation_subgraph(
+        subgraph = _sample_single_seed_subgraph(
             graph=graph,
-            seed_nodes=np.asarray([seed], dtype=np.int32),
+            seed=seed,
             fanouts=fanouts,
             rng=rng,
             snapshot_end=snapshot_end,
@@ -390,10 +500,25 @@ def _pool_mean_max(
     )
     pooled_mean = pooled_mean / counts.clamp_min(1.0)
 
-    for group_idx in range(num_groups):
-        mask = group_ids == group_idx
-        if torch.any(mask):
-            pooled_max[group_idx] = values[mask].max(dim=0).values
+    if hasattr(pooled_max, "scatter_reduce_"):
+        pooled_max.fill_(float("-inf"))
+        pooled_max.scatter_reduce_(
+            0,
+            group_ids.view(-1, 1).expand(-1, values.shape[1]),
+            values,
+            reduce="amax",
+            include_self=True,
+        )
+        pooled_max = torch.where(
+            torch.isfinite(pooled_max),
+            pooled_max,
+            torch.zeros_like(pooled_max),
+        )
+    else:
+        for group_idx in range(num_groups):
+            mask = group_ids == group_idx
+            if torch.any(mask):
+                pooled_max[group_idx] = values[mask].max(dim=0).values
     return pooled_mean, pooled_max
 
 
@@ -668,19 +793,32 @@ class RelationGraphSAGENetwork(nn.Module):
             stats[:, 3].index_add_(0, edge_subgraph_id, edge_relative_time.view(-1))
             stats[:, 3] = stats[:, 3] / stats[:, 1].clamp_min(1.0)
 
-        for subgraph_id in range(num_subgraphs):
-            edge_mask = edge_subgraph_id == subgraph_id
-            if torch.any(edge_mask):
-                sub_rels = rel_ids[edge_mask]
-                stats[subgraph_id, 2] = float(torch.unique(sub_rels).numel())
-                target_idx = int(target_local_idx[subgraph_id].item())
-                target_edges = edge_mask & (edge_dst == target_idx)
-                if torch.any(target_edges):
-                    stats[subgraph_id, 4] = float(
-                        ((rel_ids[target_edges] < self.num_edge_types).sum()).item()
+        if rel_ids.numel():
+            unique_rel_pairs = torch.unique(edge_subgraph_id * self.num_relations + rel_ids)
+            unique_rel_subgraph_ids = torch.floor_divide(unique_rel_pairs, self.num_relations)
+            stats[:, 2].index_add_(
+                0,
+                unique_rel_subgraph_ids,
+                torch.ones_like(unique_rel_subgraph_ids, dtype=node_repr.dtype),
+            )
+
+            target_edge_mask = edge_dst == target_local_idx[edge_subgraph_id]
+            if torch.any(target_edge_mask):
+                target_subgraph_ids = edge_subgraph_id[target_edge_mask]
+                target_rel_ids = rel_ids[target_edge_mask]
+                inbound_mask = target_rel_ids < self.num_edge_types
+                outbound_mask = ~inbound_mask
+                if torch.any(inbound_mask):
+                    stats[:, 4].index_add_(
+                        0,
+                        target_subgraph_ids[inbound_mask],
+                        torch.ones_like(target_subgraph_ids[inbound_mask], dtype=node_repr.dtype),
                     )
-                    stats[subgraph_id, 5] = float(
-                        ((rel_ids[target_edges] >= self.num_edge_types).sum()).item()
+                if torch.any(outbound_mask):
+                    stats[:, 5].index_add_(
+                        0,
+                        target_subgraph_ids[outbound_mask],
+                        torch.ones_like(target_subgraph_ids[outbound_mask], dtype=node_repr.dtype),
                     )
 
         stats[:, 0] = torch.log1p(stats[:, 0])
@@ -850,6 +988,7 @@ class BaseGraphSAGEExperiment:
         self.rel_dim = rel_dim
         self.fanouts = fanouts or [15, 10]
         self.batch_size = batch_size
+        self.eval_batch_size = max(batch_size, 2048)
         self.epochs = epochs
         self.max_day = max_day
         self.temporal = temporal
@@ -881,6 +1020,7 @@ class BaseGraphSAGEExperiment:
     ) -> list[tuple[np.ndarray, np.ndarray, int | None]]:
         nodes = np.asarray(node_ids, dtype=np.int32)
         positions = np.arange(nodes.size, dtype=np.int32)
+        effective_batch_size = self.batch_size if training else self.eval_batch_size
         if self.temporal:
             buckets = np.asarray(context.graph_cache.node_time_bucket[nodes], dtype=np.int8)
             batches: list[tuple[np.ndarray, np.ndarray, int | None]] = []
@@ -894,11 +1034,11 @@ class BaseGraphSAGEExperiment:
                     order = rng.permutation(bucket_nodes.size)
                     bucket_nodes = bucket_nodes[order]
                     bucket_positions = bucket_positions[order]
-                for start in range(0, bucket_nodes.size, self.batch_size):
+                for start in range(0, bucket_nodes.size, effective_batch_size):
                     batches.append(
                         (
-                            bucket_nodes[start : start + self.batch_size],
-                            bucket_positions[start : start + self.batch_size],
+                            bucket_nodes[start : start + effective_batch_size],
+                            bucket_positions[start : start + effective_batch_size],
                             int(window["end_day"]),
                         )
                     )
@@ -910,11 +1050,11 @@ class BaseGraphSAGEExperiment:
             positions = positions[order]
         return [
             (
-                nodes[start : start + self.batch_size],
-                positions[start : start + self.batch_size],
+                nodes[start : start + effective_batch_size],
+                positions[start : start + effective_batch_size],
                 None,
             )
-            for start in range(0, nodes.size, self.batch_size)
+            for start in range(0, nodes.size, effective_batch_size)
         ]
 
     def _sample_batch_subgraph(
@@ -1045,25 +1185,189 @@ class BaseGraphSAGEExperiment:
         epochs_without_improvement = 0
         epoch_rng = np.random.default_rng(self.seed)
 
-        for epoch in range(1, self.epochs + 1):
-            self.network.train()
-            batch_losses: list[float] = []
-            batch_subgraph_nodes: list[float] = []
-            batch_subgraph_edges: list[float] = []
-            batch_emb_norm: list[float] = []
-            batch_dirichlet: list[float] = []
-            batch_grad_norm: list[float] = []
+        with tqdm(
+            range(1, self.epochs + 1),
+            desc=f"{self.model_name}:seed{self.seed}:epochs",
+            unit="epoch",
+            dynamic_ncols=True,
+        ) as epoch_pbar:
+            for epoch in epoch_pbar:
+                self.network.train()
+                batch_losses: list[float] = []
+                batch_subgraph_nodes: list[float] = []
+                batch_subgraph_edges: list[float] = []
+                batch_emb_norm: list[float] = []
+                batch_dirichlet: list[float] = []
+                batch_grad_norm: list[float] = []
 
-            for batch_nodes, _, snapshot_end in self._iter_batches(
-                context=context,
-                node_ids=train_ids,
-                training=True,
-                rng=epoch_rng,
-            ):
+                train_batches = self._iter_batches(
+                    context=context,
+                    node_ids=train_ids,
+                    training=True,
+                    rng=epoch_rng,
+                )
+                with tqdm(
+                    train_batches,
+                    desc=f"{self.model_name}:seed{self.seed}:train:{epoch}/{self.epochs}",
+                    unit="batch",
+                    dynamic_ncols=True,
+                    leave=False,
+                ) as batch_pbar:
+                    for batch_nodes, _, snapshot_end in batch_pbar:
+                        subgraph = self._sample_batch_subgraph(
+                            graph=context.graph_cache,
+                            batch_nodes=batch_nodes,
+                            rng=epoch_rng,
+                            snapshot_end=snapshot_end,
+                        )
+                        (
+                            x,
+                            edge_src,
+                            edge_dst,
+                            rel_ids,
+                            edge_relative_time,
+                            target_idx,
+                            node_subgraph_id,
+                            edge_subgraph_id,
+                        ) = self._tensorize_subgraph(
+                            context=context,
+                            subgraph=subgraph,
+                            snapshot_end=snapshot_end,
+                        )
+
+                        y_batch = torch.as_tensor(
+                            context.labels[batch_nodes],
+                            dtype=torch.float32,
+                            device=self.device,
+                        )
+
+                        optimizer.zero_grad(set_to_none=True)
+                        logits, diagnostics = self.network(
+                            x=x,
+                            edge_src=edge_src,
+                            edge_dst=edge_dst,
+                            rel_ids=rel_ids,
+                            edge_relative_time=edge_relative_time,
+                            target_local_idx=target_idx,
+                            node_subgraph_id=node_subgraph_id,
+                            edge_subgraph_id=edge_subgraph_id,
+                            return_details=True,
+                        )
+                        loss = criterion(logits, y_batch)
+                        loss.backward()
+
+                        if self.graph_config.grad_clip > 0:
+                            grad_norm = float(
+                                torch.nn.utils.clip_grad_norm_(
+                                    self.network.parameters(),
+                                    self.graph_config.grad_clip,
+                                ).item()
+                            )
+                        else:
+                            grad_norm = _compute_grad_norm(self.network.parameters())
+
+                        optimizer.step()
+                        batch_losses.append(float(loss.detach().item()))
+                        batch_subgraph_nodes.append(float(subgraph.node_ids.shape[0]))
+                        batch_subgraph_edges.append(float(subgraph.edge_src.shape[0]))
+                        batch_emb_norm.append(float(diagnostics["emb_norm"]))
+                        batch_dirichlet.append(float(diagnostics["dirichlet_energy"]))
+                        batch_grad_norm.append(float(grad_norm))
+                        batch_pbar.set_postfix(
+                            loss=f"{batch_losses[-1]:.4f}",
+                            nodes=int(subgraph.node_ids.shape[0]),
+                            edges=int(subgraph.edge_src.shape[0]),
+                            refresh=False,
+                        )
+
+                val_prob = self.predict_proba(
+                    context=context,
+                    node_ids=val_ids,
+                    batch_seed=self.seed + 1000,
+                    progress_desc=f"{self.model_name}:seed{self.seed}:val:{epoch}/{self.epochs}",
+                )
+                val_auc = safe_auc(val_labels, val_prob)
+                if scheduler is not None:
+                    scheduler.step(1.0 - val_auc)
+
+                if val_auc > best_val_auc:
+                    best_val_auc = val_auc
+                    best_epoch = epoch
+                    best_state = copy.deepcopy(self.network.state_dict())
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
+
+                current_lr = float(optimizer.param_groups[0]["lr"])
+                epoch_pbar.set_postfix(
+                    val_auc=f"{val_auc:.4f}",
+                    best_epoch=best_epoch,
+                    lr=f"{current_lr:.2e}",
+                    refresh=False,
+                )
+                tqdm.write(
+                    f"[{self.model_name}] epoch={epoch} "
+                    f"train_loss={np.mean(batch_losses):.6f} "
+                    f"val_auc={val_auc:.6f} "
+                    f"avg_subgraph_nodes={np.mean(batch_subgraph_nodes):.2f} "
+                    f"avg_subgraph_edges={np.mean(batch_subgraph_edges):.2f} "
+                    f"emb_norm={np.mean(batch_emb_norm):.6f} "
+                    f"dirichlet={np.mean(batch_dirichlet):.6f} "
+                    f"grad_norm={np.mean(batch_grad_norm):.6f} "
+                    f"best_epoch={best_epoch} "
+                    f"lr={current_lr:.6g}"
+                )
+
+                if (
+                    self.graph_config.early_stop_patience > 0
+                    and epochs_without_improvement >= self.graph_config.early_stop_patience
+                ):
+                    tqdm.write(
+                        f"[{self.model_name}] early_stop epoch={epoch} "
+                        f"patience={self.graph_config.early_stop_patience}"
+                    )
+                    break
+
+        if best_state is None:
+            raise RuntimeError(f"{self.model_name}: failed to capture a best checkpoint.")
+        self.network.load_state_dict(best_state)
+        return {
+            "val_auc": float(best_val_auc),
+            "best_epoch": float(best_epoch),
+        }
+
+    @torch.no_grad()
+    def predict_proba(
+        self,
+        context: GraphPhaseContext,
+        node_ids: np.ndarray,
+        batch_seed: int | None = None,
+        progress_desc: str | None = None,
+    ) -> np.ndarray:
+        self.network.eval()
+        node_ids = np.asarray(node_ids, dtype=np.int32)
+        rng = np.random.default_rng(self.seed if batch_seed is None else batch_seed)
+        probabilities = np.zeros(node_ids.shape[0], dtype=np.float32)
+        batches = self._iter_batches(
+            context=context,
+            node_ids=node_ids,
+            training=False,
+            rng=rng,
+        )
+        desc = progress_desc or f"{self.model_name}:seed{self.seed}:{context.phase}:predict"
+        processed = 0
+        with tqdm(
+            batches,
+            desc=desc,
+            unit="batch",
+            dynamic_ncols=True,
+            leave=False,
+        ) as batch_pbar:
+            for batch_nodes, batch_positions, snapshot_end in batch_pbar:
                 subgraph = self._sample_batch_subgraph(
                     graph=context.graph_cache,
                     batch_nodes=batch_nodes,
-                    rng=epoch_rng,
+                    rng=rng,
                     snapshot_end=snapshot_end,
                 )
                 (
@@ -1080,15 +1384,7 @@ class BaseGraphSAGEExperiment:
                     subgraph=subgraph,
                     snapshot_end=snapshot_end,
                 )
-
-                y_batch = torch.as_tensor(
-                    context.labels[batch_nodes],
-                    dtype=torch.float32,
-                    device=self.device,
-                )
-
-                optimizer.zero_grad(set_to_none=True)
-                logits, diagnostics = self.network(
+                logits = self.network(
                     x=x,
                     edge_src=edge_src,
                     edge_dst=edge_dst,
@@ -1097,133 +1393,17 @@ class BaseGraphSAGEExperiment:
                     target_local_idx=target_idx,
                     node_subgraph_id=node_subgraph_id,
                     edge_subgraph_id=edge_subgraph_id,
-                    return_details=True,
                 )
-                loss = criterion(logits, y_batch)
-                loss.backward()
-
-                if self.graph_config.grad_clip > 0:
-                    grad_norm = float(
-                        torch.nn.utils.clip_grad_norm_(
-                            self.network.parameters(),
-                            self.graph_config.grad_clip,
-                        ).item()
-                    )
-                else:
-                    grad_norm = _compute_grad_norm(self.network.parameters())
-
-                optimizer.step()
-                batch_losses.append(float(loss.detach().item()))
-                batch_subgraph_nodes.append(float(subgraph.node_ids.shape[0]))
-                batch_subgraph_edges.append(float(subgraph.edge_src.shape[0]))
-                batch_emb_norm.append(float(diagnostics["emb_norm"]))
-                batch_dirichlet.append(float(diagnostics["dirichlet_energy"]))
-                batch_grad_norm.append(float(grad_norm))
-
-            val_prob = self.predict_proba(
-                context=context,
-                node_ids=val_ids,
-                batch_seed=self.seed + epoch,
-            )
-            val_auc = safe_auc(val_labels, val_prob)
-            if scheduler is not None:
-                scheduler.step(1.0 - val_auc)
-
-            if val_auc > best_val_auc:
-                best_val_auc = val_auc
-                best_epoch = epoch
-                best_state = copy.deepcopy(self.network.state_dict())
-                epochs_without_improvement = 0
-            else:
-                epochs_without_improvement += 1
-
-            current_lr = float(optimizer.param_groups[0]["lr"])
-            print(
-                f"[{self.model_name}] epoch={epoch} "
-                f"train_loss={np.mean(batch_losses):.6f} "
-                f"val_auc={val_auc:.6f} "
-                f"avg_subgraph_nodes={np.mean(batch_subgraph_nodes):.2f} "
-                f"avg_subgraph_edges={np.mean(batch_subgraph_edges):.2f} "
-                f"emb_norm={np.mean(batch_emb_norm):.6f} "
-                f"dirichlet={np.mean(batch_dirichlet):.6f} "
-                f"grad_norm={np.mean(batch_grad_norm):.6f} "
-                f"best_epoch={best_epoch} "
-                f"lr={current_lr:.6g}"
-            )
-
-            if (
-                self.graph_config.early_stop_patience > 0
-                and epochs_without_improvement >= self.graph_config.early_stop_patience
-            ):
-                print(
-                    f"[{self.model_name}] early_stop epoch={epoch} "
-                    f"patience={self.graph_config.early_stop_patience}"
+                batch_prob = (
+                    torch.sigmoid(logits)
+                    .detach()
+                    .cpu()
+                    .numpy()
+                    .astype(np.float32, copy=False)
                 )
-                break
-
-        if best_state is None:
-            raise RuntimeError(f"{self.model_name}: failed to capture a best checkpoint.")
-        self.network.load_state_dict(best_state)
-        return {
-            "val_auc": float(best_val_auc),
-            "best_epoch": float(best_epoch),
-        }
-
-    @torch.no_grad()
-    def predict_proba(
-        self,
-        context: GraphPhaseContext,
-        node_ids: np.ndarray,
-        batch_seed: int | None = None,
-    ) -> np.ndarray:
-        self.network.eval()
-        node_ids = np.asarray(node_ids, dtype=np.int32)
-        rng = np.random.default_rng(self.seed if batch_seed is None else batch_seed)
-        probabilities = np.zeros(node_ids.shape[0], dtype=np.float32)
-        for batch_nodes, batch_positions, snapshot_end in self._iter_batches(
-            context=context,
-            node_ids=node_ids,
-            training=False,
-            rng=rng,
-        ):
-            subgraph = self._sample_batch_subgraph(
-                graph=context.graph_cache,
-                batch_nodes=batch_nodes,
-                rng=rng,
-                snapshot_end=snapshot_end,
-            )
-            (
-                x,
-                edge_src,
-                edge_dst,
-                rel_ids,
-                edge_relative_time,
-                target_idx,
-                node_subgraph_id,
-                edge_subgraph_id,
-            ) = self._tensorize_subgraph(
-                context=context,
-                subgraph=subgraph,
-                snapshot_end=snapshot_end,
-            )
-            logits = self.network(
-                x=x,
-                edge_src=edge_src,
-                edge_dst=edge_dst,
-                rel_ids=rel_ids,
-                edge_relative_time=edge_relative_time,
-                target_local_idx=target_idx,
-                node_subgraph_id=node_subgraph_id,
-                edge_subgraph_id=edge_subgraph_id,
-            )
-            batch_prob = (
-                torch.sigmoid(logits)
-                .detach()
-                .cpu()
-                .numpy()
-                .astype(np.float32, copy=False)
-            )
-            probabilities[batch_positions] = batch_prob
+                probabilities[batch_positions] = batch_prob
+                processed += int(batch_positions.size)
+                batch_pbar.set_postfix(done=f"{processed}/{node_ids.size}", refresh=False)
         return probabilities
 
     def save(self, run_dir: Path) -> None:
@@ -1238,6 +1418,7 @@ class BaseGraphSAGEExperiment:
             "rel_dim": self.rel_dim,
             "fanouts": self.fanouts,
             "batch_size": self.batch_size,
+            "eval_batch_size": self.eval_batch_size,
             "epochs": self.epochs,
             "learning_rate": self.graph_config.learning_rate,
             "weight_decay": self.graph_config.weight_decay,
@@ -1292,6 +1473,7 @@ class BaseGraphSAGEExperiment:
                 meta.get("feature_normalizer_state")
             ),
         )
+        instance.eval_batch_size = int(meta.get("eval_batch_size", max(instance.batch_size, 2048)))
         state_dict = torch.load(
             run_dir / "model.pt",
             map_location=instance.device,
