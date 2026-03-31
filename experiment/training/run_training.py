@@ -30,12 +30,14 @@ from experiment.training.common import (
 from experiment.training.features import (
     FeatureStore,
     build_feature_artifacts,
+    build_hybrid_feature_normalizer,
     default_feature_groups,
     load_graph_cache,
 )
 from experiment.training.gbdt_models import LightGBMExperiment
 from experiment.training.gnn_models import (
     GraphPhaseContext,
+    GraphModelConfig,
     RelationGraphSAGEExperiment,
     TemporalRelationGraphSAGEExperiment,
 )
@@ -175,6 +177,82 @@ def parse_args() -> argparse.Namespace:
         default=32,
         help="Relation embedding dimension for graph models.",
     )
+    train_parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=1e-3,
+        help="Learning rate for graph models.",
+    )
+    train_parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=1e-5,
+        help="Weight decay for graph models.",
+    )
+    train_parser.add_argument(
+        "--dropout",
+        type=float,
+        default=0.2,
+        help="Dropout for graph models.",
+    )
+    train_parser.add_argument(
+        "--feature-norm",
+        choices=("none", "hybrid"),
+        default="none",
+        help="Feature normalization recipe for graph models.",
+    )
+    train_parser.add_argument(
+        "--norm",
+        choices=("none", "layer", "batch"),
+        default="none",
+        help="Hidden-state normalization for modern graph blocks.",
+    )
+    train_parser.add_argument(
+        "--residual",
+        action="store_true",
+        help="Enable residual connections in modern graph blocks.",
+    )
+    train_parser.add_argument(
+        "--ffn",
+        action="store_true",
+        help="Enable FFN layers in modern graph blocks.",
+    )
+    train_parser.add_argument(
+        "--jk",
+        choices=("last", "sum"),
+        default="last",
+        help="Jumping knowledge mode for graph models.",
+    )
+    train_parser.add_argument(
+        "--edge-encoder",
+        choices=("basic", "gated"),
+        default="basic",
+        help="Edge-aware message encoder for modern graph blocks.",
+    )
+    train_parser.add_argument(
+        "--subgraph-head",
+        choices=("none", "meanmax"),
+        default="none",
+        help="Subgraph fusion head for graph models.",
+    )
+    train_parser.add_argument(
+        "--grad-clip",
+        type=float,
+        default=0.0,
+        help="Gradient clipping threshold; 0 disables clipping.",
+    )
+    train_parser.add_argument(
+        "--scheduler",
+        choices=("none", "plateau"),
+        default="none",
+        help="Learning-rate scheduler for graph models.",
+    )
+    train_parser.add_argument(
+        "--early-stop-patience",
+        type=int,
+        default=0,
+        help="Early stopping patience; 0 disables early stopping.",
+    )
 
     blend_parser = subparsers.add_parser(
         "blend",
@@ -220,6 +298,24 @@ def _prepare_split_ids(args: argparse.Namespace):
     val_ids = slice_node_ids(split.val_ids, args.max_val_nodes, seed=17)
     external_ids = slice_node_ids(split.external_ids, args.max_external_nodes, seed=29)
     return split, train_ids, val_ids, external_ids
+
+
+def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
+    return GraphModelConfig(
+        learning_rate=float(args.learning_rate),
+        weight_decay=float(args.weight_decay),
+        dropout=float(args.dropout),
+        feature_norm=str(args.feature_norm),
+        norm=str(args.norm),
+        residual=bool(args.residual),
+        ffn=bool(args.ffn),
+        jk=str(args.jk),
+        edge_encoder=str(args.edge_encoder),
+        subgraph_head=str(args.subgraph_head),
+        grad_clip=float(args.grad_clip),
+        scheduler=str(args.scheduler),
+        early_stop_patience=int(args.early_stop_patience),
+    )
 
 
 def _save_average_predictions(
@@ -381,10 +477,24 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
     print(f"Training finished: {run_dir}")
 
 
-def _make_graph_contexts(feature_dir: Path, model_name: str) -> tuple[GraphPhaseContext, GraphPhaseContext]:
+def _make_graph_contexts(
+    feature_dir: Path,
+    model_name: str,
+    feature_normalizer_state=None,
+) -> tuple[GraphPhaseContext, GraphPhaseContext]:
     feature_groups = default_feature_groups(model_name)
-    phase1_store = FeatureStore("phase1", feature_groups, outdir=feature_dir)
-    phase2_store = FeatureStore("phase2", feature_groups, outdir=feature_dir)
+    phase1_store = FeatureStore(
+        "phase1",
+        feature_groups,
+        outdir=feature_dir,
+        normalizer_state=feature_normalizer_state,
+    )
+    phase2_store = FeatureStore(
+        "phase2",
+        feature_groups,
+        outdir=feature_dir,
+        normalizer_state=feature_normalizer_state,
+    )
     phase1_graph = load_graph_cache("phase1", outdir=feature_dir)
     phase2_graph = load_graph_cache("phase2", outdir=feature_dir)
     phase1_y = np.asarray(load_phase_arrays("phase1", keys=("y",))["y"], dtype=np.int8)
@@ -397,7 +507,22 @@ def _make_graph_contexts(feature_dir: Path, model_name: str) -> tuple[GraphPhase
 
 def run_train_graph(args: argparse.Namespace) -> None:
     split, train_ids, val_ids, external_ids = _prepare_split_ids(args)
-    phase1_context, phase2_context = _make_graph_contexts(args.feature_dir, args.model)
+    feature_groups = default_feature_groups(args.model)
+    graph_config = _build_graph_model_config(args)
+    feature_normalizer_state = None
+    if graph_config.feature_norm == "hybrid":
+        feature_normalizer_state = build_hybrid_feature_normalizer(
+            phase="phase1",
+            selected_groups=feature_groups,
+            train_ids=train_ids,
+            outdir=args.feature_dir,
+        )
+
+    phase1_context, phase2_context = _make_graph_contexts(
+        args.feature_dir,
+        args.model,
+        feature_normalizer_state=feature_normalizer_state,
+    )
     run_dir = _model_run_dir(args.outdir, args.model, args.run_name)
     input_dim = phase1_context.feature_store.input_dim
     num_relations = phase1_context.graph_cache.num_relations
@@ -427,6 +552,8 @@ def run_train_graph(args: argparse.Namespace) -> None:
             batch_size=args.batch_size,
             epochs=args.epochs,
             device=args.device,
+            graph_config=graph_config,
+            feature_normalizer_state=feature_normalizer_state,
         )
         fit_metrics = experiment.fit(
             context=phase1_context,
@@ -503,6 +630,7 @@ def run_train_graph(args: argparse.Namespace) -> None:
             "batch_size": args.batch_size,
             "epochs": args.epochs,
             "device": args.device,
+            **graph_config.to_dict(),
         },
     }
     summary["promotion_decision"] = _build_promotion_decision(

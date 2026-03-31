@@ -11,44 +11,100 @@ from experiment.eda.analysis import compute_degree_arrays, compute_temporal_core
 from experiment.eda.data_loader import PhaseData, load_phase
 from experiment.training.common import FEATURE_OUTPUT_ROOT, REPO_ROOT, ensure_dir, write_json
 
-
+# 特征数
 RAW_FEATURE_COUNT = 17
+# 边类型数
 NUM_EDGE_TYPES = 11
+# 时间窗口
 NUM_TIME_WINDOWS = 4
 STRONG_PAIRS = ((2, 3), (6, 8), (15, 16))
 
 
 @dataclass(frozen=True)
 class GraphCache:
-    phase: str
-    num_nodes: int
-    max_day: int
-    num_edge_types: int
-    num_relations: int
-    time_windows: list[dict[str, int]]
-    out_ptr: np.ndarray
-    out_neighbors: np.ndarray
-    out_edge_type: np.ndarray
-    out_edge_timestamp: np.ndarray
-    in_ptr: np.ndarray
-    in_neighbors: np.ndarray
-    in_edge_type: np.ndarray
-    in_edge_timestamp: np.ndarray
-    first_active: np.ndarray
-    node_time_bucket: np.ndarray
+    phase: str # 数据阶段
+    num_nodes: int # 节点个数
+    max_day: int # 最大天数，用于初始化
+    num_edge_types: int # 原始边类型总数
+    num_relations: int # 关系种类数
+    time_windows: list[dict[str, int]] # 时间窗口特征   "window_idx": 1,"start_day": 1,"end_day": 17
+    out_ptr: np.ndarray # 节点N的所有出边，扁平话数组，节点 i 的所有出边，位于 out_neighbors[out_ptr[i] : out_ptr[i+1]] 这段切片里。
+    out_neighbors: np.ndarray # 节点N的所有出领居节点ID
+    out_edge_type: np.ndarray # 所有出边类型，和Neighbor对应
+    out_edge_timestamp: np.ndarray # 边的时间戳特征
+    in_ptr: np.ndarray # 节点N的所有入边
+    in_neighbors: np.ndarray # 入邻居
+    in_edge_type: np.ndarray # 入边类型
+    in_edge_timestamp: np.ndarray # 入边时间戳
+    first_active: np.ndarray # 第一次活动时间，按最小边算
+    node_time_bucket: np.ndarray # 时间组编号
 
 
+@dataclass(frozen=True)
+class HybridFeatureNormalizerState:
+    mode: str
+    feature_names: list[str]
+    raw_indices: list[int]
+    raw_medians: list[float]
+    raw_means: list[float]
+    raw_stds: list[float]
+    log_indices: list[int]
+    log_means: list[float]
+    log_stds: list[float]
+    z_indices: list[int]
+    z_means: list[float]
+    z_stds: list[float]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "mode": self.mode,
+            "feature_names": self.feature_names,
+            "raw_indices": self.raw_indices,
+            "raw_medians": self.raw_medians,
+            "raw_means": self.raw_means,
+            "raw_stds": self.raw_stds,
+            "log_indices": self.log_indices,
+            "log_means": self.log_means,
+            "log_stds": self.log_stds,
+            "z_indices": self.z_indices,
+            "z_means": self.z_means,
+            "z_stds": self.z_stds,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any] | None) -> HybridFeatureNormalizerState | None:
+        if not payload:
+            return None
+        return cls(
+            mode=str(payload["mode"]),
+            feature_names=list(payload["feature_names"]),
+            raw_indices=[int(idx) for idx in payload["raw_indices"]],
+            raw_medians=[float(value) for value in payload["raw_medians"]],
+            raw_means=[float(value) for value in payload["raw_means"]],
+            raw_stds=[float(value) for value in payload["raw_stds"]],
+            log_indices=[int(idx) for idx in payload["log_indices"]],
+            log_means=[float(value) for value in payload["log_means"]],
+            log_stds=[float(value) for value in payload["log_stds"]],
+            z_indices=[int(idx) for idx in payload["z_indices"]],
+            z_means=[float(value) for value in payload["z_means"]],
+            z_stds=[float(value) for value in payload["z_stds"]],
+        )
+
+
+# 特征读取器
 class FeatureStore:
     def __init__(
         self,
-        phase: str,
+        phase: str, # 数据阶段
         selected_groups: list[str],
         outdir: Path = FEATURE_OUTPUT_ROOT,
+        normalizer_state: HybridFeatureNormalizerState | None = None,
     ) -> None:
         self.phase = phase
         self.phase_dir = outdir / phase
         self.manifest = load_feature_manifest(phase, outdir=outdir)
         self.selected_groups = selected_groups
+        self.normalizer_state = normalizer_state
         self.core = np.load(self.phase_dir / self.manifest["core_file"], mmap_mode="r")
         self.neighbor = None
         neighbor_file = self.manifest.get("neighbor_file")
@@ -91,7 +147,10 @@ class FeatureStore:
             )
         if not blocks:
             raise ValueError("No feature groups selected.")
-        return np.concatenate(blocks, axis=1).astype(np.float32, copy=False)
+        features = np.concatenate(blocks, axis=1).astype(np.float32, copy=False)
+        if self.normalizer_state is not None:
+            features = apply_hybrid_feature_normalizer(features, self.normalizer_state)
+        return features
 
     @property
     def input_dim(self) -> int:
@@ -250,6 +309,140 @@ def _write_graph_arrays(
 
 def _bincount_float(indices: np.ndarray, weights: np.ndarray, size: int) -> np.ndarray:
     return np.bincount(indices, weights=weights, minlength=size).astype(np.float32, copy=False)
+
+
+def _stable_std(value: float) -> float:
+    return float(max(value, 1e-6))
+
+
+def _feature_normalization_type(feature_name: str) -> str:
+    if feature_name.endswith("_is_neg1") or feature_name == "touch_background":
+        return "identity"
+    if feature_name.startswith("x") and feature_name[1:].isdigit():
+        return "raw"
+    log_prefixes = (
+        "in_type_",
+        "out_type_",
+        "bg_in_type_",
+        "bg_out_type_",
+        "window_",
+    )
+    log_exact = {
+        "missing_count",
+        "indegree",
+        "outdegree",
+        "total_degree",
+        "bg_in_count",
+        "bg_out_count",
+        "bg_total_count",
+        "first_active",
+        "last_active",
+        "active_span",
+    }
+    if feature_name in log_exact or feature_name.startswith(log_prefixes):
+        return "log"
+    return "zscore"
+
+
+def apply_hybrid_feature_normalizer(
+    features: np.ndarray,
+    state: HybridFeatureNormalizerState,
+) -> np.ndarray:
+    x = np.asarray(features, dtype=np.float32).copy()
+    if x.shape[1] != len(state.feature_names):
+        raise ValueError(
+            f"Feature dimension mismatch: expected {len(state.feature_names)}, got {x.shape[1]}"
+        )
+    if state.raw_indices:
+        raw_idx = np.asarray(state.raw_indices, dtype=np.int64)
+        raw_values = x[:, raw_idx]
+        medians = np.asarray(state.raw_medians, dtype=np.float32)
+        means = np.asarray(state.raw_means, dtype=np.float32)
+        stds = np.asarray(state.raw_stds, dtype=np.float32)
+        missing = raw_values == -1.0
+        raw_values = np.where(missing, medians.reshape(1, -1), raw_values)
+        x[:, raw_idx] = (raw_values - means.reshape(1, -1)) / stds.reshape(1, -1)
+    if state.log_indices:
+        log_idx = np.asarray(state.log_indices, dtype=np.int64)
+        log_values = np.log1p(np.clip(x[:, log_idx], 0.0, None))
+        means = np.asarray(state.log_means, dtype=np.float32)
+        stds = np.asarray(state.log_stds, dtype=np.float32)
+        x[:, log_idx] = (log_values - means.reshape(1, -1)) / stds.reshape(1, -1)
+    if state.z_indices:
+        z_idx = np.asarray(state.z_indices, dtype=np.int64)
+        z_values = x[:, z_idx]
+        means = np.asarray(state.z_means, dtype=np.float32)
+        stds = np.asarray(state.z_stds, dtype=np.float32)
+        x[:, z_idx] = (z_values - means.reshape(1, -1)) / stds.reshape(1, -1)
+    return x.astype(np.float32, copy=False)
+
+
+def build_hybrid_feature_normalizer(
+    phase: str,
+    selected_groups: list[str],
+    train_ids: np.ndarray,
+    outdir: Path = FEATURE_OUTPUT_ROOT,
+) -> HybridFeatureNormalizerState:
+    train_store = FeatureStore(phase, selected_groups, outdir=outdir)
+    x_train = train_store.take_rows(np.asarray(train_ids, dtype=np.int32))
+    feature_names = list(train_store.feature_names)
+
+    raw_indices: list[int] = []
+    raw_medians: list[float] = []
+    raw_means: list[float] = []
+    raw_stds: list[float] = []
+    log_indices: list[int] = []
+    log_means: list[float] = []
+    log_stds: list[float] = []
+    z_indices: list[int] = []
+    z_means: list[float] = []
+    z_stds: list[float] = []
+
+    for feature_idx, feature_name in enumerate(feature_names):
+        mode = _feature_normalization_type(feature_name)
+        column = x_train[:, feature_idx].astype(np.float32, copy=False)
+        if mode == "identity":
+            continue
+        if mode == "raw":
+            valid = column[column != -1.0]
+            if valid.size == 0:
+                median = 0.0
+                mean = 0.0
+                std = 1.0
+            else:
+                median = float(np.median(valid))
+                filled = np.where(column == -1.0, median, column)
+                mean = float(np.mean(filled))
+                std = _stable_std(float(np.std(filled)))
+            raw_indices.append(feature_idx)
+            raw_medians.append(median)
+            raw_means.append(mean)
+            raw_stds.append(std)
+            continue
+        if mode == "log":
+            transformed = np.log1p(np.clip(column, 0.0, None))
+            log_indices.append(feature_idx)
+            log_means.append(float(np.mean(transformed)))
+            log_stds.append(_stable_std(float(np.std(transformed))))
+            continue
+        z_indices.append(feature_idx)
+        z_means.append(float(np.mean(column)))
+        z_stds.append(_stable_std(float(np.std(column))))
+
+    return HybridFeatureNormalizerState(
+        mode="hybrid",
+        feature_names=feature_names,
+        raw_indices=raw_indices,
+        raw_medians=raw_medians,
+        raw_means=raw_means,
+        raw_stds=raw_stds,
+        log_indices=log_indices,
+        log_means=log_means,
+        log_stds=log_stds,
+        z_indices=z_indices,
+        z_means=z_means,
+        z_stds=z_stds,
+    )
 
 
 def _build_neighbor_features(
