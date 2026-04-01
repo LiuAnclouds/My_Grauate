@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import csv
 import copy
 import json
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -124,6 +126,88 @@ class TrainBatchStats:
     @property
     def positive_rate(self) -> float:
         return 0.0 if self.target_count == 0 else float(self.positive_count / self.target_count)
+
+
+def _append_text_line(path: Path, line: str) -> None:
+    ensure_dir(path.parent)
+    with path.open("a", encoding="utf-8") as fp:
+        fp.write(line.rstrip("\n"))
+        fp.write("\n")
+
+
+def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+    ensure_dir(path.parent)
+    with path.open("a", encoding="utf-8") as fp:
+        fp.write(json.dumps(payload, ensure_ascii=False))
+        fp.write("\n")
+
+
+def _write_history_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    ensure_dir(path.parent)
+    if not rows:
+        return
+    fieldnames = list(rows[0].keys())
+    with path.open("w", encoding="utf-8-sig", newline="") as fp:
+        writer = csv.DictWriter(fp, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _plot_training_curves(path: Path, rows: list[dict[str, Any]]) -> str | None:
+    if not rows:
+        return "no training rows collected"
+    try:
+        mpl_cache_dir = path.parent / ".mplconfig"
+        ensure_dir(mpl_cache_dir)
+        os.environ.setdefault("MPLCONFIGDIR", str(mpl_cache_dir))
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+
+    epochs = [int(row["epoch"]) for row in rows]
+    train_loss = [float(row["train_loss"]) for row in rows]
+    val_auc = [float(row["val_auc"]) for row in rows]
+    val_pr_auc = [float(row["val_pr_auc"]) for row in rows]
+    val_ap = [float(row["val_ap"]) for row in rows]
+    best_epoch = int(max(rows, key=lambda row: float(row["val_auc"]))["epoch"])
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
+    ax_loss, ax_auc, ax_ap, ax_pr = axes.flat
+
+    ax_loss.plot(epochs, train_loss, marker="o", linewidth=2.0, color="#1f77b4")
+    ax_loss.set_title("Train Loss")
+    ax_loss.set_xlabel("Epoch")
+    ax_loss.set_ylabel("Loss")
+    ax_loss.grid(alpha=0.25)
+
+    ax_auc.plot(epochs, val_auc, marker="o", linewidth=2.0, color="#d62728")
+    ax_auc.axvline(best_epoch, linestyle="--", linewidth=1.2, color="#444444")
+    ax_auc.set_title("Validation ROC-AUC")
+    ax_auc.set_xlabel("Epoch")
+    ax_auc.set_ylabel("AUC")
+    ax_auc.grid(alpha=0.25)
+
+    ax_ap.plot(epochs, val_ap, marker="o", linewidth=2.0, color="#2ca02c")
+    ax_ap.axvline(best_epoch, linestyle="--", linewidth=1.2, color="#444444")
+    ax_ap.set_title("Validation Average Precision")
+    ax_ap.set_xlabel("Epoch")
+    ax_ap.set_ylabel("AP")
+    ax_ap.grid(alpha=0.25)
+
+    ax_pr.plot(epochs, val_pr_auc, marker="o", linewidth=2.0, color="#9467bd")
+    ax_pr.axvline(best_epoch, linestyle="--", linewidth=1.2, color="#444444")
+    ax_pr.set_title("Validation PR-AUC")
+    ax_pr.set_xlabel("Epoch")
+    ax_pr.set_ylabel("PR-AUC")
+    ax_pr.grid(alpha=0.25)
+
+    ensure_dir(path.parent)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+    return None
 
 
 def _sample_edge_indices(
@@ -1344,12 +1428,25 @@ class BaseGraphSAGEExperiment:
         context: GraphPhaseContext,
         train_ids: np.ndarray,
         val_ids: np.ndarray,
+        artifact_dir: Path | None = None,
     ) -> dict[str, float]:
         set_global_seed(self.seed)
         train_ids = np.asarray(train_ids, dtype=np.int32)
         val_ids = np.asarray(val_ids, dtype=np.int32)
         train_labels = context.labels[train_ids].astype(np.float32, copy=False)
         val_labels = context.labels[val_ids].astype(np.int8, copy=False)
+        self.training_history: list[dict[str, Any]] = []
+
+        log_path = None if artifact_dir is None else artifact_dir / "train.log"
+        history_jsonl_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.jsonl"
+        history_csv_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.csv"
+        curve_path = None if artifact_dir is None else artifact_dir / "training_curves.png"
+        fit_summary_path = None if artifact_dir is None else artifact_dir / "fit_summary.json"
+        if artifact_dir is not None:
+            ensure_dir(artifact_dir)
+            for path in (log_path, history_jsonl_path):
+                if path is not None:
+                    path.write_text("", encoding="utf-8")
 
         optimizer = torch.optim.AdamW(
             self.network.parameters(),
@@ -1380,6 +1477,17 @@ class BaseGraphSAGEExperiment:
             device=self.device,
         )
         criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        if log_path is not None:
+            _append_text_line(
+                log_path,
+                (
+                    f"[{self.model_name}] seed={self.seed} phase={context.phase} "
+                    f"train_size={train_ids.size} val_size={val_ids.size} "
+                    f"batch_size={self.batch_size} eval_batch_size={self.eval_batch_size} "
+                    f"train_negative_ratio={self.graph_config.train_negative_ratio:.4f} "
+                    f"loss_pos_weight={float(pos_weight.item()):.4f}"
+                ),
+            )
 
         best_state = None
         best_val_auc = -math.inf
@@ -1507,9 +1615,29 @@ class BaseGraphSAGEExperiment:
                     lr=f"{current_lr:.2e}",
                     refresh=False,
                 )
-                tqdm.write(
+                epoch_row = {
+                    "epoch": int(epoch),
+                    "train_loss": float(np.mean(batch_losses)),
+                    "val_auc": float(val_auc),
+                    "val_pr_auc": float(val_metrics["pr_auc"]),
+                    "val_ap": float(val_metrics["ap"]),
+                    "train_targets": int(train_batch_stats.target_count),
+                    "train_pos": int(train_batch_stats.positive_count),
+                    "train_neg": int(train_batch_stats.negative_count),
+                    "train_pos_rate": float(train_batch_stats.positive_rate),
+                    "avg_subgraph_nodes": float(np.mean(batch_subgraph_nodes)),
+                    "avg_subgraph_edges": float(np.mean(batch_subgraph_edges)),
+                    "emb_norm": float(np.mean(batch_emb_norm)),
+                    "dirichlet": float(np.mean(batch_dirichlet)),
+                    "grad_norm": float(np.mean(batch_grad_norm)),
+                    "best_epoch": int(best_epoch),
+                    "lr": float(current_lr),
+                    "loss_pos_weight": float(pos_weight.item()),
+                }
+                self.training_history.append(epoch_row)
+                epoch_log_line = (
                     f"[{self.model_name}] epoch={epoch} "
-                    f"train_loss={np.mean(batch_losses):.6f} "
+                    f"train_loss={epoch_row['train_loss']:.6f} "
                     f"val_auc={val_auc:.6f} "
                     f"val_pr_auc={val_metrics['pr_auc']:.6f} "
                     f"val_ap={val_metrics['ap']:.6f} "
@@ -1526,25 +1654,43 @@ class BaseGraphSAGEExperiment:
                     f"lr={current_lr:.6g} "
                     f"loss_pos_weight={float(pos_weight.item()):.4f}"
                 )
+                tqdm.write(epoch_log_line)
+                if log_path is not None:
+                    _append_text_line(log_path, epoch_log_line)
+                if history_jsonl_path is not None:
+                    _append_jsonl(history_jsonl_path, epoch_row)
 
                 if (
                     self.graph_config.early_stop_patience > 0
                     and epochs_without_improvement >= self.graph_config.early_stop_patience
                 ):
-                    tqdm.write(
+                    early_stop_line = (
                         f"[{self.model_name}] early_stop epoch={epoch} "
                         f"patience={self.graph_config.early_stop_patience}"
                     )
+                    tqdm.write(early_stop_line)
+                    if log_path is not None:
+                        _append_text_line(log_path, early_stop_line)
                     break
 
         if best_state is None:
             raise RuntimeError(f"{self.model_name}: failed to capture a best checkpoint.")
         self.network.load_state_dict(best_state)
-        return {
+        fit_summary = {
             "val_auc": float(best_val_auc),
             "best_epoch": float(best_epoch),
             "loss_pos_weight": float(pos_weight.item()),
         }
+        self.fit_summary = fit_summary
+        if history_csv_path is not None:
+            _write_history_csv(history_csv_path, self.training_history)
+        if fit_summary_path is not None:
+            write_json(fit_summary_path, fit_summary)
+        if curve_path is not None:
+            plot_error = _plot_training_curves(curve_path, self.training_history)
+            if plot_error is not None and log_path is not None:
+                _append_text_line(log_path, f"[{self.model_name}] plot_warning={plot_error}")
+        return fit_summary
 
     @torch.no_grad()
     def predict_proba(

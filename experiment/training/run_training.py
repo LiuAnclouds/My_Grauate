@@ -623,6 +623,7 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 context=phase1_context,
                 train_ids=train_ids,
                 val_ids=val_ids,
+                artifact_dir=seed_dir,
             )
             val_prob = experiment.predict_proba(
                 phase1_context,
@@ -667,6 +668,9 @@ def run_train_graph(args: argparse.Namespace) -> None:
                     "external_ap": external_metrics["ap"],
                     "best_epoch": fit_metrics["best_epoch"],
                     "loss_pos_weight": fit_metrics["loss_pos_weight"],
+                    "train_log_path": _path_repr(seed_dir / "train.log"),
+                    "epoch_metrics_path": _path_repr(seed_dir / "epoch_metrics.csv"),
+                    "curve_path": _path_repr(seed_dir / "training_curves.png"),
                 }
             )
             seed_pbar.set_postfix(
