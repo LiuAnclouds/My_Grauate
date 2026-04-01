@@ -19,11 +19,11 @@ from experiment.training.common import (
     BLEND_OUTPUT_ROOT,
     FEATURE_OUTPUT_ROOT,
     MODEL_OUTPUT_ROOT,
+    compute_binary_classification_metrics,
     ensure_dir,
     load_experiment_split,
     load_phase_arrays,
     save_prediction_npz,
-    safe_auc,
     set_global_seed,
     slice_node_ids,
     write_json,
@@ -254,6 +254,15 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Early stopping patience; 0 disables early stopping.",
     )
+    train_parser.add_argument(
+        "--train-negative-ratio",
+        type=float,
+        default=0.0,
+        help=(
+            "If > 0, use only train_ids for balanced target-node sampling: keep all "
+            "positives and sample at most this many negatives per positive each epoch."
+        ),
+    )
 
     blend_parser = subparsers.add_parser(
         "blend",
@@ -316,6 +325,7 @@ def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
         grad_clip=float(args.grad_clip),
         scheduler=str(args.scheduler),
         early_stop_patience=int(args.early_stop_patience),
+        train_negative_ratio=float(args.train_negative_ratio),
     )
 
 
@@ -427,8 +437,8 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
             )
             val_prob = model.predict_proba(phase1_store, val_ids)
             external_prob = model.predict_proba(phase2_store, external_ids)
-            val_auc = safe_auc(phase1_y[val_ids], val_prob)
-            external_auc = safe_auc(phase2_y[external_ids], external_prob)
+            val_metrics = compute_binary_classification_metrics(phase1_y[val_ids], val_prob)
+            external_metrics = compute_binary_classification_metrics(phase2_y[external_ids], external_prob)
             model.save(seed_dir, feature_names=phase1_store.feature_names)
             save_prediction_npz(seed_dir / "phase1_val_predictions.npz", val_ids, phase1_y[val_ids], val_prob)
             save_prediction_npz(
@@ -442,19 +452,29 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
             metrics.append(
                 {
                     "seed": seed,
-                    "val_auc": val_auc,
-                    "external_auc": external_auc,
+                    "val_auc": val_metrics["auc"],
+                    "val_pr_auc": val_metrics["pr_auc"],
+                    "val_ap": val_metrics["ap"],
+                    "external_auc": external_metrics["auc"],
+                    "external_pr_auc": external_metrics["pr_auc"],
+                    "external_ap": external_metrics["ap"],
                     "best_iteration": fit_metrics["best_iteration"],
                 }
             )
             seed_pbar.set_postfix(
-                val_auc=f"{val_auc:.4f}",
-                external_auc=f"{external_auc:.4f}",
+                val_auc=f"{val_metrics['auc']:.4f}",
+                val_ap=f"{val_metrics['ap']:.4f}",
+                external_auc=f"{external_metrics['auc']:.4f}",
                 refresh=False,
             )
             tqdm.write(
-                f"[{args.model}] seed={seed} phase1_val_auc={val_auc:.6f} "
-                f"phase2_external_auc={external_auc:.6f}"
+                f"[{args.model}] seed={seed} "
+                f"phase1_val_auc={val_metrics['auc']:.6f} "
+                f"phase1_val_pr_auc={val_metrics['pr_auc']:.6f} "
+                f"phase1_val_ap={val_metrics['ap']:.6f} "
+                f"phase2_external_auc={external_metrics['auc']:.6f} "
+                f"phase2_external_pr_auc={external_metrics['pr_auc']:.6f} "
+                f"phase2_external_ap={external_metrics['ap']:.6f}"
             )
 
     val_avg_path = _save_average_predictions(
@@ -482,8 +502,16 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
         "phase2_external_size": int(external_ids.size),
         "phase1_val_auc_mean": float(np.mean([row["val_auc"] for row in metrics])),
         "phase1_val_auc_std": float(np.std([row["val_auc"] for row in metrics])),
+        "phase1_val_pr_auc_mean": float(np.mean([row["val_pr_auc"] for row in metrics])),
+        "phase1_val_pr_auc_std": float(np.std([row["val_pr_auc"] for row in metrics])),
+        "phase1_val_ap_mean": float(np.mean([row["val_ap"] for row in metrics])),
+        "phase1_val_ap_std": float(np.std([row["val_ap"] for row in metrics])),
         "phase2_external_auc_mean": float(np.mean([row["external_auc"] for row in metrics])),
         "phase2_external_auc_std": float(np.std([row["external_auc"] for row in metrics])),
+        "phase2_external_pr_auc_mean": float(np.mean([row["external_pr_auc"] for row in metrics])),
+        "phase2_external_pr_auc_std": float(np.std([row["external_pr_auc"] for row in metrics])),
+        "phase2_external_ap_mean": float(np.mean([row["external_ap"] for row in metrics])),
+        "phase2_external_ap_std": float(np.std([row["external_ap"] for row in metrics])),
         "seed_metrics": metrics,
         "phase1_val_avg_predictions": _path_repr(val_avg_path),
         "phase2_external_avg_predictions": _path_repr(external_avg_path),
@@ -608,8 +636,11 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 batch_seed=seed + 2000,
                 progress_desc=f"{args.model}:seed{seed}:phase2_external",
             )
-            val_auc = safe_auc(phase1_context.labels[val_ids], val_prob)
-            external_auc = safe_auc(phase2_context.labels[external_ids], external_prob)
+            val_metrics = compute_binary_classification_metrics(phase1_context.labels[val_ids], val_prob)
+            external_metrics = compute_binary_classification_metrics(
+                phase2_context.labels[external_ids],
+                external_prob,
+            )
             experiment.save(seed_dir)
             save_prediction_npz(
                 seed_dir / "phase1_val_predictions.npz",
@@ -628,19 +659,30 @@ def run_train_graph(args: argparse.Namespace) -> None:
             metrics.append(
                 {
                     "seed": seed,
-                    "val_auc": val_auc,
-                    "external_auc": external_auc,
+                    "val_auc": val_metrics["auc"],
+                    "val_pr_auc": val_metrics["pr_auc"],
+                    "val_ap": val_metrics["ap"],
+                    "external_auc": external_metrics["auc"],
+                    "external_pr_auc": external_metrics["pr_auc"],
+                    "external_ap": external_metrics["ap"],
                     "best_epoch": fit_metrics["best_epoch"],
+                    "loss_pos_weight": fit_metrics["loss_pos_weight"],
                 }
             )
             seed_pbar.set_postfix(
-                val_auc=f"{val_auc:.4f}",
-                external_auc=f"{external_auc:.4f}",
+                val_auc=f"{val_metrics['auc']:.4f}",
+                val_ap=f"{val_metrics['ap']:.4f}",
+                external_auc=f"{external_metrics['auc']:.4f}",
                 refresh=False,
             )
             tqdm.write(
-                f"[{args.model}] seed={seed} phase1_val_auc={val_auc:.6f} "
-                f"phase2_external_auc={external_auc:.6f}"
+                f"[{args.model}] seed={seed} "
+                f"phase1_val_auc={val_metrics['auc']:.6f} "
+                f"phase1_val_pr_auc={val_metrics['pr_auc']:.6f} "
+                f"phase1_val_ap={val_metrics['ap']:.6f} "
+                f"phase2_external_auc={external_metrics['auc']:.6f} "
+                f"phase2_external_pr_auc={external_metrics['pr_auc']:.6f} "
+                f"phase2_external_ap={external_metrics['ap']:.6f}"
             )
 
     val_avg_path = _save_average_predictions(
@@ -667,8 +709,16 @@ def run_train_graph(args: argparse.Namespace) -> None:
         "phase2_external_size": int(external_ids.size),
         "phase1_val_auc_mean": float(np.mean([row["val_auc"] for row in metrics])),
         "phase1_val_auc_std": float(np.std([row["val_auc"] for row in metrics])),
+        "phase1_val_pr_auc_mean": float(np.mean([row["val_pr_auc"] for row in metrics])),
+        "phase1_val_pr_auc_std": float(np.std([row["val_pr_auc"] for row in metrics])),
+        "phase1_val_ap_mean": float(np.mean([row["val_ap"] for row in metrics])),
+        "phase1_val_ap_std": float(np.std([row["val_ap"] for row in metrics])),
         "phase2_external_auc_mean": float(np.mean([row["external_auc"] for row in metrics])),
         "phase2_external_auc_std": float(np.std([row["external_auc"] for row in metrics])),
+        "phase2_external_pr_auc_mean": float(np.mean([row["external_pr_auc"] for row in metrics])),
+        "phase2_external_pr_auc_std": float(np.std([row["external_pr_auc"] for row in metrics])),
+        "phase2_external_ap_mean": float(np.mean([row["external_ap"] for row in metrics])),
+        "phase2_external_ap_std": float(np.std([row["external_ap"] for row in metrics])),
         "seed_metrics": metrics,
         "phase1_val_avg_predictions": _path_repr(val_avg_path),
         "phase2_external_avg_predictions": _path_repr(external_avg_path),
@@ -743,8 +793,8 @@ def run_blend(args: argparse.Namespace) -> None:
     val_prob = logistic.predict_proba(val_matrix)[:, 1].astype(np.float32, copy=False)
     external_prob = logistic.predict_proba(external_matrix)[:, 1].astype(np.float32, copy=False)
 
-    val_auc = safe_auc(base_val["y_true"], val_prob)
-    external_auc = safe_auc(base_external["y_true"], external_prob)
+    val_metrics = compute_binary_classification_metrics(base_val["y_true"], val_prob)
+    external_metrics = compute_binary_classification_metrics(base_external["y_true"], external_prob)
     save_prediction_npz(
         run_dir / "phase1_val_blend_predictions.npz",
         base_val["node_ids"],
@@ -763,8 +813,12 @@ def run_blend(args: argparse.Namespace) -> None:
         "model_names": model_names,
         "coefficients": logistic.coef_.reshape(-1).astype(float).tolist(),
         "intercept": float(logistic.intercept_[0]),
-        "phase1_val_auc": val_auc,
-        "phase2_external_auc": external_auc,
+        "phase1_val_auc": val_metrics["auc"],
+        "phase1_val_pr_auc": val_metrics["pr_auc"],
+        "phase1_val_ap": val_metrics["ap"],
+        "phase2_external_auc": external_metrics["auc"],
+        "phase2_external_pr_auc": external_metrics["pr_auc"],
+        "phase2_external_ap": external_metrics["ap"],
     }
     write_json(run_dir / "summary.json", summary)
     print(f"Blend finished: {run_dir}")

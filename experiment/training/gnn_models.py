@@ -14,9 +14,9 @@ import torch.nn.functional as F
 from tqdm.auto import tqdm
 
 from experiment.training.common import (
+    compute_binary_classification_metrics,
     ensure_dir,
     resolve_device,
-    safe_auc,
     set_global_seed,
     write_json,
 )
@@ -51,6 +51,7 @@ class GraphModelConfig:
     grad_clip: float = 0.0
     scheduler: str = "none"
     early_stop_patience: int = 0
+    train_negative_ratio: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -67,6 +68,7 @@ class GraphModelConfig:
             "grad_clip": float(self.grad_clip),
             "scheduler": self.scheduler,
             "early_stop_patience": int(self.early_stop_patience),
+            "train_negative_ratio": float(self.train_negative_ratio),
         }
 
     @classmethod
@@ -87,6 +89,7 @@ class GraphModelConfig:
             grad_clip=float(payload.get("grad_clip", 0.0)),
             scheduler=str(payload.get("scheduler", "none")),
             early_stop_patience=int(payload.get("early_stop_patience", 0)),
+            train_negative_ratio=float(payload.get("train_negative_ratio", 0.0)),
         )
 
     def use_legacy_path(self) -> bool:
@@ -110,6 +113,17 @@ class SampledSubgraph:
     target_local_idx: np.ndarray
     node_subgraph_id: np.ndarray | None = None
     edge_subgraph_id: np.ndarray | None = None
+
+
+@dataclass(frozen=True)
+class TrainBatchStats:
+    target_count: int
+    positive_count: int
+    negative_count: int
+
+    @property
+    def positive_rate(self) -> float:
+        return 0.0 if self.target_count == 0 else float(self.positive_count / self.target_count)
 
 
 def _sample_edge_indices(
@@ -1057,6 +1071,188 @@ class BaseGraphSAGEExperiment:
             for start in range(0, nodes.size, effective_batch_size)
         ]
 
+    def _chunk_batch_partition(
+        self,
+        nodes: np.ndarray,
+        positions: np.ndarray,
+        snapshot_end: int | None,
+        effective_batch_size: int,
+    ) -> list[tuple[np.ndarray, np.ndarray, int | None]]:
+        return [
+            (
+                nodes[start : start + effective_batch_size],
+                positions[start : start + effective_batch_size],
+                snapshot_end,
+            )
+            for start in range(0, nodes.size, effective_batch_size)
+        ]
+
+    def _build_balanced_partition_batches(
+        self,
+        nodes: np.ndarray,
+        positions: np.ndarray,
+        labels: np.ndarray,
+        snapshot_end: int | None,
+        rng: np.random.Generator,
+        effective_batch_size: int,
+    ) -> tuple[list[tuple[np.ndarray, np.ndarray, int | None]], TrainBatchStats]:
+        pos_mask = labels == 1
+        neg_mask = labels == 0
+        pos_nodes = nodes[pos_mask]
+        pos_positions = positions[pos_mask]
+        neg_nodes = nodes[neg_mask]
+        neg_positions = positions[neg_mask]
+
+        if pos_nodes.size == 0 or neg_nodes.size == 0:
+            order = rng.permutation(nodes.size)
+            shuffled_nodes = nodes[order]
+            shuffled_positions = positions[order]
+            return (
+                self._chunk_batch_partition(
+                    nodes=shuffled_nodes,
+                    positions=shuffled_positions,
+                    snapshot_end=snapshot_end,
+                    effective_batch_size=effective_batch_size,
+                ),
+                TrainBatchStats(
+                    target_count=int(nodes.size),
+                    positive_count=int(pos_nodes.size),
+                    negative_count=int(neg_nodes.size),
+                ),
+            )
+
+        negative_ratio = max(float(self.graph_config.train_negative_ratio), 0.0)
+        if negative_ratio <= 0.0:
+            negative_ratio = float(neg_nodes.size / max(pos_nodes.size, 1))
+        sampled_negatives = min(
+            neg_nodes.size,
+            max(1, int(math.ceil(pos_nodes.size * negative_ratio))),
+        )
+        neg_choice = rng.choice(neg_nodes.size, size=sampled_negatives, replace=False)
+        neg_nodes = neg_nodes[neg_choice]
+        neg_positions = neg_positions[neg_choice]
+
+        pos_order = rng.permutation(pos_nodes.size)
+        neg_order = rng.permutation(neg_nodes.size)
+        pos_nodes = pos_nodes[pos_order]
+        pos_positions = pos_positions[pos_order]
+        neg_nodes = neg_nodes[neg_order]
+        neg_positions = neg_positions[neg_order]
+
+        pos_per_batch = max(1, int(math.floor(effective_batch_size / (1.0 + negative_ratio))))
+        neg_per_batch = max(1, effective_batch_size - pos_per_batch)
+        batches: list[tuple[np.ndarray, np.ndarray, int | None]] = []
+        pos_ptr = 0
+        neg_ptr = 0
+        while pos_ptr < pos_nodes.size or neg_ptr < neg_nodes.size:
+            batch_node_parts: list[np.ndarray] = []
+            batch_position_parts: list[np.ndarray] = []
+
+            if pos_ptr < pos_nodes.size:
+                next_pos_ptr = min(pos_ptr + pos_per_batch, pos_nodes.size)
+                batch_node_parts.append(pos_nodes[pos_ptr:next_pos_ptr])
+                batch_position_parts.append(pos_positions[pos_ptr:next_pos_ptr])
+                pos_ptr = next_pos_ptr
+
+            if neg_ptr < neg_nodes.size:
+                next_neg_ptr = min(neg_ptr + neg_per_batch, neg_nodes.size)
+                batch_node_parts.append(neg_nodes[neg_ptr:next_neg_ptr])
+                batch_position_parts.append(neg_positions[neg_ptr:next_neg_ptr])
+                neg_ptr = next_neg_ptr
+
+            batch_nodes = np.concatenate(batch_node_parts, axis=0)
+            batch_positions = np.concatenate(batch_position_parts, axis=0)
+            order = rng.permutation(batch_nodes.size)
+            batches.append(
+                (
+                    batch_nodes[order],
+                    batch_positions[order],
+                    snapshot_end,
+                )
+            )
+
+        return (
+            batches,
+            TrainBatchStats(
+                target_count=int(pos_nodes.size + neg_nodes.size),
+                positive_count=int(pos_nodes.size),
+                negative_count=int(neg_nodes.size),
+            ),
+        )
+
+    def _build_train_batches(
+        self,
+        context: GraphPhaseContext,
+        node_ids: np.ndarray,
+        rng: np.random.Generator,
+    ) -> tuple[list[tuple[np.ndarray, np.ndarray, int | None]], TrainBatchStats]:
+        nodes = np.asarray(node_ids, dtype=np.int32)
+        positions = np.arange(nodes.size, dtype=np.int32)
+        effective_batch_size = self.batch_size
+        if self.graph_config.train_negative_ratio <= 0.0:
+            batches = self._iter_batches(
+                context=context,
+                node_ids=nodes,
+                training=True,
+                rng=rng,
+            )
+            labels = context.labels[nodes].astype(np.int8, copy=False)
+            pos_count = int(np.sum(labels == 1))
+            neg_count = int(np.sum(labels == 0))
+            return (
+                batches,
+                TrainBatchStats(
+                    target_count=int(nodes.size),
+                    positive_count=pos_count,
+                    negative_count=neg_count,
+                ),
+            )
+
+        if self.temporal:
+            buckets = np.asarray(context.graph_cache.node_time_bucket[nodes], dtype=np.int8)
+            batches: list[tuple[np.ndarray, np.ndarray, int | None]] = []
+            total_pos = 0
+            total_neg = 0
+            total_targets = 0
+            for bucket_idx, window in enumerate(context.graph_cache.time_windows):
+                bucket_mask = buckets == bucket_idx
+                bucket_nodes = nodes[bucket_mask]
+                bucket_positions = positions[bucket_mask]
+                if bucket_nodes.size == 0:
+                    continue
+                bucket_labels = context.labels[bucket_nodes].astype(np.int8, copy=False)
+                bucket_batches, bucket_stats = self._build_balanced_partition_batches(
+                    nodes=bucket_nodes,
+                    positions=bucket_positions,
+                    labels=bucket_labels,
+                    snapshot_end=int(window["end_day"]),
+                    rng=rng,
+                    effective_batch_size=effective_batch_size,
+                )
+                batches.extend(bucket_batches)
+                total_targets += bucket_stats.target_count
+                total_pos += bucket_stats.positive_count
+                total_neg += bucket_stats.negative_count
+            return (
+                batches,
+                TrainBatchStats(
+                    target_count=total_targets,
+                    positive_count=total_pos,
+                    negative_count=total_neg,
+                ),
+            )
+
+        labels = context.labels[nodes].astype(np.int8, copy=False)
+        batches, stats = self._build_balanced_partition_batches(
+            nodes=nodes,
+            positions=positions,
+            labels=labels,
+            snapshot_end=None,
+            rng=rng,
+            effective_batch_size=effective_batch_size,
+        )
+        return batches, stats
+
     def _sample_batch_subgraph(
         self,
         graph: GraphCache,
@@ -1172,8 +1368,14 @@ class BaseGraphSAGEExperiment:
 
         pos_count = float(np.sum(train_labels == 1))
         neg_count = float(np.sum(train_labels == 0))
+        effective_neg_count = neg_count
+        if self.graph_config.train_negative_ratio > 0.0:
+            effective_neg_count = min(
+                neg_count,
+                float(math.ceil(pos_count * self.graph_config.train_negative_ratio)),
+            )
         pos_weight = torch.tensor(
-            [neg_count / max(pos_count, 1.0)],
+            [effective_neg_count / max(pos_count, 1.0)],
             dtype=torch.float32,
             device=self.device,
         )
@@ -1200,10 +1402,9 @@ class BaseGraphSAGEExperiment:
                 batch_dirichlet: list[float] = []
                 batch_grad_norm: list[float] = []
 
-                train_batches = self._iter_batches(
+                train_batches, train_batch_stats = self._build_train_batches(
                     context=context,
                     node_ids=train_ids,
-                    training=True,
                     rng=epoch_rng,
                 )
                 with tqdm(
@@ -1286,7 +1487,8 @@ class BaseGraphSAGEExperiment:
                     batch_seed=self.seed + 1000,
                     progress_desc=f"{self.model_name}:seed{self.seed}:val:{epoch}/{self.epochs}",
                 )
-                val_auc = safe_auc(val_labels, val_prob)
+                val_metrics = compute_binary_classification_metrics(val_labels, val_prob)
+                val_auc = val_metrics["auc"]
                 if scheduler is not None:
                     scheduler.step(1.0 - val_auc)
 
@@ -1309,13 +1511,20 @@ class BaseGraphSAGEExperiment:
                     f"[{self.model_name}] epoch={epoch} "
                     f"train_loss={np.mean(batch_losses):.6f} "
                     f"val_auc={val_auc:.6f} "
+                    f"val_pr_auc={val_metrics['pr_auc']:.6f} "
+                    f"val_ap={val_metrics['ap']:.6f} "
+                    f"train_targets={train_batch_stats.target_count} "
+                    f"train_pos={train_batch_stats.positive_count} "
+                    f"train_neg={train_batch_stats.negative_count} "
+                    f"train_pos_rate={train_batch_stats.positive_rate:.4f} "
                     f"avg_subgraph_nodes={np.mean(batch_subgraph_nodes):.2f} "
                     f"avg_subgraph_edges={np.mean(batch_subgraph_edges):.2f} "
                     f"emb_norm={np.mean(batch_emb_norm):.6f} "
                     f"dirichlet={np.mean(batch_dirichlet):.6f} "
                     f"grad_norm={np.mean(batch_grad_norm):.6f} "
                     f"best_epoch={best_epoch} "
-                    f"lr={current_lr:.6g}"
+                    f"lr={current_lr:.6g} "
+                    f"loss_pos_weight={float(pos_weight.item()):.4f}"
                 )
 
                 if (
@@ -1334,6 +1543,7 @@ class BaseGraphSAGEExperiment:
         return {
             "val_auc": float(best_val_auc),
             "best_epoch": float(best_epoch),
+            "loss_pos_weight": float(pos_weight.item()),
         }
 
     @torch.no_grad()

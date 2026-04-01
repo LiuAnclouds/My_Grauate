@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import average_precision_score, precision_recall_curve, roc_auc_score
 
 from experiment.eda.data_loader import resolve_dataset_path
 
@@ -70,6 +70,36 @@ def safe_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     if labels.size < 2:
         raise ValueError("AUC requires both positive and negative samples.")
     return float(roc_auc_score(y_true, y_score))
+
+
+def safe_average_precision(y_true: np.ndarray, y_score: np.ndarray) -> float:
+    y_true = np.asarray(y_true)
+    y_score = np.asarray(y_score)
+    labels = np.unique(y_true)
+    if labels.size < 2:
+        raise ValueError("Average precision requires both positive and negative samples.")
+    return float(average_precision_score(y_true, y_score))
+
+
+def safe_pr_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
+    y_true = np.asarray(y_true)
+    y_score = np.asarray(y_score)
+    labels = np.unique(y_true)
+    if labels.size < 2:
+        raise ValueError("PR-AUC requires both positive and negative samples.")
+    precision, recall, _ = precision_recall_curve(y_true, y_score)
+    return float(np.trapz(precision[::-1], recall[::-1]))
+
+
+def compute_binary_classification_metrics(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+) -> dict[str, float]:
+    return {
+        "auc": safe_auc(y_true, y_score),
+        "ap": safe_average_precision(y_true, y_score),
+        "pr_auc": safe_pr_auc(y_true, y_score),
+    }
 
 
 def load_experiment_split(eda_root: Path = EDA_OUTPUT_ROOT) -> ExperimentSplit:
