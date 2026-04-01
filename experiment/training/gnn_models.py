@@ -54,6 +54,21 @@ class GraphModelConfig:
     scheduler: str = "none"
     early_stop_patience: int = 0
     train_negative_ratio: float = 0.0
+    negative_sampler: str = "random"
+    hard_negative_mix: float = 0.5
+    hard_negative_warmup_epochs: int = 1
+    hard_negative_refresh: int = 2
+    hard_negative_candidate_cap: int = 100000
+    hard_negative_candidate_multiplier: float = 4.0
+    hard_negative_pool_multiplier: float = 2.0
+    loss_type: str = "bce"
+    focal_gamma: float = 2.0
+    focal_alpha: float = -1.0
+    ranking_weight: float = 0.2
+    ranking_margin: float = 0.2
+    neighbor_sampler: str = "uniform"
+    recent_window: int = 50
+    recent_ratio: float = 0.8
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -71,6 +86,21 @@ class GraphModelConfig:
             "scheduler": self.scheduler,
             "early_stop_patience": int(self.early_stop_patience),
             "train_negative_ratio": float(self.train_negative_ratio),
+            "negative_sampler": self.negative_sampler,
+            "hard_negative_mix": float(self.hard_negative_mix),
+            "hard_negative_warmup_epochs": int(self.hard_negative_warmup_epochs),
+            "hard_negative_refresh": int(self.hard_negative_refresh),
+            "hard_negative_candidate_cap": int(self.hard_negative_candidate_cap),
+            "hard_negative_candidate_multiplier": float(self.hard_negative_candidate_multiplier),
+            "hard_negative_pool_multiplier": float(self.hard_negative_pool_multiplier),
+            "loss_type": self.loss_type,
+            "focal_gamma": float(self.focal_gamma),
+            "focal_alpha": float(self.focal_alpha),
+            "ranking_weight": float(self.ranking_weight),
+            "ranking_margin": float(self.ranking_margin),
+            "neighbor_sampler": self.neighbor_sampler,
+            "recent_window": int(self.recent_window),
+            "recent_ratio": float(self.recent_ratio),
         }
 
     @classmethod
@@ -92,6 +122,21 @@ class GraphModelConfig:
             scheduler=str(payload.get("scheduler", "none")),
             early_stop_patience=int(payload.get("early_stop_patience", 0)),
             train_negative_ratio=float(payload.get("train_negative_ratio", 0.0)),
+            negative_sampler=str(payload.get("negative_sampler", "random")),
+            hard_negative_mix=float(payload.get("hard_negative_mix", 0.5)),
+            hard_negative_warmup_epochs=int(payload.get("hard_negative_warmup_epochs", 1)),
+            hard_negative_refresh=int(payload.get("hard_negative_refresh", 2)),
+            hard_negative_candidate_cap=int(payload.get("hard_negative_candidate_cap", 100000)),
+            hard_negative_candidate_multiplier=float(payload.get("hard_negative_candidate_multiplier", 4.0)),
+            hard_negative_pool_multiplier=float(payload.get("hard_negative_pool_multiplier", 2.0)),
+            loss_type=str(payload.get("loss_type", "bce")),
+            focal_gamma=float(payload.get("focal_gamma", 2.0)),
+            focal_alpha=float(payload.get("focal_alpha", -1.0)),
+            ranking_weight=float(payload.get("ranking_weight", 0.2)),
+            ranking_margin=float(payload.get("ranking_margin", 0.2)),
+            neighbor_sampler=str(payload.get("neighbor_sampler", "uniform")),
+            recent_window=int(payload.get("recent_window", 50)),
+            recent_ratio=float(payload.get("recent_ratio", 0.8)),
         )
 
     def use_legacy_path(self) -> bool:
@@ -122,6 +167,7 @@ class TrainBatchStats:
     target_count: int
     positive_count: int
     negative_count: int
+    hard_negative_count: int = 0
 
     @property
     def positive_rate(self) -> float:
@@ -215,6 +261,10 @@ def _sample_edge_indices(
     fanout: int,
     rng: np.random.Generator,
     snapshot_end: int | None,
+    sampler: str = "uniform",
+    recent_window: int = 50,
+    recent_ratio: float = 0.8,
+    training: bool = True,
 ) -> np.ndarray:
     if edge_timestamp.size == 0:
         return np.empty(0, dtype=np.int32)
@@ -224,8 +274,55 @@ def _sample_edge_indices(
         valid = np.arange(edge_timestamp.size, dtype=np.int32)
     if valid.size <= fanout:
         return valid.astype(np.int32, copy=False)
-    choice = rng.choice(valid, size=fanout, replace=False)
-    return np.sort(choice.astype(np.int32, copy=False))
+
+    sampler = str(sampler)
+    if sampler == "uniform":
+        choice = rng.choice(valid, size=fanout, replace=False)
+        return np.sort(choice.astype(np.int32, copy=False))
+
+    window = max(int(recent_window), fanout, 1)
+    valid_timestamps = edge_timestamp[valid]
+    if valid.size > window:
+        recent_order = np.argpartition(valid_timestamps, -window)[-window:]
+        recent_pool = valid[recent_order].astype(np.int32, copy=False)
+    else:
+        recent_pool = valid.astype(np.int32, copy=False)
+
+    if not training:
+        recent_pool_ts = edge_timestamp[recent_pool]
+        top_recent = np.argpartition(recent_pool_ts, -fanout)[-fanout:]
+        choice = recent_pool[top_recent]
+        return np.sort(choice.astype(np.int32, copy=False))
+
+    if sampler == "recent":
+        if recent_pool.size <= fanout:
+            return np.sort(recent_pool.astype(np.int32, copy=False))
+        choice = rng.choice(recent_pool, size=fanout, replace=False)
+        return np.sort(choice.astype(np.int32, copy=False))
+
+    if sampler != "hybrid":
+        raise ValueError(f"Unsupported neighbor sampler: {sampler}")
+
+    old_pool = np.setdiff1d(valid, recent_pool, assume_unique=False).astype(np.int32, copy=False)
+    requested_recent = int(round(fanout * float(recent_ratio)))
+    recent_take = max(1, min(fanout, requested_recent))
+    recent_take = min(recent_take, recent_pool.size)
+    old_take = min(fanout - recent_take, old_pool.size)
+    taken = []
+
+    if recent_take > 0:
+        recent_choice = rng.choice(recent_pool, size=recent_take, replace=False)
+        taken.append(recent_choice.astype(np.int32, copy=False))
+    if old_take > 0:
+        old_choice = rng.choice(old_pool, size=old_take, replace=False)
+        taken.append(old_choice.astype(np.int32, copy=False))
+
+    chosen = np.concatenate(taken).astype(np.int32, copy=False) if taken else np.empty(0, dtype=np.int32)
+    if chosen.size < fanout:
+        remaining_pool = np.setdiff1d(valid, chosen, assume_unique=False).astype(np.int32, copy=False)
+        fill = rng.choice(remaining_pool, size=fanout - chosen.size, replace=False)
+        chosen = np.concatenate([chosen, fill.astype(np.int32, copy=False)]).astype(np.int32, copy=False)
+    return np.sort(chosen.astype(np.int32, copy=False))
 
 
 def sample_relation_subgraph(
@@ -234,6 +331,10 @@ def sample_relation_subgraph(
     fanouts: list[int],
     rng: np.random.Generator,
     snapshot_end: int | None = None,
+    sampler: str = "uniform",
+    recent_window: int = 50,
+    recent_ratio: float = 0.8,
+    training: bool = True,
 ) -> SampledSubgraph:
     seeds = np.asarray(seed_nodes, dtype=np.int32)
     ordered_nodes: list[int] = []
@@ -261,6 +362,10 @@ def sample_relation_subgraph(
                 fanout=fanout,
                 rng=rng,
                 snapshot_end=snapshot_end,
+                sampler=sampler,
+                recent_window=recent_window,
+                recent_ratio=recent_ratio,
+                training=training,
             )
             if in_choice.size:
                 in_neighbors = np.asarray(graph.in_neighbors[in_start:in_end])[in_choice]
@@ -290,6 +395,10 @@ def sample_relation_subgraph(
                 fanout=fanout,
                 rng=rng,
                 snapshot_end=snapshot_end,
+                sampler=sampler,
+                recent_window=recent_window,
+                recent_ratio=recent_ratio,
+                training=training,
             )
             if out_choice.size:
                 out_neighbors = np.asarray(graph.out_neighbors[out_start:out_end])[out_choice]
@@ -357,6 +466,10 @@ def _sample_single_seed_subgraph(
     fanouts: list[int],
     rng: np.random.Generator,
     snapshot_end: int | None = None,
+    sampler: str = "uniform",
+    recent_window: int = 50,
+    recent_ratio: float = 0.8,
+    training: bool = True,
 ) -> SampledSubgraph:
     seed = int(seed)
     ordered_nodes = [seed]
@@ -393,6 +506,10 @@ def _sample_single_seed_subgraph(
                 fanout=fanout,
                 rng=rng,
                 snapshot_end=snapshot_end,
+                sampler=sampler,
+                recent_window=recent_window,
+                recent_ratio=recent_ratio,
+                training=training,
             )
             if in_choice.size:
                 selected_neighbors = np.asarray(in_neighbors[in_start:in_end])[in_choice]
@@ -423,6 +540,10 @@ def _sample_single_seed_subgraph(
                 fanout=fanout,
                 rng=rng,
                 snapshot_end=snapshot_end,
+                sampler=sampler,
+                recent_window=recent_window,
+                recent_ratio=recent_ratio,
+                training=training,
             )
             if out_choice.size:
                 selected_neighbors = np.asarray(out_neighbors[out_start:out_end])[out_choice]
@@ -466,6 +587,10 @@ def sample_batched_relation_subgraphs(
     fanouts: list[int],
     rng: np.random.Generator,
     snapshot_end: int | None = None,
+    sampler: str = "uniform",
+    recent_window: int = 50,
+    recent_ratio: float = 0.8,
+    training: bool = True,
 ) -> SampledSubgraph:
     seeds = np.asarray(seed_nodes, dtype=np.int32)
     if seeds.size == 0:
@@ -497,6 +622,10 @@ def sample_batched_relation_subgraphs(
             fanouts=fanouts,
             rng=rng,
             snapshot_end=snapshot_end,
+            sampler=sampler,
+            recent_window=recent_window,
+            recent_ratio=recent_ratio,
+            training=training,
         )
         node_parts.append(subgraph.node_ids)
         edge_src_parts.append(subgraph.edge_src + node_offset)
@@ -566,6 +695,42 @@ def _compute_grad_norm(parameters: Any) -> float:
     return math.sqrt(total_sq)
 
 
+def _focal_bce_with_logits(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    pos_weight: torch.Tensor | None,
+    gamma: float,
+    alpha: float,
+) -> torch.Tensor:
+    bce = F.binary_cross_entropy_with_logits(
+        logits,
+        targets,
+        pos_weight=pos_weight,
+        reduction="none",
+    )
+    prob = torch.sigmoid(logits)
+    pt = prob * targets + (1.0 - prob) * (1.0 - targets)
+    focal_factor = (1.0 - pt).pow(max(float(gamma), 0.0))
+    loss = bce * focal_factor
+    if alpha >= 0.0:
+        alpha_t = alpha * targets + (1.0 - alpha) * (1.0 - targets)
+        loss = loss * alpha_t
+    return loss.mean()
+
+
+def _pairwise_ranking_loss(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    margin: float,
+) -> torch.Tensor:
+    pos_logits = logits[targets > 0.5]
+    neg_logits = logits[targets <= 0.5]
+    if pos_logits.numel() == 0 or neg_logits.numel() == 0:
+        return logits.new_tensor(0.0)
+    margin_term = float(margin) - (pos_logits[:, None] - neg_logits[None, :])
+    return F.softplus(margin_term).mean()
+
+
 def _dirichlet_energy(
     x: torch.Tensor,
     edge_src: torch.Tensor,
@@ -618,6 +783,34 @@ def _pool_mean_max(
             if torch.any(mask):
                 pooled_max[group_idx] = values[mask].max(dim=0).values
     return pooled_mean, pooled_max
+
+
+def _segment_softmax(
+    scores: torch.Tensor,
+    group_ids: torch.Tensor,
+    num_groups: int,
+) -> torch.Tensor:
+    if scores.numel() == 0:
+        return scores
+    max_scores = scores.new_full((num_groups,), float("-inf"))
+    if hasattr(max_scores, "scatter_reduce_"):
+        max_scores.scatter_reduce_(
+            0,
+            group_ids,
+            scores,
+            reduce="amax",
+            include_self=True,
+        )
+    else:
+        unique_groups = torch.unique(group_ids)
+        for group_idx in unique_groups.tolist():
+            group_mask = group_ids == group_idx
+            max_scores[group_idx] = scores[group_mask].max()
+    stabilized = scores - max_scores[group_ids]
+    exp_scores = stabilized.exp()
+    denom = scores.new_zeros((num_groups,))
+    denom.index_add_(0, group_ids, exp_scores)
+    return exp_scores / denom[group_ids].clamp_min(1e-12)
 
 
 class RelationSAGELayer(nn.Module):
@@ -678,7 +871,6 @@ class ModernRelationBlock(nn.Module):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.residual = residual
-        self.ffn_enabled = ffn
         self.gated = edge_encoder == "gated"
         self.norm1 = _make_norm(norm, hidden_dim)
         self.norm2 = _make_norm(norm, hidden_dim) if ffn else nn.Identity()
@@ -752,6 +944,91 @@ class ModernRelationBlock(nn.Module):
         return out, edge_repr
 
 
+class ModernRelationAttentionBlock(nn.Module):
+    def __init__(
+        self,
+        hidden_dim: int,
+        edge_dim: int,
+        dropout: float,
+        norm: str,
+        residual: bool,
+        ffn: bool,
+        edge_encoder: str,
+    ) -> None:
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.residual = residual
+        self.gated = edge_encoder == "gated"
+        self.norm1 = _make_norm(norm, hidden_dim)
+        self.norm2 = _make_norm(norm, hidden_dim) if ffn else nn.Identity()
+        self.self_linear = nn.Linear(hidden_dim, hidden_dim)
+        self.msg_mlp = nn.Sequential(
+            nn.Linear(hidden_dim + edge_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+        self.attn_mlp = nn.Sequential(
+            nn.Linear(hidden_dim * 2 + edge_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, 1),
+        )
+        self.gate_mlp = (
+            nn.Sequential(
+                nn.Linear(hidden_dim * 2 + edge_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, 1),
+            )
+            if self.gated
+            else None
+        )
+        self.agg_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.dropout = nn.Dropout(dropout)
+        self.attn_dropout = nn.Dropout(dropout)
+        if ffn:
+            self.ffn = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim * 2),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden_dim * 2, hidden_dim),
+            )
+        else:
+            self.ffn = None
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        edge_src: torch.Tensor,
+        edge_dst: torch.Tensor,
+        edge_emb: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        h_in = x
+        h = self.norm1(x)
+        if edge_src.numel() == 0:
+            edge_repr = h.new_zeros((0, self.hidden_dim))
+            agg = h.new_zeros((h.shape[0], self.hidden_dim))
+        else:
+            edge_context = torch.cat([h[edge_dst], h[edge_src], edge_emb], dim=-1)
+            msg = self.msg_mlp(torch.cat([h[edge_src], edge_emb], dim=-1))
+            if self.gate_mlp is not None:
+                msg = msg * torch.sigmoid(self.gate_mlp(edge_context))
+            attn_score = self.attn_mlp(edge_context).squeeze(-1)
+            attn_weight = _segment_softmax(attn_score, edge_dst, h.shape[0]).unsqueeze(-1)
+            edge_repr = self.attn_dropout(attn_weight) * msg
+            agg = h.new_zeros((h.shape[0], self.hidden_dim))
+            agg.index_add_(0, edge_dst, edge_repr)
+
+        update = self.self_linear(h) + self.agg_proj(agg)
+        update = self.dropout(update)
+        out = h_in + update if self.residual else update
+
+        if self.ffn is not None:
+            ffn_update = self.ffn(self.norm2(out))
+            ffn_update = self.dropout(ffn_update)
+            out = out + ffn_update if self.residual else ffn_update
+
+        return out, edge_repr
+
+
 class RelationGraphSAGENetwork(nn.Module):
     def __init__(
         self,
@@ -763,6 +1040,7 @@ class RelationGraphSAGENetwork(nn.Module):
         dropout: float,
         temporal: bool,
         model_config: GraphModelConfig,
+        aggregator_type: str = "sage",
     ) -> None:
         super().__init__()
         self.temporal = temporal
@@ -770,7 +1048,8 @@ class RelationGraphSAGENetwork(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_relations = num_relations
         self.num_edge_types = max(num_relations // 2, 1)
-        self.use_legacy = model_config.use_legacy_path()
+        self.aggregator_type = aggregator_type
+        self.use_legacy = aggregator_type == "sage" and model_config.use_legacy_path()
 
         self.input_proj = nn.Linear(input_dim, hidden_dim)
         self.input_dropout = nn.Dropout(dropout)
@@ -803,9 +1082,10 @@ class RelationGraphSAGENetwork(nn.Module):
 
         self.rel_embedding = nn.Embedding(num_relations, rel_dim)
         edge_dim = rel_dim + (rel_dim if temporal else 0)
+        block_cls = ModernRelationBlock if aggregator_type == "sage" else ModernRelationAttentionBlock
         self.layers = nn.ModuleList(
             [
-                ModernRelationBlock(
+                block_cls(
                     hidden_dim=hidden_dim,
                     edge_dim=edge_dim,
                     dropout=dropout,
@@ -1075,6 +1355,7 @@ class BaseGraphSAGEExperiment:
         dropout: float = 0.2,
         device: str | None = None,
         temporal: bool = False,
+        aggregator_type: str = "sage",
         graph_config: GraphModelConfig | None = None,
         feature_normalizer_state: HybridFeatureNormalizerState | None = None,
     ) -> None:
@@ -1090,6 +1371,7 @@ class BaseGraphSAGEExperiment:
         self.epochs = epochs
         self.max_day = max_day
         self.temporal = temporal
+        self.aggregator_type = aggregator_type
         self.device = torch.device(resolve_device(device))
         self.feature_normalizer_state = feature_normalizer_state
         self.graph_config = graph_config or GraphModelConfig(
@@ -1107,7 +1389,322 @@ class BaseGraphSAGEExperiment:
             dropout=self.graph_config.dropout,
             temporal=temporal,
             model_config=self.graph_config,
+            aggregator_type=aggregator_type,
         ).to(self.device)
+        self._hard_negative_pools: dict[int, np.ndarray] = {}
+        self._hard_negative_pool_stats: dict[int, dict[str, int]] = {}
+
+    def _hard_negative_pool_key(self, snapshot_end: int | None) -> int:
+        return -1 if snapshot_end is None else int(snapshot_end)
+
+    def _hard_negative_enabled(self) -> bool:
+        return (
+            self.graph_config.train_negative_ratio > 0.0
+            and self.graph_config.negative_sampler in {"hard", "mixed"}
+        )
+
+    def _uses_ranking_loss(self) -> bool:
+        return "ranking" in str(self.graph_config.loss_type)
+
+    def _iter_train_partitions(
+        self,
+        context: GraphPhaseContext,
+        node_ids: np.ndarray,
+    ) -> list[tuple[np.ndarray, np.ndarray, int | None]]:
+        nodes = np.asarray(node_ids, dtype=np.int32)
+        positions = np.arange(nodes.size, dtype=np.int32)
+        if not self.temporal:
+            return [(nodes, positions, None)]
+
+        buckets = np.asarray(context.graph_cache.node_time_bucket[nodes], dtype=np.int8)
+        partitions: list[tuple[np.ndarray, np.ndarray, int | None]] = []
+        for bucket_idx, window in enumerate(context.graph_cache.time_windows):
+            bucket_mask = buckets == bucket_idx
+            bucket_nodes = nodes[bucket_mask]
+            bucket_positions = positions[bucket_mask]
+            if bucket_nodes.size == 0:
+                continue
+            partitions.append((bucket_nodes, bucket_positions, int(window["end_day"])))
+        return partitions
+
+    def _compute_loss(
+        self,
+        logits: torch.Tensor,
+        targets: torch.Tensor,
+        pos_weight: torch.Tensor,
+    ) -> tuple[torch.Tensor, dict[str, float]]:
+        loss_type = str(self.graph_config.loss_type)
+        if "focal" in loss_type:
+            base_loss = _focal_bce_with_logits(
+                logits=logits,
+                targets=targets,
+                pos_weight=pos_weight,
+                gamma=float(self.graph_config.focal_gamma),
+                alpha=float(self.graph_config.focal_alpha),
+            )
+        else:
+            base_loss = F.binary_cross_entropy_with_logits(
+                logits,
+                targets,
+                pos_weight=pos_weight,
+            )
+
+        ranking_loss = logits.new_tensor(0.0)
+        if self._uses_ranking_loss() and self.graph_config.ranking_weight > 0.0:
+            ranking_loss = _pairwise_ranking_loss(
+                logits=logits,
+                targets=targets,
+                margin=float(self.graph_config.ranking_margin),
+            )
+
+        total_loss = base_loss + float(self.graph_config.ranking_weight) * ranking_loss
+        return total_loss, {
+            "base_loss": float(base_loss.detach().item()),
+            "ranking_loss": float(ranking_loss.detach().item()),
+            "total_loss": float(total_loss.detach().item()),
+        }
+
+    def _current_hard_negative_pool_size(self) -> int:
+        return int(sum(pool.shape[0] for pool in self._hard_negative_pools.values()))
+
+    def _current_hard_negative_candidate_count(self) -> int:
+        return int(
+            sum(int(stats.get("candidate_count", 0)) for stats in self._hard_negative_pool_stats.values())
+        )
+
+    def _maybe_refresh_hard_negative_pools(
+        self,
+        context: GraphPhaseContext,
+        train_ids: np.ndarray,
+        epoch: int,
+        rng: np.random.Generator,
+    ) -> dict[str, int | bool]:
+        if not self._hard_negative_enabled():
+            self._hard_negative_pools = {}
+            self._hard_negative_pool_stats = {}
+            return {
+                "refreshed": False,
+                "pool_size": 0,
+                "candidate_count": 0,
+                "partition_count": 0,
+            }
+
+        warmup_epochs = max(int(self.graph_config.hard_negative_warmup_epochs), 0)
+        if epoch <= warmup_epochs:
+            self._hard_negative_pools = {}
+            self._hard_negative_pool_stats = {}
+            return {
+                "refreshed": False,
+                "pool_size": 0,
+                "candidate_count": 0,
+                "partition_count": 0,
+            }
+
+        refresh_every = max(int(self.graph_config.hard_negative_refresh), 1)
+        refresh_due = not self._hard_negative_pools or (
+            (epoch - warmup_epochs - 1) % refresh_every == 0
+        )
+        if not refresh_due:
+            return {
+                "refreshed": False,
+                "pool_size": self._current_hard_negative_pool_size(),
+                "candidate_count": self._current_hard_negative_candidate_count(),
+                "partition_count": len(self._hard_negative_pools),
+            }
+
+        negative_ratio = max(float(self.graph_config.train_negative_ratio), 0.0)
+        candidate_cap = max(int(self.graph_config.hard_negative_candidate_cap), 1)
+        candidate_multiplier = max(float(self.graph_config.hard_negative_candidate_multiplier), 1.0)
+        pool_multiplier = max(float(self.graph_config.hard_negative_pool_multiplier), 1.0)
+        hard_pools: dict[int, np.ndarray] = {}
+        hard_pool_stats: dict[int, dict[str, int]] = {}
+
+        for partition_idx, (nodes, _, snapshot_end) in enumerate(
+            self._iter_train_partitions(context=context, node_ids=train_ids)
+        ):
+            labels = context.labels[nodes].astype(np.int8, copy=False)
+            pos_nodes = nodes[labels == 1]
+            neg_nodes = nodes[labels == 0]
+            if pos_nodes.size == 0 or neg_nodes.size == 0:
+                continue
+
+            sampled_negatives = min(
+                neg_nodes.size,
+                max(1, int(math.ceil(pos_nodes.size * negative_ratio))),
+            )
+            requested_candidates = max(
+                sampled_negatives,
+                int(math.ceil(sampled_negatives * candidate_multiplier)),
+            )
+            candidate_count = min(neg_nodes.size, candidate_cap, requested_candidates)
+            if candidate_count <= 0:
+                continue
+
+            if candidate_count >= neg_nodes.size:
+                candidate_nodes = neg_nodes.astype(np.int32, copy=False)
+            else:
+                choice = rng.choice(neg_nodes.size, size=candidate_count, replace=False)
+                candidate_nodes = neg_nodes[choice].astype(np.int32, copy=False)
+
+            candidate_scores = self.predict_proba(
+                context=context,
+                node_ids=candidate_nodes,
+                batch_seed=self.seed + epoch * 1009 + partition_idx * 53 + 100000,
+                progress_desc=None,
+                show_progress=False,
+            )
+            if candidate_scores.size == 0:
+                continue
+
+            pool_count = min(
+                candidate_nodes.size,
+                max(1, int(math.ceil(sampled_negatives * pool_multiplier))),
+            )
+            if pool_count >= candidate_nodes.size:
+                top_idx = np.argsort(-candidate_scores, kind="stable")
+            else:
+                top_idx = np.argpartition(candidate_scores, -pool_count)[-pool_count:]
+                top_idx = top_idx[np.argsort(-candidate_scores[top_idx], kind="stable")]
+            pool_nodes = candidate_nodes[top_idx].astype(np.int32, copy=False)
+            pool_key = self._hard_negative_pool_key(snapshot_end)
+            hard_pools[pool_key] = pool_nodes
+            hard_pool_stats[pool_key] = {
+                "candidate_count": int(candidate_nodes.size),
+                "pool_count": int(pool_nodes.size),
+                "sampled_negatives": int(sampled_negatives),
+            }
+
+        self._hard_negative_pools = hard_pools
+        self._hard_negative_pool_stats = hard_pool_stats
+        return {
+            "refreshed": True,
+            "pool_size": self._current_hard_negative_pool_size(),
+            "candidate_count": self._current_hard_negative_candidate_count(),
+            "partition_count": len(self._hard_negative_pools),
+        }
+
+    def _sample_negative_partition(
+        self,
+        neg_nodes: np.ndarray,
+        neg_positions: np.ndarray,
+        sampled_negatives: int,
+        snapshot_end: int | None,
+        rng: np.random.Generator,
+    ) -> tuple[np.ndarray, np.ndarray, int]:
+        if sampled_negatives <= 0 or neg_nodes.size == 0:
+            return (
+                np.empty(0, dtype=np.int32),
+                np.empty(0, dtype=np.int32),
+                0,
+            )
+
+        sampler = str(self.graph_config.negative_sampler)
+        if sampler not in {"random", "hard", "mixed"}:
+            raise ValueError(f"Unsupported negative sampler: {sampler}")
+        if sampler == "random":
+            choice = rng.choice(neg_nodes.size, size=sampled_negatives, replace=False)
+            return (
+                neg_nodes[choice].astype(np.int32, copy=False),
+                neg_positions[choice].astype(np.int32, copy=False),
+                0,
+            )
+
+        hard_pool = self._hard_negative_pools.get(self._hard_negative_pool_key(snapshot_end))
+        if hard_pool is None or hard_pool.size == 0:
+            choice = rng.choice(neg_nodes.size, size=sampled_negatives, replace=False)
+            return (
+                neg_nodes[choice].astype(np.int32, copy=False),
+                neg_positions[choice].astype(np.int32, copy=False),
+                0,
+            )
+
+        hard_mask = np.isin(neg_nodes, hard_pool, assume_unique=False)
+        hard_candidate_idx = np.flatnonzero(hard_mask)
+        if sampler == "hard":
+            requested_hard = sampled_negatives
+        else:
+            requested_hard = int(round(sampled_negatives * float(self.graph_config.hard_negative_mix)))
+            requested_hard = max(0, min(sampled_negatives, requested_hard))
+
+        selected_hard_idx = np.empty(0, dtype=np.int32)
+        if hard_candidate_idx.size and requested_hard > 0:
+            if hard_candidate_idx.size <= requested_hard:
+                selected_hard_idx = hard_candidate_idx.astype(np.int32, copy=False)
+            else:
+                hard_choice = rng.choice(hard_candidate_idx.size, size=requested_hard, replace=False)
+                selected_hard_idx = hard_candidate_idx[hard_choice].astype(np.int32, copy=False)
+
+        remaining_take = sampled_negatives - selected_hard_idx.size
+        selected_random_idx = np.empty(0, dtype=np.int32)
+        if remaining_take > 0:
+            available_mask = np.ones(neg_nodes.size, dtype=bool)
+            if selected_hard_idx.size:
+                available_mask[selected_hard_idx] = False
+
+            non_hard_idx = np.flatnonzero(available_mask & ~hard_mask)
+            if non_hard_idx.size:
+                random_take = min(remaining_take, non_hard_idx.size)
+                if non_hard_idx.size <= random_take:
+                    selected_random_idx = non_hard_idx.astype(np.int32, copy=False)
+                else:
+                    random_choice = rng.choice(non_hard_idx.size, size=random_take, replace=False)
+                    selected_random_idx = non_hard_idx[random_choice].astype(np.int32, copy=False)
+                available_mask[selected_random_idx] = False
+                remaining_take -= selected_random_idx.size
+
+            if remaining_take > 0:
+                fallback_idx = np.flatnonzero(available_mask)
+                if fallback_idx.size:
+                    fallback_take = min(remaining_take, fallback_idx.size)
+                    if fallback_idx.size <= fallback_take:
+                        extra_idx = fallback_idx.astype(np.int32, copy=False)
+                    else:
+                        extra_choice = rng.choice(fallback_idx.size, size=fallback_take, replace=False)
+                        extra_idx = fallback_idx[extra_choice].astype(np.int32, copy=False)
+                    selected_random_idx = (
+                        extra_idx
+                        if selected_random_idx.size == 0
+                        else np.concatenate([selected_random_idx, extra_idx]).astype(np.int32, copy=False)
+                    )
+
+        selected_idx = (
+            selected_hard_idx
+            if selected_random_idx.size == 0
+            else (
+                selected_random_idx
+                if selected_hard_idx.size == 0
+                else np.concatenate([selected_hard_idx, selected_random_idx]).astype(np.int32, copy=False)
+            )
+        )
+        if selected_idx.size == 0:
+            return (
+                np.empty(0, dtype=np.int32),
+                np.empty(0, dtype=np.int32),
+                0,
+            )
+
+        if selected_idx.size < sampled_negatives:
+            refill_take = min(sampled_negatives - selected_idx.size, neg_nodes.size - selected_idx.size)
+            if refill_take > 0:
+                refill_mask = np.ones(neg_nodes.size, dtype=bool)
+                refill_mask[selected_idx] = False
+                refill_idx = np.flatnonzero(refill_mask)
+                if refill_idx.size:
+                    if refill_idx.size <= refill_take:
+                        extra_idx = refill_idx.astype(np.int32, copy=False)
+                    else:
+                        extra_choice = rng.choice(refill_idx.size, size=refill_take, replace=False)
+                        extra_idx = refill_idx[extra_choice].astype(np.int32, copy=False)
+                    selected_idx = np.concatenate([selected_idx, extra_idx]).astype(np.int32, copy=False)
+
+        order = rng.permutation(selected_idx.size)
+        selected_idx = selected_idx[order].astype(np.int32, copy=False)
+        hard_selected_count = int(np.sum(hard_mask[selected_idx]))
+        return (
+            neg_nodes[selected_idx].astype(np.int32, copy=False),
+            neg_positions[selected_idx].astype(np.int32, copy=False),
+            hard_selected_count,
+        )
 
     def _iter_batches(
         self,
@@ -1212,9 +1809,13 @@ class BaseGraphSAGEExperiment:
             neg_nodes.size,
             max(1, int(math.ceil(pos_nodes.size * negative_ratio))),
         )
-        neg_choice = rng.choice(neg_nodes.size, size=sampled_negatives, replace=False)
-        neg_nodes = neg_nodes[neg_choice]
-        neg_positions = neg_positions[neg_choice]
+        neg_nodes, neg_positions, hard_negative_count = self._sample_negative_partition(
+            neg_nodes=neg_nodes,
+            neg_positions=neg_positions,
+            sampled_negatives=sampled_negatives,
+            snapshot_end=snapshot_end,
+            rng=rng,
+        )
 
         pos_order = rng.permutation(pos_nodes.size)
         neg_order = rng.permutation(neg_nodes.size)
@@ -1261,6 +1862,7 @@ class BaseGraphSAGEExperiment:
                 target_count=int(pos_nodes.size + neg_nodes.size),
                 positive_count=int(pos_nodes.size),
                 negative_count=int(neg_nodes.size),
+                hard_negative_count=int(hard_negative_count),
             ),
         )
 
@@ -1271,7 +1873,6 @@ class BaseGraphSAGEExperiment:
         rng: np.random.Generator,
     ) -> tuple[list[tuple[np.ndarray, np.ndarray, int | None]], TrainBatchStats]:
         nodes = np.asarray(node_ids, dtype=np.int32)
-        positions = np.arange(nodes.size, dtype=np.int32)
         effective_batch_size = self.batch_size
         if self.graph_config.train_negative_ratio <= 0.0:
             batches = self._iter_batches(
@@ -1292,50 +1893,38 @@ class BaseGraphSAGEExperiment:
                 ),
             )
 
-        if self.temporal:
-            buckets = np.asarray(context.graph_cache.node_time_bucket[nodes], dtype=np.int8)
-            batches: list[tuple[np.ndarray, np.ndarray, int | None]] = []
-            total_pos = 0
-            total_neg = 0
-            total_targets = 0
-            for bucket_idx, window in enumerate(context.graph_cache.time_windows):
-                bucket_mask = buckets == bucket_idx
-                bucket_nodes = nodes[bucket_mask]
-                bucket_positions = positions[bucket_mask]
-                if bucket_nodes.size == 0:
-                    continue
-                bucket_labels = context.labels[bucket_nodes].astype(np.int8, copy=False)
-                bucket_batches, bucket_stats = self._build_balanced_partition_batches(
-                    nodes=bucket_nodes,
-                    positions=bucket_positions,
-                    labels=bucket_labels,
-                    snapshot_end=int(window["end_day"]),
-                    rng=rng,
-                    effective_batch_size=effective_batch_size,
-                )
-                batches.extend(bucket_batches)
-                total_targets += bucket_stats.target_count
-                total_pos += bucket_stats.positive_count
-                total_neg += bucket_stats.negative_count
-            return (
-                batches,
-                TrainBatchStats(
-                    target_count=total_targets,
-                    positive_count=total_pos,
-                    negative_count=total_neg,
-                ),
+        batches: list[tuple[np.ndarray, np.ndarray, int | None]] = []
+        total_targets = 0
+        total_pos = 0
+        total_neg = 0
+        total_hard_neg = 0
+        for partition_nodes, partition_positions, snapshot_end in self._iter_train_partitions(
+            context=context,
+            node_ids=nodes,
+        ):
+            partition_labels = context.labels[partition_nodes].astype(np.int8, copy=False)
+            partition_batches, partition_stats = self._build_balanced_partition_batches(
+                nodes=partition_nodes,
+                positions=partition_positions,
+                labels=partition_labels,
+                snapshot_end=snapshot_end,
+                rng=rng,
+                effective_batch_size=effective_batch_size,
             )
-
-        labels = context.labels[nodes].astype(np.int8, copy=False)
-        batches, stats = self._build_balanced_partition_batches(
-            nodes=nodes,
-            positions=positions,
-            labels=labels,
-            snapshot_end=None,
-            rng=rng,
-            effective_batch_size=effective_batch_size,
+            batches.extend(partition_batches)
+            total_targets += partition_stats.target_count
+            total_pos += partition_stats.positive_count
+            total_neg += partition_stats.negative_count
+            total_hard_neg += partition_stats.hard_negative_count
+        return (
+            batches,
+            TrainBatchStats(
+                target_count=total_targets,
+                positive_count=total_pos,
+                negative_count=total_neg,
+                hard_negative_count=total_hard_neg,
+            ),
         )
-        return batches, stats
 
     def _sample_batch_subgraph(
         self,
@@ -1343,18 +1932,24 @@ class BaseGraphSAGEExperiment:
         batch_nodes: np.ndarray,
         rng: np.random.Generator,
         snapshot_end: int | None,
+        training: bool,
     ) -> SampledSubgraph:
         sampler = (
             sample_batched_relation_subgraphs
             if self.graph_config.subgraph_head == "meanmax"
             else sample_relation_subgraph
         )
+        neighbor_sampler = self.graph_config.neighbor_sampler if self.temporal else "uniform"
         return sampler(
             graph=graph,
             seed_nodes=batch_nodes,
             fanouts=self.fanouts,
             rng=rng,
             snapshot_end=snapshot_end,
+            sampler=neighbor_sampler,
+            recent_window=self.graph_config.recent_window,
+            recent_ratio=self.graph_config.recent_ratio,
+            training=training,
         )
 
     def _tensorize_subgraph(
@@ -1476,7 +2071,6 @@ class BaseGraphSAGEExperiment:
             dtype=torch.float32,
             device=self.device,
         )
-        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
         if log_path is not None:
             _append_text_line(
                 log_path,
@@ -1484,7 +2078,17 @@ class BaseGraphSAGEExperiment:
                     f"[{self.model_name}] seed={self.seed} phase={context.phase} "
                     f"train_size={train_ids.size} val_size={val_ids.size} "
                     f"batch_size={self.batch_size} eval_batch_size={self.eval_batch_size} "
+                    f"aggregator_type={self.aggregator_type} "
+                    f"neighbor_sampler={self.graph_config.neighbor_sampler} "
+                    f"recent_window={self.graph_config.recent_window} "
+                    f"recent_ratio={self.graph_config.recent_ratio:.4f} "
                     f"train_negative_ratio={self.graph_config.train_negative_ratio:.4f} "
+                    f"negative_sampler={self.graph_config.negative_sampler} "
+                    f"loss_type={self.graph_config.loss_type} "
+                    f"ranking_weight={self.graph_config.ranking_weight:.4f} "
+                    f"ranking_margin={self.graph_config.ranking_margin:.4f} "
+                    f"focal_gamma={self.graph_config.focal_gamma:.4f} "
+                    f"focal_alpha={self.graph_config.focal_alpha:.4f} "
                     f"loss_pos_weight={float(pos_weight.item()):.4f}"
                 ),
             )
@@ -1504,11 +2108,29 @@ class BaseGraphSAGEExperiment:
             for epoch in epoch_pbar:
                 self.network.train()
                 batch_losses: list[float] = []
+                batch_base_losses: list[float] = []
+                batch_ranking_losses: list[float] = []
                 batch_subgraph_nodes: list[float] = []
                 batch_subgraph_edges: list[float] = []
                 batch_emb_norm: list[float] = []
                 batch_dirichlet: list[float] = []
                 batch_grad_norm: list[float] = []
+                hard_negative_refresh = self._maybe_refresh_hard_negative_pools(
+                    context=context,
+                    train_ids=train_ids,
+                    epoch=epoch,
+                    rng=epoch_rng,
+                )
+                if hard_negative_refresh["refreshed"]:
+                    refresh_line = (
+                        f"[{self.model_name}] hard_negative_refresh epoch={epoch} "
+                        f"partitions={hard_negative_refresh['partition_count']} "
+                        f"candidates={hard_negative_refresh['candidate_count']} "
+                        f"pool_size={hard_negative_refresh['pool_size']}"
+                    )
+                    tqdm.write(refresh_line)
+                    if log_path is not None:
+                        _append_text_line(log_path, refresh_line)
 
                 train_batches, train_batch_stats = self._build_train_batches(
                     context=context,
@@ -1528,6 +2150,7 @@ class BaseGraphSAGEExperiment:
                             batch_nodes=batch_nodes,
                             rng=epoch_rng,
                             snapshot_end=snapshot_end,
+                            training=True,
                         )
                         (
                             x,
@@ -1562,7 +2185,11 @@ class BaseGraphSAGEExperiment:
                             edge_subgraph_id=edge_subgraph_id,
                             return_details=True,
                         )
-                        loss = criterion(logits, y_batch)
+                        loss, loss_parts = self._compute_loss(
+                            logits=logits,
+                            targets=y_batch,
+                            pos_weight=pos_weight,
+                        )
                         loss.backward()
 
                         if self.graph_config.grad_clip > 0:
@@ -1576,7 +2203,9 @@ class BaseGraphSAGEExperiment:
                             grad_norm = _compute_grad_norm(self.network.parameters())
 
                         optimizer.step()
-                        batch_losses.append(float(loss.detach().item()))
+                        batch_losses.append(float(loss_parts["total_loss"]))
+                        batch_base_losses.append(float(loss_parts["base_loss"]))
+                        batch_ranking_losses.append(float(loss_parts["ranking_loss"]))
                         batch_subgraph_nodes.append(float(subgraph.node_ids.shape[0]))
                         batch_subgraph_edges.append(float(subgraph.edge_src.shape[0]))
                         batch_emb_norm.append(float(diagnostics["emb_norm"]))
@@ -1618,13 +2247,18 @@ class BaseGraphSAGEExperiment:
                 epoch_row = {
                     "epoch": int(epoch),
                     "train_loss": float(np.mean(batch_losses)),
+                    "train_base_loss": float(np.mean(batch_base_losses)),
+                    "train_ranking_loss": float(np.mean(batch_ranking_losses)),
                     "val_auc": float(val_auc),
                     "val_pr_auc": float(val_metrics["pr_auc"]),
                     "val_ap": float(val_metrics["ap"]),
                     "train_targets": int(train_batch_stats.target_count),
                     "train_pos": int(train_batch_stats.positive_count),
                     "train_neg": int(train_batch_stats.negative_count),
+                    "train_hard_neg": int(train_batch_stats.hard_negative_count),
                     "train_pos_rate": float(train_batch_stats.positive_rate),
+                    "hard_negative_pool_size": int(self._current_hard_negative_pool_size()),
+                    "hard_negative_candidate_count": int(self._current_hard_negative_candidate_count()),
                     "avg_subgraph_nodes": float(np.mean(batch_subgraph_nodes)),
                     "avg_subgraph_edges": float(np.mean(batch_subgraph_edges)),
                     "emb_norm": float(np.mean(batch_emb_norm)),
@@ -1638,13 +2272,17 @@ class BaseGraphSAGEExperiment:
                 epoch_log_line = (
                     f"[{self.model_name}] epoch={epoch} "
                     f"train_loss={epoch_row['train_loss']:.6f} "
+                    f"train_base_loss={epoch_row['train_base_loss']:.6f} "
+                    f"train_ranking_loss={epoch_row['train_ranking_loss']:.6f} "
                     f"val_auc={val_auc:.6f} "
                     f"val_pr_auc={val_metrics['pr_auc']:.6f} "
                     f"val_ap={val_metrics['ap']:.6f} "
                     f"train_targets={train_batch_stats.target_count} "
                     f"train_pos={train_batch_stats.positive_count} "
                     f"train_neg={train_batch_stats.negative_count} "
+                    f"train_hard_neg={train_batch_stats.hard_negative_count} "
                     f"train_pos_rate={train_batch_stats.positive_rate:.4f} "
+                    f"hard_negative_pool_size={self._current_hard_negative_pool_size()} "
                     f"avg_subgraph_nodes={np.mean(batch_subgraph_nodes):.2f} "
                     f"avg_subgraph_edges={np.mean(batch_subgraph_edges):.2f} "
                     f"emb_norm={np.mean(batch_emb_norm):.6f} "
@@ -1680,6 +2318,8 @@ class BaseGraphSAGEExperiment:
             "val_auc": float(best_val_auc),
             "best_epoch": float(best_epoch),
             "loss_pos_weight": float(pos_weight.item()),
+            "loss_type": str(self.graph_config.loss_type),
+            "negative_sampler": str(self.graph_config.negative_sampler),
         }
         self.fit_summary = fit_summary
         if history_csv_path is not None:
@@ -1699,6 +2339,7 @@ class BaseGraphSAGEExperiment:
         node_ids: np.ndarray,
         batch_seed: int | None = None,
         progress_desc: str | None = None,
+        show_progress: bool = True,
     ) -> np.ndarray:
         self.network.eval()
         node_ids = np.asarray(node_ids, dtype=np.int32)
@@ -1718,6 +2359,7 @@ class BaseGraphSAGEExperiment:
             unit="batch",
             dynamic_ncols=True,
             leave=False,
+            disable=not show_progress,
         ) as batch_pbar:
             for batch_nodes, batch_positions, snapshot_end in batch_pbar:
                 subgraph = self._sample_batch_subgraph(
@@ -1725,6 +2367,7 @@ class BaseGraphSAGEExperiment:
                     batch_nodes=batch_nodes,
                     rng=rng,
                     snapshot_end=snapshot_end,
+                    training=False,
                 )
                 (
                     x,
@@ -1781,6 +2424,7 @@ class BaseGraphSAGEExperiment:
             "dropout": self.graph_config.dropout,
             "max_day": self.max_day,
             "temporal": self.temporal,
+            "aggregator_type": self.aggregator_type,
             "graph_model_config": self.graph_config.to_dict(),
             "feature_normalizer_state": (
                 None
@@ -1824,6 +2468,7 @@ class BaseGraphSAGEExperiment:
             epochs=int(meta["epochs"]),
             device=device,
             temporal=bool(meta.get("temporal", False)),
+            aggregator_type=str(meta.get("aggregator_type", "sage")),
             graph_config=graph_config,
             feature_normalizer_state=HybridFeatureNormalizerState.from_dict(
                 meta.get("feature_normalizer_state")
@@ -1842,10 +2487,19 @@ class BaseGraphSAGEExperiment:
 class RelationGraphSAGEExperiment(BaseGraphSAGEExperiment):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs["temporal"] = False
+        kwargs.setdefault("aggregator_type", "sage")
         super().__init__(*args, **kwargs)
 
 
 class TemporalRelationGraphSAGEExperiment(BaseGraphSAGEExperiment):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs["temporal"] = True
+        kwargs.setdefault("aggregator_type", "sage")
+        super().__init__(*args, **kwargs)
+
+
+class TemporalRelationGATExperiment(BaseGraphSAGEExperiment):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs["temporal"] = True
+        kwargs.setdefault("aggregator_type", "attention")
         super().__init__(*args, **kwargs)

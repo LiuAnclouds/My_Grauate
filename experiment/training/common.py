@@ -29,13 +29,6 @@ class ExperimentSplit:
     external_phase: str = "phase2"
 
 
-@dataclass(frozen=True)
-class PredictionArtifacts:
-    val_path: Path
-    external_path: Path
-    summary_path: Path
-
-
 def ensure_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path

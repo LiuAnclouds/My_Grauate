@@ -40,6 +40,7 @@ from experiment.training.gnn_models import (
     GraphPhaseContext,
     GraphModelConfig,
     RelationGraphSAGEExperiment,
+    TemporalRelationGATExperiment,
     TemporalRelationGraphSAGEExperiment,
 )
 
@@ -97,6 +98,7 @@ def parse_args() -> argparse.Namespace:
             "m3_neighbor",
             "m4_graphsage",
             "m5_temporal_graphsage",
+            "m6_temporal_gat",
         ),
         help="Model family to train.",
     )
@@ -263,6 +265,96 @@ def parse_args() -> argparse.Namespace:
             "positives and sample at most this many negatives per positive each epoch."
         ),
     )
+    train_parser.add_argument(
+        "--negative-sampler",
+        choices=("random", "hard", "mixed"),
+        default="random",
+        help="Train-time negative target sampler used when --train-negative-ratio > 0.",
+    )
+    train_parser.add_argument(
+        "--hard-negative-mix",
+        type=float,
+        default=0.5,
+        help="For negative-sampler=mixed, fraction of sampled train negatives drawn from the hard pool.",
+    )
+    train_parser.add_argument(
+        "--hard-negative-warmup-epochs",
+        type=int,
+        default=1,
+        help="Epochs to keep pure random negative sampling before hard-negative mining starts.",
+    )
+    train_parser.add_argument(
+        "--hard-negative-refresh",
+        type=int,
+        default=2,
+        help="Refresh hard-negative pools every N epochs after warmup.",
+    )
+    train_parser.add_argument(
+        "--hard-negative-candidate-cap",
+        type=int,
+        default=100000,
+        help="Maximum number of negative candidates scored per partition when mining hard negatives.",
+    )
+    train_parser.add_argument(
+        "--hard-negative-candidate-multiplier",
+        type=float,
+        default=4.0,
+        help="Mine roughly this many negative candidates relative to the epoch negative budget.",
+    )
+    train_parser.add_argument(
+        "--hard-negative-pool-multiplier",
+        type=float,
+        default=2.0,
+        help="Keep a hard-negative pool this many times larger than the epoch negative budget.",
+    )
+    train_parser.add_argument(
+        "--loss-type",
+        choices=("bce", "focal", "bce_ranking", "focal_ranking"),
+        default="bce",
+        help="Supervised loss for graph models.",
+    )
+    train_parser.add_argument(
+        "--focal-gamma",
+        type=float,
+        default=2.0,
+        help="Focal loss gamma. Used when loss-type contains focal.",
+    )
+    train_parser.add_argument(
+        "--focal-alpha",
+        type=float,
+        default=-1.0,
+        help="Optional focal alpha in [0,1]. Negative values disable alpha balancing.",
+    )
+    train_parser.add_argument(
+        "--ranking-weight",
+        type=float,
+        default=0.2,
+        help="Weight for the pairwise ranking term when loss-type contains ranking.",
+    )
+    train_parser.add_argument(
+        "--ranking-margin",
+        type=float,
+        default=0.2,
+        help="Margin used inside the softplus pairwise ranking loss.",
+    )
+    train_parser.add_argument(
+        "--neighbor-sampler",
+        choices=("uniform", "recent", "hybrid"),
+        default=None,
+        help="Temporal neighbor sampler. Defaults to hybrid for m6_temporal_gat and uniform otherwise.",
+    )
+    train_parser.add_argument(
+        "--recent-window",
+        type=int,
+        default=50,
+        help="Candidate recent-history window size for recent/hybrid temporal sampling.",
+    )
+    train_parser.add_argument(
+        "--recent-ratio",
+        type=float,
+        default=0.8,
+        help="Fraction of fanout drawn from recent-history pool under hybrid sampling.",
+    )
 
     blend_parser = subparsers.add_parser(
         "blend",
@@ -311,6 +403,11 @@ def _prepare_split_ids(args: argparse.Namespace):
 
 
 def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
+    neighbor_sampler = (
+        str(args.neighbor_sampler)
+        if args.neighbor_sampler is not None
+        else ("hybrid" if args.model == "m6_temporal_gat" else "uniform")
+    )
     return GraphModelConfig(
         learning_rate=float(args.learning_rate),
         weight_decay=float(args.weight_decay),
@@ -326,6 +423,21 @@ def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
         scheduler=str(args.scheduler),
         early_stop_patience=int(args.early_stop_patience),
         train_negative_ratio=float(args.train_negative_ratio),
+        negative_sampler=str(args.negative_sampler),
+        hard_negative_mix=float(args.hard_negative_mix),
+        hard_negative_warmup_epochs=int(args.hard_negative_warmup_epochs),
+        hard_negative_refresh=int(args.hard_negative_refresh),
+        hard_negative_candidate_cap=int(args.hard_negative_candidate_cap),
+        hard_negative_candidate_multiplier=float(args.hard_negative_candidate_multiplier),
+        hard_negative_pool_multiplier=float(args.hard_negative_pool_multiplier),
+        loss_type=str(args.loss_type),
+        focal_gamma=float(args.focal_gamma),
+        focal_alpha=float(args.focal_alpha),
+        ranking_weight=float(args.ranking_weight),
+        ranking_margin=float(args.ranking_margin),
+        neighbor_sampler=neighbor_sampler,
+        recent_window=max(int(args.recent_window), 1),
+        recent_ratio=float(args.recent_ratio),
     )
 
 
@@ -589,9 +701,12 @@ def run_train_graph(args: argparse.Namespace) -> None:
     external_predictions: list[np.ndarray] = []
     metrics: list[dict[str, Any]] = []
 
-    experiment_cls = (
-        TemporalRelationGraphSAGEExperiment if args.model == "m5_temporal_graphsage" else RelationGraphSAGEExperiment
-    )
+    experiment_map = {
+        "m4_graphsage": RelationGraphSAGEExperiment,
+        "m5_temporal_graphsage": TemporalRelationGraphSAGEExperiment,
+        "m6_temporal_gat": TemporalRelationGATExperiment,
+    }
+    experiment_cls = experiment_map[args.model]
 
     with tqdm(
         args.seeds,
@@ -735,6 +850,7 @@ def run_train_graph(args: argparse.Namespace) -> None:
             "batch_size": args.batch_size,
             "epochs": args.epochs,
             "device": args.device,
+            "aggregator_type": "attention" if args.model == "m6_temporal_gat" else "sage",
             **graph_config.to_dict(),
         },
     }

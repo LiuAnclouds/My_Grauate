@@ -779,6 +779,6 @@ def default_feature_groups(model_name: str) -> list[str]:
         ]
     if model_name == "m3_neighbor":
         return default_feature_groups("m2_hybrid") + ["neighbor"]
-    if model_name in {"m4_graphsage", "m5_temporal_graphsage"}:
+    if model_name in {"m4_graphsage", "m5_temporal_graphsage", "m6_temporal_gat"}:
         return default_feature_groups("m2_hybrid")
     raise KeyError(f"Unsupported model name: {model_name}")
