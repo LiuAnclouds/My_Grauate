@@ -5,6 +5,13 @@
 /experiment/outputs
 /article_code/GeneralDyG-main/dataset
 /article_code/GeneralDyG-main/model
+/node_modules
+/catboost_info
+/.pytest_cache
+/.mypy_cache
+/.ruff_cache
+/.coverage*
+*.log
 __pycache__/
 *.pyc
 *.pyo

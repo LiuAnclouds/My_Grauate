@@ -5,7 +5,7 @@ import copy
 import json
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -22,12 +22,14 @@ from experiment.training.common import (
     set_global_seed,
     write_json,
 )
+from experiment.training.context_fusion import TargetContextFusionHead
 from experiment.training.features import (
     FeatureStore,
     GraphCache,
     HybridFeatureNormalizerState,
     default_feature_groups,
 )
+from experiment.training.prototype_memory import PrototypeMemoryBank, PrototypeMemoryConfig
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,11 @@ class GraphPhaseContext:
     feature_store: FeatureStore
     graph_cache: GraphCache
     labels: np.ndarray
+    target_context_store: FeatureStore | None = None
+    known_label_codes: np.ndarray | None = None
+    reference_day: int | None = None
+    historical_background_ids: np.ndarray | None = None
+    sampling_profile: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +76,32 @@ class GraphModelConfig:
     neighbor_sampler: str = "uniform"
     recent_window: int = 50
     recent_ratio: float = 0.8
+    consistency_temperature: float = 0.35
+    time_decay_strength: float = 0.0
+    target_time_weight_half_life_days: float = 0.0
+    target_time_weight_floor: float = 0.25
+    known_label_feature: bool = False
+    known_label_feature_dim: int = 5
+    target_context_fusion: str = "none"
+    target_context_input_dim: int = 0
+    primary_multiclass_num_classes: int = 0
+    prototype_multiclass_num_classes: int = 0
+    prototype_loss_weight: float = 0.0
+    prototype_temperature: float = 0.2
+    prototype_momentum: float = 0.9
+    prototype_start_epoch: int = 1
+    prototype_loss_ramp_epochs: int = 0
+    prototype_bucket_mode: str = "global"
+    prototype_neighbor_blend: float = 0.0
+    prototype_global_blend: float = 0.0
+    prototype_consistency_weight: float = 0.0
+    include_historical_background_negatives: bool = False
+    historical_background_negative_ratio: float = 0.25
+    historical_background_negative_warmup_epochs: int = 0
+    historical_background_aux_only: bool = False
+    aux_multiclass_num_classes: int = 4
+    aux_multiclass_loss_weight: float = 0.0
+    aux_inference_blend: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -101,6 +134,34 @@ class GraphModelConfig:
             "neighbor_sampler": self.neighbor_sampler,
             "recent_window": int(self.recent_window),
             "recent_ratio": float(self.recent_ratio),
+            "consistency_temperature": float(self.consistency_temperature),
+            "time_decay_strength": float(self.time_decay_strength),
+            "target_time_weight_half_life_days": float(self.target_time_weight_half_life_days),
+            "target_time_weight_floor": float(self.target_time_weight_floor),
+            "known_label_feature": bool(self.known_label_feature),
+            "known_label_feature_dim": int(self.known_label_feature_dim),
+            "target_context_fusion": self.target_context_fusion,
+            "target_context_input_dim": int(self.target_context_input_dim),
+            "primary_multiclass_num_classes": int(self.primary_multiclass_num_classes),
+            "prototype_multiclass_num_classes": int(self.prototype_multiclass_num_classes),
+            "prototype_loss_weight": float(self.prototype_loss_weight),
+            "prototype_temperature": float(self.prototype_temperature),
+            "prototype_momentum": float(self.prototype_momentum),
+            "prototype_start_epoch": int(self.prototype_start_epoch),
+            "prototype_loss_ramp_epochs": int(self.prototype_loss_ramp_epochs),
+            "prototype_bucket_mode": self.prototype_bucket_mode,
+            "prototype_neighbor_blend": float(self.prototype_neighbor_blend),
+            "prototype_global_blend": float(self.prototype_global_blend),
+            "prototype_consistency_weight": float(self.prototype_consistency_weight),
+            "include_historical_background_negatives": bool(self.include_historical_background_negatives),
+            "historical_background_negative_ratio": float(self.historical_background_negative_ratio),
+            "historical_background_negative_warmup_epochs": int(
+                self.historical_background_negative_warmup_epochs
+            ),
+            "historical_background_aux_only": bool(self.historical_background_aux_only),
+            "aux_multiclass_num_classes": int(self.aux_multiclass_num_classes),
+            "aux_multiclass_loss_weight": float(self.aux_multiclass_loss_weight),
+            "aux_inference_blend": float(self.aux_inference_blend),
         }
 
     @classmethod
@@ -137,6 +198,38 @@ class GraphModelConfig:
             neighbor_sampler=str(payload.get("neighbor_sampler", "uniform")),
             recent_window=int(payload.get("recent_window", 50)),
             recent_ratio=float(payload.get("recent_ratio", 0.8)),
+            consistency_temperature=float(payload.get("consistency_temperature", 0.35)),
+            time_decay_strength=float(payload.get("time_decay_strength", 0.0)),
+            target_time_weight_half_life_days=float(payload.get("target_time_weight_half_life_days", 0.0)),
+            target_time_weight_floor=float(payload.get("target_time_weight_floor", 0.25)),
+            known_label_feature=bool(payload.get("known_label_feature", False)),
+            known_label_feature_dim=int(payload.get("known_label_feature_dim", 5)),
+            target_context_fusion=str(payload.get("target_context_fusion", "none")),
+            target_context_input_dim=int(payload.get("target_context_input_dim", 0)),
+            primary_multiclass_num_classes=int(payload.get("primary_multiclass_num_classes", 0)),
+            prototype_multiclass_num_classes=int(payload.get("prototype_multiclass_num_classes", 0)),
+            prototype_loss_weight=float(payload.get("prototype_loss_weight", 0.0)),
+            prototype_temperature=float(payload.get("prototype_temperature", 0.2)),
+            prototype_momentum=float(payload.get("prototype_momentum", 0.9)),
+            prototype_start_epoch=int(payload.get("prototype_start_epoch", 1)),
+            prototype_loss_ramp_epochs=int(payload.get("prototype_loss_ramp_epochs", 0)),
+            prototype_bucket_mode=str(payload.get("prototype_bucket_mode", "global")),
+            prototype_neighbor_blend=float(payload.get("prototype_neighbor_blend", 0.0)),
+            prototype_global_blend=float(payload.get("prototype_global_blend", 0.0)),
+            prototype_consistency_weight=float(payload.get("prototype_consistency_weight", 0.0)),
+            include_historical_background_negatives=bool(
+                payload.get("include_historical_background_negatives", False)
+            ),
+            historical_background_negative_ratio=float(
+                payload.get("historical_background_negative_ratio", 0.25)
+            ),
+            historical_background_negative_warmup_epochs=int(
+                payload.get("historical_background_negative_warmup_epochs", 0)
+            ),
+            historical_background_aux_only=bool(payload.get("historical_background_aux_only", False)),
+            aux_multiclass_num_classes=int(payload.get("aux_multiclass_num_classes", 4)),
+            aux_multiclass_loss_weight=float(payload.get("aux_multiclass_loss_weight", 0.0)),
+            aux_inference_blend=float(payload.get("aux_inference_blend", 0.0)),
         )
 
     def use_legacy_path(self) -> bool:
@@ -148,6 +241,14 @@ class GraphModelConfig:
             and self.edge_encoder == "basic"
             and self.subgraph_head == "none"
         )
+
+
+@dataclass(frozen=True)
+class GraphForwardOutput:
+    logits: torch.Tensor
+    diagnostics: dict[str, float] | None = None
+    embedding: torch.Tensor | None = None
+    aux_logits: torch.Tensor | None = None
 
 
 @dataclass(frozen=True)
@@ -168,6 +269,7 @@ class TrainBatchStats:
     positive_count: int
     negative_count: int
     hard_negative_count: int = 0
+    background_negative_count: int = 0
 
     @property
     def positive_rate(self) -> float:
@@ -256,14 +358,88 @@ def _plot_training_curves(path: Path, rows: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def _sampler_uses_relation_risk(sampler: str) -> bool:
+    return str(sampler) in {"risk_recent", "risk_consistency_recent"}
+
+
+def _sampler_uses_consistency_profile(sampler: str) -> bool:
+    return str(sampler) in {"consistency_recent", "risk_consistency_recent"}
+
+
+def _consistency_score(
+    *,
+    center_node: int | None,
+    neighbor_ids: np.ndarray | None,
+    node_profile: np.ndarray | None,
+    temperature: float,
+) -> np.ndarray | None:
+    if center_node is None or neighbor_ids is None or node_profile is None:
+        return None
+    if neighbor_ids.size == 0:
+        return np.empty(0, dtype=np.float64)
+
+    center_idx = int(center_node)
+    neighbor_idx = np.asarray(neighbor_ids, dtype=np.int32)
+    center_profile = np.asarray(node_profile[center_idx], dtype=np.float32)
+    neighbor_profile = np.asarray(node_profile[neighbor_idx], dtype=np.float32)
+    if center_profile.ndim != 1 or neighbor_profile.ndim != 2:
+        return None
+
+    similarity = np.matmul(neighbor_profile, center_profile.astype(np.float32, copy=False)).astype(
+        np.float64,
+        copy=False,
+    )
+    similarity = np.clip(similarity, -1.0, 1.0)
+    if temperature <= 0.0:
+        return np.clip((similarity + 1.0) * 0.5, 1e-6, None)
+    shifted = similarity - float(np.max(similarity))
+    score = np.exp(shifted / max(float(temperature), 1e-3))
+    return np.clip(score, 1e-6, None).astype(np.float64, copy=False)
+
+
+def _recent_sampler_score(
+    *,
+    sampler: str,
+    recent_pool: np.ndarray,
+    edge_relation_ids: np.ndarray | None,
+    relation_weight: np.ndarray | None,
+    center_node: int | None,
+    edge_neighbor_ids: np.ndarray | None,
+    node_profile: np.ndarray | None,
+    consistency_temperature: float,
+) -> np.ndarray | None:
+    score: np.ndarray | None = None
+    if _sampler_uses_relation_risk(sampler) and edge_relation_ids is not None and relation_weight is not None:
+        recent_rel = np.asarray(edge_relation_ids[recent_pool], dtype=np.int64)
+        score = np.asarray(relation_weight[recent_rel], dtype=np.float64)
+    if _sampler_uses_consistency_profile(sampler) and edge_neighbor_ids is not None and node_profile is not None:
+        consistency = _consistency_score(
+            center_node=center_node,
+            neighbor_ids=np.asarray(edge_neighbor_ids[recent_pool], dtype=np.int32),
+            node_profile=node_profile,
+            temperature=consistency_temperature,
+        )
+        if consistency is not None:
+            score = consistency if score is None else score * consistency
+    if score is None:
+        return None
+    return np.clip(score, 1e-6, None).astype(np.float64, copy=False)
+
+
 def _sample_edge_indices(
     edge_timestamp: np.ndarray,
     fanout: int,
     rng: np.random.Generator,
     snapshot_end: int | None,
+    edge_relation_ids: np.ndarray | None = None,
+    relation_weight: np.ndarray | None = None,
+    center_node: int | None = None,
+    edge_neighbor_ids: np.ndarray | None = None,
+    node_profile: np.ndarray | None = None,
     sampler: str = "uniform",
     recent_window: int = 50,
     recent_ratio: float = 0.8,
+    consistency_temperature: float = 0.35,
     training: bool = True,
 ) -> np.ndarray:
     if edge_timestamp.size == 0:
@@ -288,16 +464,36 @@ def _sample_edge_indices(
     else:
         recent_pool = valid.astype(np.int32, copy=False)
 
+    recent_score = _recent_sampler_score(
+        sampler=sampler,
+        recent_pool=recent_pool,
+        edge_relation_ids=edge_relation_ids,
+        relation_weight=relation_weight,
+        center_node=center_node,
+        edge_neighbor_ids=edge_neighbor_ids,
+        node_profile=node_profile,
+        consistency_temperature=consistency_temperature,
+    )
+
     if not training:
+        if recent_score is not None:
+            top_score = np.argpartition(recent_score, -fanout)[-fanout:]
+            choice = recent_pool[top_score]
+            return np.sort(choice.astype(np.int32, copy=False))
         recent_pool_ts = edge_timestamp[recent_pool]
         top_recent = np.argpartition(recent_pool_ts, -fanout)[-fanout:]
         choice = recent_pool[top_recent]
         return np.sort(choice.astype(np.int32, copy=False))
 
-    if sampler == "recent":
+    if sampler in {"recent", "consistency_recent", "risk_recent", "risk_consistency_recent"}:
         if recent_pool.size <= fanout:
             return np.sort(recent_pool.astype(np.int32, copy=False))
-        choice = rng.choice(recent_pool, size=fanout, replace=False)
+        if recent_score is None:
+            choice = rng.choice(recent_pool, size=fanout, replace=False)
+            return np.sort(choice.astype(np.int32, copy=False))
+        weight = recent_score
+        weight = weight / float(np.sum(weight, dtype=np.float64))
+        choice = rng.choice(recent_pool, size=fanout, replace=False, p=weight)
         return np.sort(choice.astype(np.int32, copy=False))
 
     if sampler != "hybrid":
@@ -331,9 +527,12 @@ def sample_relation_subgraph(
     fanouts: list[int],
     rng: np.random.Generator,
     snapshot_end: int | None = None,
+    relation_weight: np.ndarray | None = None,
+    node_profile: np.ndarray | None = None,
     sampler: str = "uniform",
     recent_window: int = 50,
     recent_ratio: float = 0.8,
+    consistency_temperature: float = 0.35,
     training: bool = True,
 ) -> SampledSubgraph:
     seeds = np.asarray(seed_nodes, dtype=np.int32)
@@ -357,14 +556,21 @@ def sample_relation_subgraph(
         for center in frontier.tolist():
             in_start = int(graph.in_ptr[center])
             in_end = int(graph.in_ptr[center + 1])
+            in_rel_ids = np.asarray(graph.in_edge_type[in_start:in_end], dtype=np.int64) - 1
             in_choice = _sample_edge_indices(
                 edge_timestamp=np.asarray(graph.in_edge_timestamp[in_start:in_end]),
                 fanout=fanout,
                 rng=rng,
                 snapshot_end=snapshot_end,
+                edge_relation_ids=in_rel_ids,
+                relation_weight=relation_weight,
+                center_node=int(center),
+                edge_neighbor_ids=np.asarray(graph.in_neighbors[in_start:in_end], dtype=np.int32),
+                node_profile=node_profile,
                 sampler=sampler,
                 recent_window=recent_window,
                 recent_ratio=recent_ratio,
+                consistency_temperature=consistency_temperature,
                 training=training,
             )
             if in_choice.size:
@@ -390,14 +596,23 @@ def sample_relation_subgraph(
 
             out_start = int(graph.out_ptr[center])
             out_end = int(graph.out_ptr[center + 1])
+            out_rel_ids = (
+                np.asarray(graph.out_edge_type[out_start:out_end], dtype=np.int64) - 1 + graph.num_edge_types
+            )
             out_choice = _sample_edge_indices(
                 edge_timestamp=np.asarray(graph.out_edge_timestamp[out_start:out_end]),
                 fanout=fanout,
                 rng=rng,
                 snapshot_end=snapshot_end,
+                edge_relation_ids=out_rel_ids,
+                relation_weight=relation_weight,
+                center_node=int(center),
+                edge_neighbor_ids=np.asarray(graph.out_neighbors[out_start:out_end], dtype=np.int32),
+                node_profile=node_profile,
                 sampler=sampler,
                 recent_window=recent_window,
                 recent_ratio=recent_ratio,
+                consistency_temperature=consistency_temperature,
                 training=training,
             )
             if out_choice.size:
@@ -466,9 +681,12 @@ def _sample_single_seed_subgraph(
     fanouts: list[int],
     rng: np.random.Generator,
     snapshot_end: int | None = None,
+    relation_weight: np.ndarray | None = None,
+    node_profile: np.ndarray | None = None,
     sampler: str = "uniform",
     recent_window: int = 50,
     recent_ratio: float = 0.8,
+    consistency_temperature: float = 0.35,
     training: bool = True,
 ) -> SampledSubgraph:
     seed = int(seed)
@@ -501,14 +719,21 @@ def _sample_single_seed_subgraph(
             in_start = int(in_ptr[center])
             in_end = int(in_ptr[center + 1])
             in_time_slice = np.asarray(in_edge_timestamp[in_start:in_end])
+            in_rel_ids = np.asarray(in_edge_type[in_start:in_end], dtype=np.int64) - 1
             in_choice = _sample_edge_indices(
                 edge_timestamp=in_time_slice,
                 fanout=fanout,
                 rng=rng,
                 snapshot_end=snapshot_end,
+                edge_relation_ids=in_rel_ids,
+                relation_weight=relation_weight,
+                center_node=center,
+                edge_neighbor_ids=np.asarray(in_neighbors[in_start:in_end], dtype=np.int32),
+                node_profile=node_profile,
                 sampler=sampler,
                 recent_window=recent_window,
                 recent_ratio=recent_ratio,
+                consistency_temperature=consistency_temperature,
                 training=training,
             )
             if in_choice.size:
@@ -535,14 +760,21 @@ def _sample_single_seed_subgraph(
             out_start = int(out_ptr[center])
             out_end = int(out_ptr[center + 1])
             out_time_slice = np.asarray(out_edge_timestamp[out_start:out_end])
+            out_rel_ids = np.asarray(out_edge_type[out_start:out_end], dtype=np.int64) - 1 + num_edge_types
             out_choice = _sample_edge_indices(
                 edge_timestamp=out_time_slice,
                 fanout=fanout,
                 rng=rng,
                 snapshot_end=snapshot_end,
+                edge_relation_ids=out_rel_ids,
+                relation_weight=relation_weight,
+                center_node=center,
+                edge_neighbor_ids=np.asarray(out_neighbors[out_start:out_end], dtype=np.int32),
+                node_profile=node_profile,
                 sampler=sampler,
                 recent_window=recent_window,
                 recent_ratio=recent_ratio,
+                consistency_temperature=consistency_temperature,
                 training=training,
             )
             if out_choice.size:
@@ -587,9 +819,12 @@ def sample_batched_relation_subgraphs(
     fanouts: list[int],
     rng: np.random.Generator,
     snapshot_end: int | None = None,
+    relation_weight: np.ndarray | None = None,
+    node_profile: np.ndarray | None = None,
     sampler: str = "uniform",
     recent_window: int = 50,
     recent_ratio: float = 0.8,
+    consistency_temperature: float = 0.35,
     training: bool = True,
 ) -> SampledSubgraph:
     seeds = np.asarray(seed_nodes, dtype=np.int32)
@@ -622,9 +857,12 @@ def sample_batched_relation_subgraphs(
             fanouts=fanouts,
             rng=rng,
             snapshot_end=snapshot_end,
+            relation_weight=relation_weight,
+            node_profile=node_profile,
             sampler=sampler,
             recent_window=recent_window,
             recent_ratio=recent_ratio,
+            consistency_temperature=consistency_temperature,
             training=training,
         )
         node_parts.append(subgraph.node_ids)
@@ -701,6 +939,7 @@ def _focal_bce_with_logits(
     pos_weight: torch.Tensor | None,
     gamma: float,
     alpha: float,
+    sample_weight: torch.Tensor | None = None,
 ) -> torch.Tensor:
     bce = F.binary_cross_entropy_with_logits(
         logits,
@@ -715,6 +954,8 @@ def _focal_bce_with_logits(
     if alpha >= 0.0:
         alpha_t = alpha * targets + (1.0 - alpha) * (1.0 - targets)
         loss = loss * alpha_t
+    if sample_weight is not None:
+        loss = loss * sample_weight
     return loss.mean()
 
 
@@ -836,6 +1077,7 @@ class RelationSAGELayer(nn.Module):
         edge_dst: torch.Tensor,
         rel_ids: torch.Tensor,
         time_feature: torch.Tensor | None = None,
+        time_weight: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if edge_src.numel() == 0:
             return F.relu(self.self_linear(x))
@@ -844,6 +1086,8 @@ class RelationSAGELayer(nn.Module):
         if time_feature is not None:
             msg_parts.append(time_feature)
         msg = self.msg_linear(torch.cat(msg_parts, dim=-1))
+        if time_weight is not None:
+            msg = msg * time_weight
         agg = x.new_zeros((x.shape[0], msg.shape[1]))
         agg.index_add_(0, edge_dst, msg)
         deg = x.new_zeros((x.shape[0], 1))
@@ -907,6 +1151,7 @@ class ModernRelationBlock(nn.Module):
         edge_src: torch.Tensor,
         edge_dst: torch.Tensor,
         edge_emb: torch.Tensor,
+        time_weight: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         h_in = x
         h = self.norm1(x)
@@ -922,6 +1167,8 @@ class ModernRelationBlock(nn.Module):
                 edge_repr = gate * msg
             else:
                 edge_repr = msg
+            if time_weight is not None:
+                edge_repr = edge_repr * time_weight
             agg = h.new_zeros((h.shape[0], self.hidden_dim))
             agg.index_add_(0, edge_dst, edge_repr)
             deg = h.new_zeros((h.shape[0], 1))
@@ -1000,6 +1247,7 @@ class ModernRelationAttentionBlock(nn.Module):
         edge_src: torch.Tensor,
         edge_dst: torch.Tensor,
         edge_emb: torch.Tensor,
+        time_weight: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         h_in = x
         h = self.norm1(x)
@@ -1011,6 +1259,8 @@ class ModernRelationAttentionBlock(nn.Module):
             msg = self.msg_mlp(torch.cat([h[edge_src], edge_emb], dim=-1))
             if self.gate_mlp is not None:
                 msg = msg * torch.sigmoid(self.gate_mlp(edge_context))
+            if time_weight is not None:
+                msg = msg * time_weight
             attn_score = self.attn_mlp(edge_context).squeeze(-1)
             attn_weight = _segment_softmax(attn_score, edge_dst, h.shape[0]).unsqueeze(-1)
             edge_repr = self.attn_dropout(attn_weight) * msg
@@ -1050,6 +1300,15 @@ class RelationGraphSAGENetwork(nn.Module):
         self.num_edge_types = max(num_relations // 2, 1)
         self.aggregator_type = aggregator_type
         self.use_legacy = aggregator_type == "sage" and model_config.use_legacy_path()
+        self.target_context_fusion = str(model_config.target_context_fusion)
+        self.target_context_input_dim = (
+            int(model_config.target_context_input_dim)
+            if int(model_config.target_context_input_dim) > 0
+            else int(input_dim)
+        )
+        self.primary_num_classes = max(int(model_config.primary_multiclass_num_classes), 0)
+        self.aux_num_classes = max(int(model_config.aux_multiclass_num_classes), 0)
+        primary_output_dim = self.primary_num_classes if self.primary_num_classes >= 3 else 1
 
         self.input_proj = nn.Linear(input_dim, hidden_dim)
         self.input_dropout = nn.Dropout(dropout)
@@ -1073,11 +1332,32 @@ class RelationGraphSAGENetwork(nn.Module):
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.ReLU(),
                 nn.Dropout(dropout),
-                nn.Linear(hidden_dim, 1),
+                nn.Linear(hidden_dim, primary_output_dim),
+            )
+            self.aux_classifier = (
+                nn.Sequential(
+                    nn.Linear(hidden_dim, hidden_dim),
+                    nn.ReLU(),
+                    nn.Dropout(dropout),
+                    nn.Linear(hidden_dim, self.aux_num_classes),
+                )
+                if float(model_config.aux_multiclass_loss_weight) > 0.0 and self.aux_num_classes >= 3
+                else None
             )
             self.rel_embedding = None
             self.stats_proj = None
             self.subgraph_classifier = None
+            self.context_fusion_head = (
+                TargetContextFusionHead(
+                    input_dim=self.target_context_input_dim,
+                    hidden_dim=hidden_dim,
+                    output_dim=primary_output_dim,
+                    dropout=dropout,
+                    mode=self.target_context_fusion,
+                )
+                if self.target_context_fusion in {"gate", "concat", "logit_residual"}
+                else None
+            )
             return
 
         self.rel_embedding = nn.Embedding(num_relations, rel_dim)
@@ -1101,8 +1381,9 @@ class RelationGraphSAGENetwork(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, 1),
+            nn.Linear(hidden_dim, primary_output_dim),
         )
+        aux_input_dim = hidden_dim
         if model_config.subgraph_head == "meanmax":
             self.stats_proj = nn.Sequential(
                 nn.Linear(6, hidden_dim),
@@ -1113,11 +1394,33 @@ class RelationGraphSAGENetwork(nn.Module):
                 nn.Linear(hidden_dim * 6, hidden_dim),
                 nn.GELU(),
                 nn.Dropout(dropout),
-                nn.Linear(hidden_dim, 1),
+                nn.Linear(hidden_dim, primary_output_dim),
             )
+            aux_input_dim = hidden_dim * 6
         else:
             self.stats_proj = None
             self.subgraph_classifier = None
+        self.aux_classifier = (
+            nn.Sequential(
+                nn.Linear(aux_input_dim, hidden_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden_dim, self.aux_num_classes),
+            )
+            if float(model_config.aux_multiclass_loss_weight) > 0.0 and self.aux_num_classes >= 3
+            else None
+        )
+        self.context_fusion_head = (
+            TargetContextFusionHead(
+                input_dim=self.target_context_input_dim,
+                hidden_dim=hidden_dim,
+                output_dim=primary_output_dim,
+                dropout=dropout,
+                mode=self.target_context_fusion,
+            )
+            if self.target_context_fusion in {"gate", "concat", "logit_residual"}
+            else None
+        )
 
     def _build_edge_embedding(
         self,
@@ -1206,7 +1509,7 @@ class RelationGraphSAGENetwork(nn.Module):
         stats[:, 5] = torch.log1p(stats[:, 5])
         return stats
 
-    def _forward_subgraph_head(
+    def _compose_subgraph_target_repr(
         self,
         node_repr: torch.Tensor,
         edge_repr: torch.Tensor,
@@ -1259,9 +1562,30 @@ class RelationGraphSAGENetwork(nn.Module):
             ],
             dim=-1,
         )
-        return self.subgraph_classifier(fused).squeeze(-1)
+        return fused
 
-    def forward(
+    def _apply_classifier_with_embedding(
+        self,
+        representation: torch.Tensor,
+        classifier: nn.Sequential,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        hidden = classifier[0](representation)
+        hidden = classifier[1](hidden)
+        hidden = classifier[2](hidden)
+        logits = classifier[3](hidden)
+        if logits.dim() == 2 and logits.shape[-1] == 1:
+            logits = logits.squeeze(-1)
+        return logits, hidden
+
+    def _apply_aux_classifier(
+        self,
+        representation: torch.Tensor,
+    ) -> torch.Tensor | None:
+        if self.aux_classifier is None:
+            return None
+        return self.aux_classifier(representation)
+
+    def forward_output(
         self,
         x: torch.Tensor,
         edge_src: torch.Tensor,
@@ -1269,15 +1593,28 @@ class RelationGraphSAGENetwork(nn.Module):
         rel_ids: torch.Tensor,
         edge_relative_time: torch.Tensor | None,
         target_local_idx: torch.Tensor,
+        target_context_features: torch.Tensor | None = None,
         node_subgraph_id: torch.Tensor | None = None,
         edge_subgraph_id: torch.Tensor | None = None,
-        return_details: bool = False,
-    ) -> torch.Tensor | tuple[torch.Tensor, dict[str, float]]:
+        include_diagnostics: bool = False,
+        include_embedding: bool = False,
+        include_aux: bool = False,
+    ) -> GraphForwardOutput:
         h = self.input_proj(x)
         h = F.relu(h) if self.use_legacy else F.gelu(h)
         h = self.input_dropout(h)
 
         edge_emb, time_feature = self._build_edge_embedding(x, rel_ids, edge_relative_time)
+        time_weight = None
+        if (
+            self.temporal
+            and edge_relative_time is not None
+            and edge_relative_time.numel()
+            and float(self.model_config.time_decay_strength) > 0.0
+        ):
+            time_weight = torch.exp(
+                -float(self.model_config.time_decay_strength) * edge_relative_time
+            )
         last_edge_repr = h.new_zeros((0, self.hidden_dim))
         layer_outputs: list[torch.Tensor] = []
 
@@ -1289,11 +1626,16 @@ class RelationGraphSAGENetwork(nn.Module):
                     edge_dst=edge_dst,
                     rel_ids=rel_ids,
                     time_feature=time_feature,
+                    time_weight=time_weight,
                 )
                 h = self.input_dropout(h)
                 layer_outputs.append(h)
             node_repr = layer_outputs[-1] if layer_outputs else h
-            logits = self.classifier(node_repr[target_local_idx]).squeeze(-1)
+            target_representation = node_repr[target_local_idx]
+            logits, embedding = self._apply_classifier_with_embedding(
+                target_representation,
+                self.classifier,
+            )
         else:
             for layer in self.layers:
                 h, last_edge_repr = layer(
@@ -1301,6 +1643,7 @@ class RelationGraphSAGENetwork(nn.Module):
                     edge_src=edge_src,
                     edge_dst=edge_dst,
                     edge_emb=edge_emb,
+                    time_weight=time_weight,
                 )
                 layer_outputs.append(h)
             node_repr = (
@@ -1309,7 +1652,7 @@ class RelationGraphSAGENetwork(nn.Module):
                 else (layer_outputs[-1] if layer_outputs else h)
             )
             if self.model_config.subgraph_head == "meanmax":
-                logits = self._forward_subgraph_head(
+                target_representation = self._compose_subgraph_target_repr(
                     node_repr=node_repr,
                     edge_repr=last_edge_repr,
                     target_local_idx=target_local_idx,
@@ -1319,20 +1662,86 @@ class RelationGraphSAGENetwork(nn.Module):
                     rel_ids=rel_ids,
                     edge_relative_time=edge_relative_time,
                 )
+                logits, embedding = self._apply_classifier_with_embedding(
+                    target_representation,
+                    self.subgraph_classifier,
+                )
             else:
-                logits = self.classifier(node_repr[target_local_idx]).squeeze(-1)
+                target_representation = node_repr[target_local_idx]
+                logits, embedding = self._apply_classifier_with_embedding(
+                    target_representation,
+                    self.classifier,
+                )
 
-        if not return_details:
-            return logits
-        diagnostics = {
-            "emb_norm": float(node_repr.norm(dim=-1).mean().detach().item()),
-            "dirichlet_energy": float(
-                _dirichlet_energy(node_repr, edge_src=edge_src, edge_dst=edge_dst)
-                .detach()
-                .item()
-            ),
-        }
-        return logits, diagnostics
+        fusion_diagnostics = None
+        if self.context_fusion_head is not None:
+            fusion_features = target_context_features if target_context_features is not None else x[target_local_idx]
+            logits, embedding, fusion_diagnostics = self.context_fusion_head(
+                base_embedding=embedding,
+                base_logits=logits,
+                target_features=fusion_features,
+            )
+
+        diagnostics = None
+        if include_diagnostics:
+            diagnostics = {
+                "emb_norm": float(node_repr.norm(dim=-1).mean().detach().item()),
+                "dirichlet_energy": float(
+                    _dirichlet_energy(node_repr, edge_src=edge_src, edge_dst=edge_dst)
+                    .detach()
+                    .item()
+                ),
+            }
+            if fusion_diagnostics is not None:
+                diagnostics.update(fusion_diagnostics)
+        aux_logits = self._apply_aux_classifier(target_representation) if include_aux else None
+        return GraphForwardOutput(
+            logits=logits,
+            diagnostics=diagnostics,
+            embedding=embedding if include_embedding else None,
+            aux_logits=aux_logits,
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        edge_src: torch.Tensor,
+        edge_dst: torch.Tensor,
+        rel_ids: torch.Tensor,
+        edge_relative_time: torch.Tensor | None,
+        target_local_idx: torch.Tensor,
+        target_context_features: torch.Tensor | None = None,
+        node_subgraph_id: torch.Tensor | None = None,
+        edge_subgraph_id: torch.Tensor | None = None,
+        return_details: bool = False,
+        return_embedding: bool = False,
+    ) -> (
+        torch.Tensor
+        | tuple[torch.Tensor, dict[str, float]]
+        | tuple[torch.Tensor, torch.Tensor]
+        | tuple[torch.Tensor, dict[str, float], torch.Tensor]
+    ):
+        output = self.forward_output(
+            x=x,
+            edge_src=edge_src,
+            edge_dst=edge_dst,
+            rel_ids=rel_ids,
+            edge_relative_time=edge_relative_time,
+            target_local_idx=target_local_idx,
+            target_context_features=target_context_features,
+            node_subgraph_id=node_subgraph_id,
+            edge_subgraph_id=edge_subgraph_id,
+            include_diagnostics=return_details,
+            include_embedding=return_embedding,
+            include_aux=False,
+        )
+        if return_details and return_embedding:
+            return output.logits, output.diagnostics or {}, output.embedding
+        if return_details:
+            return output.logits, output.diagnostics or {}
+        if return_embedding:
+            return output.logits, output.embedding
+        return output.logits
 
 
 class BaseGraphSAGEExperiment:
@@ -1358,6 +1767,9 @@ class BaseGraphSAGEExperiment:
         aggregator_type: str = "sage",
         graph_config: GraphModelConfig | None = None,
         feature_normalizer_state: HybridFeatureNormalizerState | None = None,
+        target_context_input_dim: int | None = None,
+        target_context_feature_groups: list[str] | None = None,
+        target_context_normalizer_state: HybridFeatureNormalizerState | None = None,
     ) -> None:
         self.model_name = model_name
         self.seed = seed
@@ -1374,11 +1786,18 @@ class BaseGraphSAGEExperiment:
         self.aggregator_type = aggregator_type
         self.device = torch.device(resolve_device(device))
         self.feature_normalizer_state = feature_normalizer_state
+        self.target_context_feature_groups = list(target_context_feature_groups or [])
+        self.target_context_normalizer_state = target_context_normalizer_state
         self.graph_config = graph_config or GraphModelConfig(
             learning_rate=learning_rate,
             weight_decay=weight_decay,
             dropout=dropout,
         )
+        if target_context_input_dim is not None:
+            self.graph_config = replace(
+                self.graph_config,
+                target_context_input_dim=int(target_context_input_dim),
+            )
 
         self.network = RelationGraphSAGENetwork(
             input_dim=input_dim,
@@ -1393,6 +1812,202 @@ class BaseGraphSAGEExperiment:
         ).to(self.device)
         self._hard_negative_pools: dict[int, np.ndarray] = {}
         self._hard_negative_pool_stats: dict[int, dict[str, int]] = {}
+        self._relation_sampling_weight: np.ndarray | None = None
+
+    def _binary_train_labels(self, labels: np.ndarray) -> np.ndarray:
+        labels_arr = np.asarray(labels, dtype=np.int8)
+        if not self.graph_config.include_historical_background_negatives:
+            return labels_arr.astype(np.int8, copy=False)
+        return (labels_arr == 1).astype(np.int8, copy=False)
+
+    def _primary_multiclass_enabled(self) -> bool:
+        return int(self.graph_config.primary_multiclass_num_classes) >= 3
+
+    def _aux_multiclass_enabled(self) -> bool:
+        return (
+            float(self.graph_config.aux_multiclass_loss_weight) > 0.0
+            and int(self.graph_config.aux_multiclass_num_classes) >= 3
+        )
+
+    def _prototype_enabled(self) -> bool:
+        return (
+            float(self.graph_config.prototype_loss_weight) > 0.0
+            and int(self.graph_config.prototype_multiclass_num_classes) >= 3
+        )
+
+    def _background_aux_only_enabled(self) -> bool:
+        return (
+            not self._primary_multiclass_enabled()
+            and
+            bool(self.graph_config.historical_background_aux_only)
+            and bool(self.graph_config.include_historical_background_negatives)
+        )
+
+    def _map_multiclass_targets(
+        self,
+        labels: np.ndarray,
+        num_classes: int,
+    ) -> np.ndarray:
+        labels_arr = np.asarray(labels, dtype=np.int8)
+        if num_classes < 3:
+            return np.full(labels_arr.shape[0], -1, dtype=np.int64)
+        if num_classes == 3:
+            mapped = np.full(labels_arr.shape[0], -1, dtype=np.int64)
+            mapped[labels_arr == 0] = 0
+            mapped[labels_arr == 1] = 1
+            mapped[np.isin(labels_arr, (2, 3))] = 2
+            return mapped
+        mapped = np.full(labels_arr.shape[0], -1, dtype=np.int64)
+        valid_mask = np.isin(labels_arr, (0, 1, 2, 3))
+        mapped[valid_mask] = labels_arr[valid_mask].astype(np.int64, copy=False)
+        return mapped
+
+    def _map_primary_targets(self, labels: np.ndarray) -> np.ndarray:
+        return self._map_multiclass_targets(
+            labels=labels,
+            num_classes=int(self.graph_config.primary_multiclass_num_classes),
+        )
+
+    def _map_aux_targets(self, labels: np.ndarray) -> np.ndarray:
+        return self._map_multiclass_targets(
+            labels=labels,
+            num_classes=int(self.graph_config.aux_multiclass_num_classes),
+        )
+
+    def _map_prototype_targets(self, labels: np.ndarray) -> np.ndarray:
+        return self._map_multiclass_targets(
+            labels=labels,
+            num_classes=int(self.graph_config.prototype_multiclass_num_classes),
+        )
+
+    def _compute_multiclass_class_weight(
+        self,
+        context: GraphPhaseContext,
+        train_ids: np.ndarray,
+        num_classes: int,
+    ) -> torch.Tensor | None:
+        if num_classes < 3:
+            return None
+        label_blocks = [np.asarray(context.labels[np.asarray(train_ids, dtype=np.int32)], dtype=np.int8)]
+        if (
+            self.graph_config.include_historical_background_negatives
+            and context.historical_background_ids is not None
+            and np.asarray(context.historical_background_ids).size
+        ):
+            label_blocks.append(
+                np.asarray(
+                    context.labels[np.asarray(context.historical_background_ids, dtype=np.int32)],
+                    dtype=np.int8,
+                )
+            )
+        mapped_targets = self._map_multiclass_targets(
+            np.concatenate(label_blocks, axis=0),
+            num_classes=num_classes,
+        )
+        valid_targets = mapped_targets[mapped_targets >= 0]
+        if valid_targets.size == 0:
+            return None
+        counts = np.bincount(valid_targets, minlength=num_classes).astype(np.float32, copy=False)
+        present = counts > 0
+        if not np.any(present):
+            return None
+        weights = np.ones(num_classes, dtype=np.float32)
+        weights[present] = 1.0 / np.sqrt(counts[present])
+        weights[present] = weights[present] / float(np.mean(weights[present], dtype=np.float64))
+        return torch.as_tensor(weights, dtype=torch.float32, device=self.device)
+
+    def _compute_primary_class_weight(
+        self,
+        context: GraphPhaseContext,
+        train_ids: np.ndarray,
+    ) -> torch.Tensor | None:
+        if not self._primary_multiclass_enabled():
+            return None
+        return self._compute_multiclass_class_weight(
+            context=context,
+            train_ids=train_ids,
+            num_classes=int(self.graph_config.primary_multiclass_num_classes),
+        )
+
+    def _compute_aux_class_weight(
+        self,
+        context: GraphPhaseContext,
+        train_ids: np.ndarray,
+    ) -> torch.Tensor | None:
+        if not self._aux_multiclass_enabled():
+            return None
+        return self._compute_multiclass_class_weight(
+            context=context,
+            train_ids=train_ids,
+            num_classes=int(self.graph_config.aux_multiclass_num_classes),
+        )
+
+    def _compute_prototype_class_weight(
+        self,
+        context: GraphPhaseContext,
+        train_ids: np.ndarray,
+    ) -> torch.Tensor | None:
+        if not self._prototype_enabled():
+            return None
+        return self._compute_multiclass_class_weight(
+            context=context,
+            train_ids=train_ids,
+            num_classes=int(self.graph_config.prototype_multiclass_num_classes),
+        )
+
+    def _build_prototype_regularizer(
+        self,
+        context: GraphPhaseContext,
+    ) -> PrototypeMemoryBank | None:
+        if not self._prototype_enabled():
+            return None
+        num_buckets = max(len(context.graph_cache.time_windows), 1)
+        return PrototypeMemoryBank(
+            config=PrototypeMemoryConfig(
+                num_classes=int(self.graph_config.prototype_multiclass_num_classes),
+                embedding_dim=int(self.hidden_dim),
+                temperature=float(self.graph_config.prototype_temperature),
+                momentum=float(self.graph_config.prototype_momentum),
+                start_epoch=int(self.graph_config.prototype_start_epoch),
+                loss_ramp_epochs=int(self.graph_config.prototype_loss_ramp_epochs),
+                bucket_mode=str(self.graph_config.prototype_bucket_mode),
+                num_buckets=int(num_buckets),
+                neighbor_blend=float(self.graph_config.prototype_neighbor_blend),
+                global_blend=float(self.graph_config.prototype_global_blend),
+                consistency_weight=float(self.graph_config.prototype_consistency_weight),
+            ),
+            device=self.device,
+        )
+
+    def _prototype_time_bucketed(self) -> bool:
+        return self._prototype_enabled() and str(self.graph_config.prototype_bucket_mode) == "time_bucket"
+
+    def _fraud_probability_from_multiclass_logits(self, logits: torch.Tensor) -> torch.Tensor:
+        multiclass_prob = torch.softmax(logits, dim=-1)
+        foreground = multiclass_prob[:, 0] + multiclass_prob[:, 1]
+        return multiclass_prob[:, 1] / foreground.clamp_min(1e-6)
+
+    def _fraud_score_from_aux_logits(self, aux_logits: torch.Tensor) -> torch.Tensor:
+        aux_prob = torch.softmax(aux_logits, dim=-1)
+        foreground = aux_prob[:, 0] + aux_prob[:, 1]
+        return aux_prob[:, 1] / foreground.clamp_min(1e-6)
+
+    def _primary_probability_from_logits(self, logits: torch.Tensor) -> torch.Tensor:
+        if self._primary_multiclass_enabled():
+            return self._fraud_probability_from_multiclass_logits(logits)
+        return torch.sigmoid(logits)
+
+    def _blend_primary_and_aux_probability(
+        self,
+        logits: torch.Tensor,
+        aux_logits: torch.Tensor | None,
+    ) -> torch.Tensor:
+        primary_prob = self._primary_probability_from_logits(logits)
+        blend = float(np.clip(self.graph_config.aux_inference_blend, 0.0, 1.0))
+        if aux_logits is None or blend <= 0.0:
+            return primary_prob
+        aux_score = self._fraud_score_from_aux_logits(aux_logits)
+        return (1.0 - blend) * primary_prob + blend * aux_score
 
     def _hard_negative_pool_key(self, snapshot_end: int | None) -> int:
         return -1 if snapshot_end is None else int(snapshot_end)
@@ -1402,6 +2017,60 @@ class BaseGraphSAGEExperiment:
             self.graph_config.train_negative_ratio > 0.0
             and self.graph_config.negative_sampler in {"hard", "mixed"}
         )
+
+    def _relation_risk_sampler_enabled(self) -> bool:
+        return _sampler_uses_relation_risk(self.graph_config.neighbor_sampler)
+
+    def _consistency_sampler_enabled(self) -> bool:
+        return _sampler_uses_consistency_profile(self.graph_config.neighbor_sampler)
+
+    def _build_relation_sampling_weight(
+        self,
+        context: GraphPhaseContext,
+        train_ids: np.ndarray,
+    ) -> np.ndarray | None:
+        if not self._relation_risk_sampler_enabled():
+            return None
+
+        graph = context.graph_cache
+        labels = np.asarray(context.labels[np.asarray(train_ids, dtype=np.int32)], dtype=np.int8)
+        pos_counts = np.ones(graph.num_relations, dtype=np.float64)
+        neg_counts = np.ones(graph.num_relations, dtype=np.float64)
+        snapshot_end = context.reference_day
+        train_nodes = np.asarray(train_ids, dtype=np.int32)
+
+        for node, label in zip(train_nodes.tolist(), labels.tolist(), strict=True):
+            if label not in (0, 1):
+                continue
+            target_counts = pos_counts if int(label) == 1 else neg_counts
+
+            in_start = int(graph.in_ptr[node])
+            in_end = int(graph.in_ptr[node + 1])
+            in_ts = np.asarray(graph.in_edge_timestamp[in_start:in_end], dtype=np.int32)
+            in_rel = np.asarray(graph.in_edge_type[in_start:in_end], dtype=np.int64) - 1
+            if snapshot_end is not None:
+                in_rel = in_rel[in_ts <= int(snapshot_end)]
+            if in_rel.size:
+                np.add.at(target_counts, in_rel, 1.0)
+
+            out_start = int(graph.out_ptr[node])
+            out_end = int(graph.out_ptr[node + 1])
+            out_ts = np.asarray(graph.out_edge_timestamp[out_start:out_end], dtype=np.int32)
+            out_rel = np.asarray(graph.out_edge_type[out_start:out_end], dtype=np.int64) - 1 + graph.num_edge_types
+            if snapshot_end is not None:
+                out_rel = out_rel[out_ts <= int(snapshot_end)]
+            if out_rel.size:
+                np.add.at(target_counts, out_rel, 1.0)
+
+        pos_rate = pos_counts / float(np.sum(pos_counts, dtype=np.float64))
+        neg_rate = neg_counts / float(np.sum(neg_counts, dtype=np.float64))
+        log_ratio = np.log(pos_rate) - np.log(neg_rate)
+        log_ratio = np.clip(log_ratio, -2.0, 2.0)
+        weight = np.exp(log_ratio).astype(np.float32, copy=False)
+        mean_weight = float(np.mean(weight, dtype=np.float64))
+        if mean_weight > 0.0:
+            weight = weight / mean_weight
+        return np.clip(weight, 0.25, 4.0).astype(np.float32, copy=False)
 
     def _uses_ranking_loss(self) -> bool:
         return "ranking" in str(self.graph_config.loss_type)
@@ -1432,37 +2101,156 @@ class BaseGraphSAGEExperiment:
         logits: torch.Tensor,
         targets: torch.Tensor,
         pos_weight: torch.Tensor,
+        sample_weight: torch.Tensor | None = None,
+        aux_logits: torch.Tensor | None = None,
+        aux_targets: torch.Tensor | None = None,
+        primary_class_weight: torch.Tensor | None = None,
+        aux_class_weight: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, float]]:
         loss_type = str(self.graph_config.loss_type)
-        if "focal" in loss_type:
-            base_loss = _focal_bce_with_logits(
-                logits=logits,
-                targets=targets,
-                pos_weight=pos_weight,
-                gamma=float(self.graph_config.focal_gamma),
-                alpha=float(self.graph_config.focal_alpha),
-            )
-        else:
-            base_loss = F.binary_cross_entropy_with_logits(
+        if self._primary_multiclass_enabled():
+            primary_ce = F.cross_entropy(
                 logits,
                 targets,
-                pos_weight=pos_weight,
+                reduction="none",
             )
+            if primary_class_weight is not None:
+                primary_ce = primary_ce * primary_class_weight[targets]
+            if sample_weight is not None:
+                primary_ce = primary_ce * sample_weight
+            base_loss = primary_ce.mean()
+        else:
+            if "focal" in loss_type:
+                base_loss = _focal_bce_with_logits(
+                    logits=logits,
+                    targets=targets,
+                    pos_weight=pos_weight,
+                    gamma=float(self.graph_config.focal_gamma),
+                    alpha=float(self.graph_config.focal_alpha),
+                    sample_weight=sample_weight,
+                )
+            else:
+                bce = F.binary_cross_entropy_with_logits(
+                    logits,
+                    targets,
+                    pos_weight=pos_weight,
+                    reduction="none",
+                )
+                if sample_weight is not None:
+                    bce = bce * sample_weight
+                base_loss = bce.mean()
 
         ranking_loss = logits.new_tensor(0.0)
-        if self._uses_ranking_loss() and self.graph_config.ranking_weight > 0.0:
+        if (
+            not self._primary_multiclass_enabled()
+            and self._uses_ranking_loss()
+            and self.graph_config.ranking_weight > 0.0
+        ):
             ranking_loss = _pairwise_ranking_loss(
                 logits=logits,
                 targets=targets,
                 margin=float(self.graph_config.ranking_margin),
             )
 
-        total_loss = base_loss + float(self.graph_config.ranking_weight) * ranking_loss
+        aux_loss = logits.new_tensor(0.0)
+        if (
+            aux_logits is not None
+            and aux_targets is not None
+            and float(self.graph_config.aux_multiclass_loss_weight) > 0.0
+        ):
+            aux_ce = F.cross_entropy(
+                aux_logits,
+                aux_targets,
+                reduction="none",
+            )
+            if aux_class_weight is not None:
+                aux_ce = aux_ce * aux_class_weight[aux_targets]
+            if sample_weight is not None:
+                aux_ce = aux_ce * sample_weight
+            aux_loss = aux_ce.mean()
+
+        total_loss = (
+            base_loss
+            + float(self.graph_config.ranking_weight) * ranking_loss
+            + float(self.graph_config.aux_multiclass_loss_weight) * aux_loss
+        )
         return total_loss, {
             "base_loss": float(base_loss.detach().item()),
             "ranking_loss": float(ranking_loss.detach().item()),
+            "aux_loss": float(aux_loss.detach().item()),
             "total_loss": float(total_loss.detach().item()),
         }
+
+    def _compute_target_time_weight(
+        self,
+        context: GraphPhaseContext,
+        batch_nodes: np.ndarray,
+    ) -> torch.Tensor | None:
+        half_life = float(self.graph_config.target_time_weight_half_life_days)
+        if half_life <= 0.0 or context.reference_day is None:
+            return None
+        first_active = np.asarray(
+            context.graph_cache.first_active[np.asarray(batch_nodes, dtype=np.int32)],
+            dtype=np.float32,
+        )
+        age = np.clip(float(context.reference_day) - first_active, 0.0, None)
+        decay = np.power(np.float32(0.5), age / half_life).astype(np.float32, copy=False)
+        floor = float(np.clip(self.graph_config.target_time_weight_floor, 0.0, 1.0))
+        weight = (floor + (1.0 - floor) * decay).astype(np.float32, copy=False)
+        mean_weight = float(np.mean(weight, dtype=np.float64))
+        if mean_weight > 0.0:
+            weight = weight / mean_weight
+        return torch.as_tensor(weight, dtype=torch.float32, device=self.device)
+
+    def _sample_partition_background_negatives(
+        self,
+        context: GraphPhaseContext,
+        partition_nodes: np.ndarray,
+        snapshot_end: int | None,
+        epoch: int,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        if (
+            not self.graph_config.include_historical_background_negatives
+            or context.historical_background_ids is None
+        ):
+            return np.empty(0, dtype=np.int32)
+        ratio = self._current_historical_background_negative_ratio(epoch)
+        if ratio <= 0.0:
+            return np.empty(0, dtype=np.int32)
+
+        partition_labels = self._binary_train_labels(context.labels[partition_nodes])
+        pos_count = int(np.sum(partition_labels == 1))
+        if pos_count <= 0:
+            return np.empty(0, dtype=np.int32)
+
+        pool = np.asarray(context.historical_background_ids, dtype=np.int32)
+        if pool.size == 0:
+            return np.empty(0, dtype=np.int32)
+
+        if snapshot_end is not None:
+            first_active = np.asarray(context.graph_cache.first_active[pool], dtype=np.int32)
+            eligible = pool[first_active <= int(snapshot_end)].astype(np.int32, copy=False)
+            if eligible.size:
+                pool = eligible
+        if pool.size == 0:
+            return np.empty(0, dtype=np.int32)
+
+        sample_size = min(pool.size, max(1, int(math.ceil(pos_count * ratio))))
+        if pool.size <= sample_size:
+            return np.asarray(pool, dtype=np.int32, copy=False)
+        choice = rng.choice(pool.size, size=sample_size, replace=False)
+        return np.asarray(pool[choice], dtype=np.int32, copy=False)
+
+    def _current_historical_background_negative_ratio(self, epoch: int) -> float:
+        target_ratio = max(float(self.graph_config.historical_background_negative_ratio), 0.0)
+        if target_ratio <= 0.0:
+            return 0.0
+        warmup_epochs = max(int(self.graph_config.historical_background_negative_warmup_epochs), 0)
+        if warmup_epochs <= 1:
+            return target_ratio
+        progress = min(max(int(epoch), 1), warmup_epochs) / float(warmup_epochs)
+        return float(target_ratio * progress)
 
     def _current_hard_negative_pool_size(self) -> int:
         return int(sum(pool.shape[0] for pool in self._hard_negative_pools.values()))
@@ -1522,7 +2310,7 @@ class BaseGraphSAGEExperiment:
         for partition_idx, (nodes, _, snapshot_end) in enumerate(
             self._iter_train_partitions(context=context, node_ids=train_ids)
         ):
-            labels = context.labels[nodes].astype(np.int8, copy=False)
+            labels = self._binary_train_labels(context.labels[nodes])
             pos_nodes = nodes[labels == 1]
             neg_nodes = nodes[labels == 0]
             if pos_nodes.size == 0 or neg_nodes.size == 0:
@@ -1587,14 +2375,16 @@ class BaseGraphSAGEExperiment:
         self,
         neg_nodes: np.ndarray,
         neg_positions: np.ndarray,
+        neg_background_mask: np.ndarray | None,
         sampled_negatives: int,
         snapshot_end: int | None,
         rng: np.random.Generator,
-    ) -> tuple[np.ndarray, np.ndarray, int]:
+    ) -> tuple[np.ndarray, np.ndarray, int, int]:
         if sampled_negatives <= 0 or neg_nodes.size == 0:
             return (
                 np.empty(0, dtype=np.int32),
                 np.empty(0, dtype=np.int32),
+                0,
                 0,
             )
 
@@ -1607,6 +2397,7 @@ class BaseGraphSAGEExperiment:
                 neg_nodes[choice].astype(np.int32, copy=False),
                 neg_positions[choice].astype(np.int32, copy=False),
                 0,
+                int(np.sum(neg_background_mask[choice])) if neg_background_mask is not None else 0,
             )
 
         hard_pool = self._hard_negative_pools.get(self._hard_negative_pool_key(snapshot_end))
@@ -1616,6 +2407,7 @@ class BaseGraphSAGEExperiment:
                 neg_nodes[choice].astype(np.int32, copy=False),
                 neg_positions[choice].astype(np.int32, copy=False),
                 0,
+                int(np.sum(neg_background_mask[choice])) if neg_background_mask is not None else 0,
             )
 
         hard_mask = np.isin(neg_nodes, hard_pool, assume_unique=False)
@@ -1681,6 +2473,7 @@ class BaseGraphSAGEExperiment:
                 np.empty(0, dtype=np.int32),
                 np.empty(0, dtype=np.int32),
                 0,
+                0,
             )
 
         if selected_idx.size < sampled_negatives:
@@ -1700,10 +2493,14 @@ class BaseGraphSAGEExperiment:
         order = rng.permutation(selected_idx.size)
         selected_idx = selected_idx[order].astype(np.int32, copy=False)
         hard_selected_count = int(np.sum(hard_mask[selected_idx]))
+        background_selected_count = (
+            int(np.sum(neg_background_mask[selected_idx])) if neg_background_mask is not None else 0
+        )
         return (
             neg_nodes[selected_idx].astype(np.int32, copy=False),
             neg_positions[selected_idx].astype(np.int32, copy=False),
             hard_selected_count,
+            background_selected_count,
         )
 
     def _iter_batches(
@@ -1773,16 +2570,23 @@ class BaseGraphSAGEExperiment:
         nodes: np.ndarray,
         positions: np.ndarray,
         labels: np.ndarray,
+        background_negative_mask: np.ndarray | None,
         snapshot_end: int | None,
         rng: np.random.Generator,
         effective_batch_size: int,
     ) -> tuple[list[tuple[np.ndarray, np.ndarray, int | None]], TrainBatchStats]:
+        background_mask = (
+            np.asarray(background_negative_mask, dtype=bool)
+            if background_negative_mask is not None
+            else np.zeros(nodes.shape[0], dtype=bool)
+        )
         pos_mask = labels == 1
         neg_mask = labels == 0
         pos_nodes = nodes[pos_mask]
         pos_positions = positions[pos_mask]
         neg_nodes = nodes[neg_mask]
         neg_positions = positions[neg_mask]
+        neg_background_mask = background_mask[neg_mask]
 
         if pos_nodes.size == 0 or neg_nodes.size == 0:
             order = rng.permutation(nodes.size)
@@ -1799,6 +2603,7 @@ class BaseGraphSAGEExperiment:
                     target_count=int(nodes.size),
                     positive_count=int(pos_nodes.size),
                     negative_count=int(neg_nodes.size),
+                    background_negative_count=int(np.sum(neg_background_mask)),
                 ),
             )
 
@@ -1809,9 +2614,10 @@ class BaseGraphSAGEExperiment:
             neg_nodes.size,
             max(1, int(math.ceil(pos_nodes.size * negative_ratio))),
         )
-        neg_nodes, neg_positions, hard_negative_count = self._sample_negative_partition(
+        neg_nodes, neg_positions, hard_negative_count, background_negative_count = self._sample_negative_partition(
             neg_nodes=neg_nodes,
             neg_positions=neg_positions,
+            neg_background_mask=neg_background_mask,
             sampled_negatives=sampled_negatives,
             snapshot_end=snapshot_end,
             rng=rng,
@@ -1863,6 +2669,7 @@ class BaseGraphSAGEExperiment:
                 positive_count=int(pos_nodes.size),
                 negative_count=int(neg_nodes.size),
                 hard_negative_count=int(hard_negative_count),
+                background_negative_count=int(background_negative_count),
             ),
         )
 
@@ -1870,18 +2677,22 @@ class BaseGraphSAGEExperiment:
         self,
         context: GraphPhaseContext,
         node_ids: np.ndarray,
+        epoch: int,
         rng: np.random.Generator,
     ) -> tuple[list[tuple[np.ndarray, np.ndarray, int | None]], TrainBatchStats]:
         nodes = np.asarray(node_ids, dtype=np.int32)
         effective_batch_size = self.batch_size
-        if self.graph_config.train_negative_ratio <= 0.0:
+        if (
+            self.graph_config.train_negative_ratio <= 0.0
+            and not self.graph_config.include_historical_background_negatives
+        ):
             batches = self._iter_batches(
                 context=context,
                 node_ids=nodes,
                 training=True,
                 rng=rng,
             )
-            labels = context.labels[nodes].astype(np.int8, copy=False)
+            labels = self._binary_train_labels(context.labels[nodes])
             pos_count = int(np.sum(labels == 1))
             neg_count = int(np.sum(labels == 0))
             return (
@@ -1890,6 +2701,7 @@ class BaseGraphSAGEExperiment:
                     target_count=int(nodes.size),
                     positive_count=pos_count,
                     negative_count=neg_count,
+                    background_negative_count=0,
                 ),
             )
 
@@ -1898,15 +2710,36 @@ class BaseGraphSAGEExperiment:
         total_pos = 0
         total_neg = 0
         total_hard_neg = 0
+        total_background_neg = 0
         for partition_nodes, partition_positions, snapshot_end in self._iter_train_partitions(
             context=context,
             node_ids=nodes,
         ):
-            partition_labels = context.labels[partition_nodes].astype(np.int8, copy=False)
+            partition_labels = self._binary_train_labels(context.labels[partition_nodes])
+            background_negative_mask = np.zeros(partition_nodes.shape[0], dtype=bool)
+            background_nodes = self._sample_partition_background_negatives(
+                context=context,
+                partition_nodes=partition_nodes,
+                snapshot_end=snapshot_end,
+                epoch=epoch,
+                rng=rng,
+            )
+            if background_nodes.size:
+                partition_nodes = np.concatenate([partition_nodes, background_nodes]).astype(np.int32, copy=False)
+                partition_positions = np.concatenate(
+                    [partition_positions, np.full(background_nodes.shape[0], -1, dtype=np.int32)]
+                ).astype(np.int32, copy=False)
+                partition_labels = np.concatenate(
+                    [partition_labels, np.zeros(background_nodes.shape[0], dtype=np.int8)]
+                ).astype(np.int8, copy=False)
+                background_negative_mask = np.concatenate(
+                    [background_negative_mask, np.ones(background_nodes.shape[0], dtype=bool)]
+                )
             partition_batches, partition_stats = self._build_balanced_partition_batches(
                 nodes=partition_nodes,
                 positions=partition_positions,
                 labels=partition_labels,
+                background_negative_mask=background_negative_mask,
                 snapshot_end=snapshot_end,
                 rng=rng,
                 effective_batch_size=effective_batch_size,
@@ -1916,6 +2749,7 @@ class BaseGraphSAGEExperiment:
             total_pos += partition_stats.positive_count
             total_neg += partition_stats.negative_count
             total_hard_neg += partition_stats.hard_negative_count
+            total_background_neg += partition_stats.background_negative_count
         return (
             batches,
             TrainBatchStats(
@@ -1923,12 +2757,14 @@ class BaseGraphSAGEExperiment:
                 positive_count=total_pos,
                 negative_count=total_neg,
                 hard_negative_count=total_hard_neg,
+                background_negative_count=total_background_neg,
             ),
         )
 
     def _sample_batch_subgraph(
         self,
         graph: GraphCache,
+        context: GraphPhaseContext,
         batch_nodes: np.ndarray,
         rng: np.random.Generator,
         snapshot_end: int | None,
@@ -1946,9 +2782,12 @@ class BaseGraphSAGEExperiment:
             fanouts=self.fanouts,
             rng=rng,
             snapshot_end=snapshot_end,
+            relation_weight=self._relation_sampling_weight,
+            node_profile=context.sampling_profile,
             sampler=neighbor_sampler,
             recent_window=self.graph_config.recent_window,
             recent_ratio=self.graph_config.recent_ratio,
+            consistency_temperature=self.graph_config.consistency_temperature,
             training=training,
         )
 
@@ -1966,8 +2805,28 @@ class BaseGraphSAGEExperiment:
         torch.Tensor,
         torch.Tensor | None,
         torch.Tensor | None,
+        torch.Tensor | None,
     ]:
         x_np = context.feature_store.take_rows(subgraph.node_ids)
+        if self.graph_config.known_label_feature and context.known_label_codes is not None:
+            label_codes = np.asarray(context.known_label_codes[subgraph.node_ids], dtype=np.int64).copy()
+            label_dim = max(int(self.graph_config.known_label_feature_dim), 1)
+            unknown_index = label_dim - 1
+            if subgraph.target_local_idx.size:
+                label_codes[np.asarray(subgraph.target_local_idx, dtype=np.int64)] = 4
+            if label_dim == 5:
+                label_index = np.clip(label_codes, 0, 4)
+            elif label_dim == 3:
+                label_index = np.full(label_codes.shape[0], unknown_index, dtype=np.int64)
+                label_index[np.isin(label_codes, (0, 2, 3))] = 0
+                label_index[label_codes == 1] = 1
+                label_index[label_codes == 4] = unknown_index
+            else:
+                label_index = np.clip(label_codes, 0, unknown_index)
+                label_index[label_codes == 4] = unknown_index
+            label_features = np.zeros((label_codes.shape[0], label_dim), dtype=np.float32)
+            label_features[np.arange(label_codes.shape[0]), label_index] = 1.0
+            x_np = np.concatenate([x_np, label_features], axis=1).astype(np.float32, copy=False)
         x = torch.as_tensor(x_np, dtype=torch.float32, device=self.device)
         edge_src = torch.as_tensor(subgraph.edge_src, dtype=torch.long, device=self.device)
         edge_dst = torch.as_tensor(subgraph.edge_dst, dtype=torch.long, device=self.device)
@@ -2007,6 +2866,16 @@ class BaseGraphSAGEExperiment:
                 device=self.device,
             )
 
+        target_context_x = None
+        if context.target_context_store is not None and subgraph.target_local_idx.size:
+            target_global_ids = subgraph.node_ids[np.asarray(subgraph.target_local_idx, dtype=np.int64)]
+            target_context_np = context.target_context_store.take_rows(target_global_ids)
+            target_context_x = torch.as_tensor(
+                target_context_np,
+                dtype=torch.float32,
+                device=self.device,
+            )
+
         return (
             x,
             edge_src,
@@ -2016,6 +2885,7 @@ class BaseGraphSAGEExperiment:
             target_idx,
             node_subgraph_id,
             edge_subgraph_id,
+            target_context_x,
         )
 
     def fit(
@@ -2028,9 +2898,17 @@ class BaseGraphSAGEExperiment:
         set_global_seed(self.seed)
         train_ids = np.asarray(train_ids, dtype=np.int32)
         val_ids = np.asarray(val_ids, dtype=np.int32)
-        train_labels = context.labels[train_ids].astype(np.float32, copy=False)
+        train_labels = self._binary_train_labels(context.labels[train_ids]).astype(np.float32, copy=False)
         val_labels = context.labels[val_ids].astype(np.int8, copy=False)
+        primary_class_weight = self._compute_primary_class_weight(context=context, train_ids=train_ids)
         self.training_history: list[dict[str, Any]] = []
+        aux_class_weight = self._compute_aux_class_weight(context=context, train_ids=train_ids)
+        prototype_class_weight = self._compute_prototype_class_weight(context=context, train_ids=train_ids)
+        self._relation_sampling_weight = self._build_relation_sampling_weight(
+            context=context,
+            train_ids=train_ids,
+        )
+        prototype_regularizer = self._build_prototype_regularizer(context=context)
 
         log_path = None if artifact_dir is None else artifact_dir / "train.log"
         history_jsonl_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.jsonl"
@@ -2058,19 +2936,22 @@ class BaseGraphSAGEExperiment:
                 min_lr=1e-5,
             )
 
-        pos_count = float(np.sum(train_labels == 1))
-        neg_count = float(np.sum(train_labels == 0))
-        effective_neg_count = neg_count
-        if self.graph_config.train_negative_ratio > 0.0:
-            effective_neg_count = min(
-                neg_count,
-                float(math.ceil(pos_count * self.graph_config.train_negative_ratio)),
+        if self._primary_multiclass_enabled():
+            pos_weight = torch.tensor([1.0], dtype=torch.float32, device=self.device)
+        else:
+            pos_count = float(np.sum(train_labels == 1))
+            neg_count = float(np.sum(train_labels == 0))
+            effective_neg_count = neg_count
+            if self.graph_config.train_negative_ratio > 0.0:
+                effective_neg_count = min(
+                    neg_count,
+                    float(math.ceil(pos_count * self.graph_config.train_negative_ratio)),
+                )
+            pos_weight = torch.tensor(
+                [effective_neg_count / max(pos_count, 1.0)],
+                dtype=torch.float32,
+                device=self.device,
             )
-        pos_weight = torch.tensor(
-            [effective_neg_count / max(pos_count, 1.0)],
-            dtype=torch.float32,
-            device=self.device,
-        )
         if log_path is not None:
             _append_text_line(
                 log_path,
@@ -2080,15 +2961,39 @@ class BaseGraphSAGEExperiment:
                     f"batch_size={self.batch_size} eval_batch_size={self.eval_batch_size} "
                     f"aggregator_type={self.aggregator_type} "
                     f"neighbor_sampler={self.graph_config.neighbor_sampler} "
+                    f"relation_risk_sampler={self._relation_risk_sampler_enabled()} "
+                    f"consistency_sampler={self._consistency_sampler_enabled()} "
                     f"recent_window={self.graph_config.recent_window} "
                     f"recent_ratio={self.graph_config.recent_ratio:.4f} "
+                    f"consistency_temperature={self.graph_config.consistency_temperature:.4f} "
                     f"train_negative_ratio={self.graph_config.train_negative_ratio:.4f} "
+                    f"historical_background_negative_ratio="
+                    f"{self.graph_config.historical_background_negative_ratio:.4f} "
+                    f"historical_background_negative_warmup_epochs="
+                    f"{self.graph_config.historical_background_negative_warmup_epochs} "
+                    f"historical_background_aux_only={self.graph_config.historical_background_aux_only} "
                     f"negative_sampler={self.graph_config.negative_sampler} "
                     f"loss_type={self.graph_config.loss_type} "
                     f"ranking_weight={self.graph_config.ranking_weight:.4f} "
                     f"ranking_margin={self.graph_config.ranking_margin:.4f} "
                     f"focal_gamma={self.graph_config.focal_gamma:.4f} "
                     f"focal_alpha={self.graph_config.focal_alpha:.4f} "
+                    f"primary_multiclass_num_classes={self.graph_config.primary_multiclass_num_classes} "
+                    f"prototype_multiclass_num_classes={self.graph_config.prototype_multiclass_num_classes} "
+                    f"prototype_loss_weight={self.graph_config.prototype_loss_weight:.4f} "
+                    f"prototype_temperature={self.graph_config.prototype_temperature:.4f} "
+                    f"prototype_momentum={self.graph_config.prototype_momentum:.4f} "
+                    f"prototype_start_epoch={self.graph_config.prototype_start_epoch} "
+                    f"prototype_loss_ramp_epochs={self.graph_config.prototype_loss_ramp_epochs} "
+                    f"prototype_bucket_mode={self.graph_config.prototype_bucket_mode} "
+                    f"prototype_neighbor_blend={self.graph_config.prototype_neighbor_blend:.4f} "
+                    f"prototype_global_blend={self.graph_config.prototype_global_blend:.4f} "
+                    f"prototype_consistency_weight={self.graph_config.prototype_consistency_weight:.4f} "
+                    f"aux_multiclass_num_classes={self.graph_config.aux_multiclass_num_classes} "
+                    f"aux_multiclass_loss_weight={self.graph_config.aux_multiclass_loss_weight:.4f} "
+                    f"aux_inference_blend={self.graph_config.aux_inference_blend:.4f} "
+                    f"historical_background_pool="
+                    f"{0 if context.historical_background_ids is None else int(context.historical_background_ids.size)} "
                     f"loss_pos_weight={float(pos_weight.item()):.4f}"
                 ),
             )
@@ -2110,6 +3015,8 @@ class BaseGraphSAGEExperiment:
                 batch_losses: list[float] = []
                 batch_base_losses: list[float] = []
                 batch_ranking_losses: list[float] = []
+                batch_prototype_losses: list[float] = []
+                batch_aux_losses: list[float] = []
                 batch_subgraph_nodes: list[float] = []
                 batch_subgraph_edges: list[float] = []
                 batch_emb_norm: list[float] = []
@@ -2135,6 +3042,7 @@ class BaseGraphSAGEExperiment:
                 train_batches, train_batch_stats = self._build_train_batches(
                     context=context,
                     node_ids=train_ids,
+                    epoch=epoch,
                     rng=epoch_rng,
                 )
                 with tqdm(
@@ -2144,9 +3052,10 @@ class BaseGraphSAGEExperiment:
                     dynamic_ncols=True,
                     leave=False,
                 ) as batch_pbar:
-                    for batch_nodes, _, snapshot_end in batch_pbar:
+                    for batch_nodes, batch_positions, snapshot_end in batch_pbar:
                         subgraph = self._sample_batch_subgraph(
                             graph=context.graph_cache,
+                            context=context,
                             batch_nodes=batch_nodes,
                             rng=epoch_rng,
                             snapshot_end=snapshot_end,
@@ -2161,35 +3070,111 @@ class BaseGraphSAGEExperiment:
                             target_idx,
                             node_subgraph_id,
                             edge_subgraph_id,
+                            target_context_x,
                         ) = self._tensorize_subgraph(
                             context=context,
                             subgraph=subgraph,
                             snapshot_end=snapshot_end,
                         )
 
-                        y_batch = torch.as_tensor(
-                            context.labels[batch_nodes],
-                            dtype=torch.float32,
-                            device=self.device,
+                        if self._primary_multiclass_enabled():
+                            y_batch = torch.as_tensor(
+                                self._map_primary_targets(context.labels[batch_nodes]),
+                                dtype=torch.long,
+                                device=self.device,
+                            )
+                        else:
+                            y_batch = torch.as_tensor(
+                                self._binary_train_labels(context.labels[batch_nodes]),
+                                dtype=torch.float32,
+                                device=self.device,
+                            )
+                        sample_weight = self._compute_target_time_weight(
+                            context=context,
+                            batch_nodes=batch_nodes,
                         )
+                        prototype_sample_weight = sample_weight.clone() if sample_weight is not None else None
+                        aux_targets = None
+                        if self._aux_multiclass_enabled():
+                            aux_targets = torch.as_tensor(
+                                self._map_aux_targets(context.labels[batch_nodes]),
+                                dtype=torch.long,
+                                device=self.device,
+                            )
+                        prototype_targets = None
+                        if self._prototype_enabled():
+                            prototype_targets = torch.as_tensor(
+                                self._map_prototype_targets(context.labels[batch_nodes]),
+                                dtype=torch.long,
+                                device=self.device,
+                            )
+                        prototype_bucket_ids = None
+                        if self._prototype_time_bucketed():
+                            prototype_bucket_ids = torch.as_tensor(
+                                np.asarray(context.graph_cache.node_time_bucket[batch_nodes], dtype=np.int64),
+                                dtype=torch.long,
+                                device=self.device,
+                            )
+                        if self._background_aux_only_enabled():
+                            background_mask = torch.as_tensor(
+                                np.asarray(batch_positions, dtype=np.int32) < 0,
+                                dtype=torch.bool,
+                                device=self.device,
+                            )
+                            if sample_weight is None:
+                                sample_weight = torch.ones_like(y_batch, dtype=torch.float32, device=self.device)
+                            sample_weight = sample_weight.clone()
+                            sample_weight[background_mask] = 0.0
+                            nonzero = sample_weight > 0
+                            if torch.any(nonzero):
+                                sample_weight[nonzero] = sample_weight[nonzero] / sample_weight[nonzero].mean().clamp_min(
+                                    1e-6
+                                )
 
                         optimizer.zero_grad(set_to_none=True)
-                        logits, diagnostics = self.network(
+                        forward_output = self.network.forward_output(
                             x=x,
                             edge_src=edge_src,
                             edge_dst=edge_dst,
                             rel_ids=rel_ids,
                             edge_relative_time=edge_relative_time,
                             target_local_idx=target_idx,
+                            target_context_features=target_context_x,
                             node_subgraph_id=node_subgraph_id,
                             edge_subgraph_id=edge_subgraph_id,
-                            return_details=True,
+                            include_diagnostics=True,
+                            include_embedding=self._prototype_enabled(),
+                            include_aux=self._aux_multiclass_enabled(),
                         )
                         loss, loss_parts = self._compute_loss(
-                            logits=logits,
+                            logits=forward_output.logits,
                             targets=y_batch,
                             pos_weight=pos_weight,
+                            sample_weight=sample_weight,
+                            aux_logits=forward_output.aux_logits,
+                            aux_targets=aux_targets,
+                            primary_class_weight=primary_class_weight,
+                            aux_class_weight=aux_class_weight,
                         )
+                        prototype_loss = forward_output.logits.new_tensor(0.0)
+                        if self._prototype_enabled():
+                            if (
+                                forward_output.embedding is None
+                                or prototype_targets is None
+                                or prototype_regularizer is None
+                            ):
+                                raise RuntimeError("Prototype regularizer expected embeddings and initialized memory.")
+                            prototype_loss = prototype_regularizer.compute_loss(
+                                embedding=forward_output.embedding,
+                                targets=prototype_targets,
+                                epoch=epoch,
+                                sample_weight=prototype_sample_weight,
+                                class_weight=prototype_class_weight,
+                                bucket_ids=prototype_bucket_ids,
+                            )
+                            loss = loss + float(self.graph_config.prototype_loss_weight) * prototype_loss
+                        loss_parts["prototype_loss"] = float(prototype_loss.detach().item())
+                        loss_parts["total_loss"] = float(loss.detach().item())
                         loss.backward()
 
                         if self.graph_config.grad_clip > 0:
@@ -2206,10 +3191,12 @@ class BaseGraphSAGEExperiment:
                         batch_losses.append(float(loss_parts["total_loss"]))
                         batch_base_losses.append(float(loss_parts["base_loss"]))
                         batch_ranking_losses.append(float(loss_parts["ranking_loss"]))
+                        batch_prototype_losses.append(float(loss_parts["prototype_loss"]))
+                        batch_aux_losses.append(float(loss_parts["aux_loss"]))
                         batch_subgraph_nodes.append(float(subgraph.node_ids.shape[0]))
                         batch_subgraph_edges.append(float(subgraph.edge_src.shape[0]))
-                        batch_emb_norm.append(float(diagnostics["emb_norm"]))
-                        batch_dirichlet.append(float(diagnostics["dirichlet_energy"]))
+                        batch_emb_norm.append(float((forward_output.diagnostics or {})["emb_norm"]))
+                        batch_dirichlet.append(float((forward_output.diagnostics or {})["dirichlet_energy"]))
                         batch_grad_norm.append(float(grad_norm))
                         batch_pbar.set_postfix(
                             loss=f"{batch_losses[-1]:.4f}",
@@ -2249,6 +3236,8 @@ class BaseGraphSAGEExperiment:
                     "train_loss": float(np.mean(batch_losses)),
                     "train_base_loss": float(np.mean(batch_base_losses)),
                     "train_ranking_loss": float(np.mean(batch_ranking_losses)),
+                    "train_prototype_loss": float(np.mean(batch_prototype_losses)),
+                    "train_aux_loss": float(np.mean(batch_aux_losses)),
                     "val_auc": float(val_auc),
                     "val_pr_auc": float(val_metrics["pr_auc"]),
                     "val_ap": float(val_metrics["ap"]),
@@ -2256,6 +3245,7 @@ class BaseGraphSAGEExperiment:
                     "train_pos": int(train_batch_stats.positive_count),
                     "train_neg": int(train_batch_stats.negative_count),
                     "train_hard_neg": int(train_batch_stats.hard_negative_count),
+                    "train_bg_neg": int(train_batch_stats.background_negative_count),
                     "train_pos_rate": float(train_batch_stats.positive_rate),
                     "hard_negative_pool_size": int(self._current_hard_negative_pool_size()),
                     "hard_negative_candidate_count": int(self._current_hard_negative_candidate_count()),
@@ -2274,6 +3264,8 @@ class BaseGraphSAGEExperiment:
                     f"train_loss={epoch_row['train_loss']:.6f} "
                     f"train_base_loss={epoch_row['train_base_loss']:.6f} "
                     f"train_ranking_loss={epoch_row['train_ranking_loss']:.6f} "
+                    f"train_prototype_loss={epoch_row['train_prototype_loss']:.6f} "
+                    f"train_aux_loss={epoch_row['train_aux_loss']:.6f} "
                     f"val_auc={val_auc:.6f} "
                     f"val_pr_auc={val_metrics['pr_auc']:.6f} "
                     f"val_ap={val_metrics['ap']:.6f} "
@@ -2281,6 +3273,7 @@ class BaseGraphSAGEExperiment:
                     f"train_pos={train_batch_stats.positive_count} "
                     f"train_neg={train_batch_stats.negative_count} "
                     f"train_hard_neg={train_batch_stats.hard_negative_count} "
+                    f"train_bg_neg={train_batch_stats.background_negative_count} "
                     f"train_pos_rate={train_batch_stats.positive_rate:.4f} "
                     f"hard_negative_pool_size={self._current_hard_negative_pool_size()} "
                     f"avg_subgraph_nodes={np.mean(batch_subgraph_nodes):.2f} "
@@ -2333,18 +3326,24 @@ class BaseGraphSAGEExperiment:
         return fit_summary
 
     @torch.no_grad()
-    def predict_proba(
+    def _predict_outputs(
         self,
         context: GraphPhaseContext,
         node_ids: np.ndarray,
         batch_seed: int | None = None,
         progress_desc: str | None = None,
         show_progress: bool = True,
-    ) -> np.ndarray:
+        return_embeddings: bool = False,
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         self.network.eval()
         node_ids = np.asarray(node_ids, dtype=np.int32)
         rng = np.random.default_rng(self.seed if batch_seed is None else batch_seed)
         probabilities = np.zeros(node_ids.shape[0], dtype=np.float32)
+        embeddings = (
+            np.zeros((node_ids.shape[0], self.hidden_dim), dtype=np.float32)
+            if return_embeddings
+            else None
+        )
         batches = self._iter_batches(
             context=context,
             node_ids=node_ids,
@@ -2364,6 +3363,7 @@ class BaseGraphSAGEExperiment:
             for batch_nodes, batch_positions, snapshot_end in batch_pbar:
                 subgraph = self._sample_batch_subgraph(
                     graph=context.graph_cache,
+                    context=context,
                     batch_nodes=batch_nodes,
                     rng=rng,
                     snapshot_end=snapshot_end,
@@ -2378,32 +3378,104 @@ class BaseGraphSAGEExperiment:
                     target_idx,
                     node_subgraph_id,
                     edge_subgraph_id,
+                    target_context_x,
                 ) = self._tensorize_subgraph(
                     context=context,
                     subgraph=subgraph,
                     snapshot_end=snapshot_end,
                 )
-                logits = self.network(
+                forward_output = self.network.forward_output(
                     x=x,
                     edge_src=edge_src,
                     edge_dst=edge_dst,
                     rel_ids=rel_ids,
                     edge_relative_time=edge_relative_time,
                     target_local_idx=target_idx,
+                    target_context_features=target_context_x,
                     node_subgraph_id=node_subgraph_id,
                     edge_subgraph_id=edge_subgraph_id,
+                    include_embedding=return_embeddings,
+                    include_aux=float(self.graph_config.aux_inference_blend) > 0.0,
                 )
                 batch_prob = (
-                    torch.sigmoid(logits)
+                    self._blend_primary_and_aux_probability(
+                        logits=forward_output.logits,
+                        aux_logits=forward_output.aux_logits,
+                    )
                     .detach()
                     .cpu()
                     .numpy()
                     .astype(np.float32, copy=False)
                 )
                 probabilities[batch_positions] = batch_prob
+                if embeddings is not None:
+                    embeddings[batch_positions] = (
+                        forward_output.embedding.detach().cpu().numpy().astype(np.float32, copy=False)
+                    )
                 processed += int(batch_positions.size)
                 batch_pbar.set_postfix(done=f"{processed}/{node_ids.size}", refresh=False)
+        return probabilities, embeddings
+
+    @torch.no_grad()
+    def predict_proba(
+        self,
+        context: GraphPhaseContext,
+        node_ids: np.ndarray,
+        batch_seed: int | None = None,
+        progress_desc: str | None = None,
+        show_progress: bool = True,
+    ) -> np.ndarray:
+        probabilities, _ = self._predict_outputs(
+            context=context,
+            node_ids=node_ids,
+            batch_seed=batch_seed,
+            progress_desc=progress_desc,
+            show_progress=show_progress,
+            return_embeddings=False,
+        )
         return probabilities
+
+    @torch.no_grad()
+    def predict_proba_and_embeddings(
+        self,
+        context: GraphPhaseContext,
+        node_ids: np.ndarray,
+        batch_seed: int | None = None,
+        progress_desc: str | None = None,
+        show_progress: bool = True,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        probabilities, embeddings = self._predict_outputs(
+            context=context,
+            node_ids=node_ids,
+            batch_seed=batch_seed,
+            progress_desc=progress_desc,
+            show_progress=show_progress,
+            return_embeddings=True,
+        )
+        if embeddings is None:
+            raise RuntimeError("Expected embeddings to be returned.")
+        return probabilities, embeddings
+
+    @torch.no_grad()
+    def predict_embeddings(
+        self,
+        context: GraphPhaseContext,
+        node_ids: np.ndarray,
+        batch_seed: int | None = None,
+        progress_desc: str | None = None,
+        show_progress: bool = True,
+    ) -> np.ndarray:
+        _, embeddings = self._predict_outputs(
+            context=context,
+            node_ids=node_ids,
+            batch_seed=batch_seed,
+            progress_desc=progress_desc,
+            show_progress=show_progress,
+            return_embeddings=True,
+        )
+        if embeddings is None:
+            raise RuntimeError("Expected embeddings to be returned.")
+        return embeddings
 
     def save(self, run_dir: Path) -> None:
         ensure_dir(run_dir)
@@ -2430,6 +3502,12 @@ class BaseGraphSAGEExperiment:
                 None
                 if self.feature_normalizer_state is None
                 else self.feature_normalizer_state.to_dict()
+            ),
+            "target_context_feature_groups": self.target_context_feature_groups,
+            "target_context_normalizer_state": (
+                None
+                if self.target_context_normalizer_state is None
+                else self.target_context_normalizer_state.to_dict()
             ),
         }
         write_json(run_dir / "model_meta.json", metadata)
@@ -2473,6 +3551,11 @@ class BaseGraphSAGEExperiment:
             feature_normalizer_state=HybridFeatureNormalizerState.from_dict(
                 meta.get("feature_normalizer_state")
             ),
+            target_context_input_dim=int(graph_config.target_context_input_dim or input_dim),
+            target_context_feature_groups=list(meta.get("target_context_feature_groups") or []),
+            target_context_normalizer_state=HybridFeatureNormalizerState.from_dict(
+                meta.get("target_context_normalizer_state")
+            ),
         )
         instance.eval_batch_size = int(meta.get("eval_batch_size", max(instance.batch_size, 2048)))
         state_dict = torch.load(
@@ -2480,7 +3563,7 @@ class BaseGraphSAGEExperiment:
             map_location=instance.device,
             weights_only=True,
         )
-        instance.network.load_state_dict(state_dict)
+        instance.network.load_state_dict(state_dict, strict=False)
         return instance
 
 

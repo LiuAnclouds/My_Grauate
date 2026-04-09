@@ -146,6 +146,79 @@ def save_prediction_npz(
     )
 
 
+def resolve_prediction_path(run_dir: Path, split_name: str) -> Path:
+    candidates = (
+        run_dir / f"{split_name}_avg_predictions.npz",
+        run_dir / f"{split_name}_predictions.npz",
+        run_dir / f"{split_name}_blend_predictions.npz",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        f"{run_dir}: missing prediction file for {split_name}. "
+        f"Expected one of {[path.name for path in candidates]}."
+    )
+
+
+def load_prediction_npz(path: Path) -> dict[str, np.ndarray]:
+    data = np.load(path)
+    files = set(data.files)
+
+    node_key = "node_ids" if "node_ids" in files else "ids"
+    label_key = "y_true" if "y_true" in files else "labels"
+    score_key = next(
+        (
+            key
+            for key in (
+                "probability",
+                "probabilities",
+                "score",
+                "scores",
+                "avg_probability",
+                "avg_probabilities",
+                "avg_score",
+                "avg_scores",
+            )
+            if key in files
+        ),
+        None,
+    )
+    if score_key is None:
+        raise KeyError(f"{path}: unsupported prediction archive keys {sorted(files)}")
+
+    score = np.asarray(data[score_key], dtype=np.float32)
+    if score.ndim == 2 and score.shape[1] == 1:
+        score = score.reshape(-1)
+    return {
+        "node_ids": np.asarray(data[node_key], dtype=np.int32),
+        "y_true": np.asarray(data[label_key], dtype=np.int8),
+        "probability": score,
+    }
+
+
+def align_prediction_bundle(
+    bundle: dict[str, np.ndarray],
+    ref_node_ids: np.ndarray,
+) -> dict[str, np.ndarray]:
+    node_ids = np.asarray(bundle["node_ids"], dtype=np.int32)
+    ref_ids = np.asarray(ref_node_ids, dtype=np.int32)
+    if np.array_equal(node_ids, ref_ids):
+        return {
+            "node_ids": node_ids,
+            "y_true": np.asarray(bundle["y_true"], dtype=np.int8, copy=False),
+            "probability": np.asarray(bundle["probability"], dtype=np.float32, copy=False),
+        }
+
+    position = {int(node_id): idx for idx, node_id in enumerate(node_ids.tolist())}
+    aligned_idx = np.asarray([position[int(node_id)] for node_id in ref_ids], dtype=np.int64)
+    return {
+        "node_ids": ref_ids,
+        "y_true": np.asarray(bundle["y_true"][aligned_idx], dtype=np.int8, copy=False),
+        "probability": np.asarray(bundle["probability"][aligned_idx], dtype=np.float32, copy=False),
+    }
+
+
 def resolve_device(requested: str | None = None) -> str:
     if requested:
         return requested

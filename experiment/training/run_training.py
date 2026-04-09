@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -19,10 +20,13 @@ from experiment.training.common import (
     BLEND_OUTPUT_ROOT,
     FEATURE_OUTPUT_ROOT,
     MODEL_OUTPUT_ROOT,
+    align_prediction_bundle,
     compute_binary_classification_metrics,
     ensure_dir,
+    load_prediction_npz,
     load_experiment_split,
     load_phase_arrays,
+    resolve_prediction_path,
     save_prediction_npz,
     set_global_seed,
     slice_node_ids,
@@ -32,16 +36,16 @@ from experiment.training.features import (
     FeatureStore,
     build_feature_artifacts,
     build_hybrid_feature_normalizer,
-    default_feature_groups,
-    load_graph_cache,
+    resolve_feature_groups,
+)
+from experiment.training.graph_runtime import (
+    build_graph_label_artifacts,
+    make_graph_contexts,
+    resolve_graph_experiment_class,
 )
 from experiment.training.gbdt_models import LightGBMExperiment
 from experiment.training.gnn_models import (
-    GraphPhaseContext,
     GraphModelConfig,
-    RelationGraphSAGEExperiment,
-    TemporalRelationGATExperiment,
-    TemporalRelationGraphSAGEExperiment,
 )
 
 
@@ -118,6 +122,15 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=MODEL_OUTPUT_ROOT,
         help="Output directory for model checkpoints and predictions.",
+    )
+    train_parser.add_argument(
+        "--extra-groups",
+        nargs="*",
+        default=(),
+        help=(
+            "Optional extra offline feature groups appended on top of the model default. "
+            "Useful for temporal_snapshot / temporal_recent / temporal_relation_recent."
+        ),
     )
     train_parser.add_argument(
         "--seeds",
@@ -339,7 +352,7 @@ def parse_args() -> argparse.Namespace:
     )
     train_parser.add_argument(
         "--neighbor-sampler",
-        choices=("uniform", "recent", "hybrid"),
+        choices=("uniform", "recent", "hybrid", "risk_recent", "consistency_recent", "risk_consistency_recent"),
         default=None,
         help="Temporal neighbor sampler. Defaults to hybrid for m6_temporal_gat and uniform otherwise.",
     )
@@ -354,6 +367,207 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.8,
         help="Fraction of fanout drawn from recent-history pool under hybrid sampling.",
+    )
+    train_parser.add_argument(
+        "--consistency-temperature",
+        type=float,
+        default=0.35,
+        help="Temperature for consistency-guided temporal sampling; smaller values sharpen neighbor preference.",
+    )
+    train_parser.add_argument(
+        "--time-decay-strength",
+        type=float,
+        default=0.0,
+        help=(
+            "If > 0, exponentially downweight stale temporal edges during message passing "
+            "using exp(-strength * normalized_relative_time)."
+        ),
+    )
+    train_parser.add_argument(
+        "--target-time-weight-half-life-days",
+        type=float,
+        default=0.0,
+        help=(
+            "If > 0, exponentially upweight more recent phase1 training target nodes toward "
+            "the validation split threshold."
+        ),
+    )
+    train_parser.add_argument(
+        "--target-time-weight-floor",
+        type=float,
+        default=0.25,
+        help="Minimum per-target recency weight when --target-time-weight-half-life-days > 0.",
+    )
+    train_parser.add_argument(
+        "--known-label-feature",
+        action="store_true",
+        help=(
+            "Append a 5-dim one-hot feature for known normal / known fraud / known bg2 / "
+            "known bg3 / unknown. Phase1 historical 0/1 and all phase1/phase2 bg2/bg3 are "
+            "treated as known; target nodes are masked to unknown."
+        ),
+    )
+    train_parser.add_argument(
+        "--known-label-feature-dim",
+        type=int,
+        choices=(3, 5),
+        default=5,
+        help="Known-label one-hot width. `3` merges background classes, `5` keeps bg2/bg3 separate.",
+    )
+    train_parser.add_argument(
+        "--target-context-fusion",
+        choices=("none", "gate", "concat", "logit_residual"),
+        default="none",
+        help=(
+            "Optional target-node context fusion applied after the base graph classifier. "
+            "`gate` adds a residual gated context expert; `concat` learns a compact post-head fusion; "
+            "`logit_residual` keeps the graph head unchanged and applies a learned context-only logit correction."
+        ),
+    )
+    train_parser.add_argument(
+        "--target-context-extra-groups",
+        nargs="*",
+        default=(),
+        help=(
+            "Optional extra feature groups loaded only for the target-node context expert. "
+            "These groups do not enter graph message passing."
+        ),
+    )
+    train_parser.add_argument(
+        "--primary-multiclass-num-classes",
+        type=int,
+        choices=(0, 3, 4),
+        default=0,
+        help=(
+            "Primary graph objective class count. `0` keeps binary fraud detection, "
+            "`3` uses normal/fraud/background, `4` uses normal/fraud/bg2/bg3."
+        ),
+    )
+    train_parser.add_argument(
+        "--prototype-multiclass-num-classes",
+        type=int,
+        choices=(0, 3, 4),
+        default=0,
+        help=(
+            "Prototype-regularization class count. `0` disables the prototype memory loss, "
+            "`3` uses normal/fraud/background, `4` uses normal/fraud/bg2/bg3."
+        ),
+    )
+    train_parser.add_argument(
+        "--prototype-loss-weight",
+        type=float,
+        default=0.0,
+        help="Weight for the prototype-memory regularization loss on graph embeddings.",
+    )
+    train_parser.add_argument(
+        "--prototype-temperature",
+        type=float,
+        default=0.2,
+        help="Softmax temperature used inside the prototype-memory regularizer.",
+    )
+    train_parser.add_argument(
+        "--prototype-momentum",
+        type=float,
+        default=0.9,
+        help="EMA momentum used to update class prototypes during training.",
+    )
+    train_parser.add_argument(
+        "--prototype-start-epoch",
+        type=int,
+        default=1,
+        help="Delay the prototype-memory regularizer until this epoch to let the backbone stabilize first.",
+    )
+    train_parser.add_argument(
+        "--prototype-loss-ramp-epochs",
+        type=int,
+        default=0,
+        help="If > 1, linearly ramp the prototype-memory loss over this many epochs after it starts.",
+    )
+    train_parser.add_argument(
+        "--prototype-bucket-mode",
+        choices=("global", "time_bucket"),
+        default="global",
+        help=(
+            "Prototype memory layout. `global` shares one class prototype bank across all time, "
+            "`time_bucket` keeps an additional bank per temporal bucket and falls back to the global bank."
+        ),
+    )
+    train_parser.add_argument(
+        "--prototype-neighbor-blend",
+        type=float,
+        default=0.0,
+        help="Blend ratio for adjacent temporal-bucket prototypes when bucket-mode=time_bucket.",
+    )
+    train_parser.add_argument(
+        "--prototype-global-blend",
+        type=float,
+        default=0.0,
+        help=(
+            "When using --prototype-bucket-mode time_bucket, blend this amount of the global "
+            "prototype logits into the bucket-specific logits."
+        ),
+    )
+    train_parser.add_argument(
+        "--prototype-consistency-weight",
+        type=float,
+        default=0.0,
+        help="Extra weight on same-class temporal/global prototype anchor consistency inside the prototype loss.",
+    )
+    train_parser.add_argument(
+        "--include-historical-background-negatives",
+        action="store_true",
+        help=(
+            "Sample leakage-safe phase1 historical background nodes (labels 2/3) as extra "
+            "binary negatives during graph-model training."
+        ),
+    )
+    train_parser.add_argument(
+        "--historical-background-negative-ratio",
+        type=float,
+        default=0.25,
+        help=(
+            "Maximum number of sampled historical background negatives per split-train positive "
+            "inside each temporal partition when --include-historical-background-negatives is enabled."
+        ),
+    )
+    train_parser.add_argument(
+        "--historical-background-negative-warmup-epochs",
+        type=int,
+        default=0,
+        help=(
+            "If > 1, linearly warm the historical background negative ratio from 0 to "
+            "--historical-background-negative-ratio over the first N epochs."
+        ),
+    )
+    train_parser.add_argument(
+        "--historical-background-aux-only",
+        action="store_true",
+        help=(
+            "When historical background nodes are sampled, exclude them from the primary binary loss "
+            "and use them only for the auxiliary multiclass head."
+        ),
+    )
+    train_parser.add_argument(
+        "--aux-multiclass-num-classes",
+        type=int,
+        choices=(3, 4),
+        default=4,
+        help="Auxiliary head class count. `3` merges bg2/bg3, `4` keeps them separate.",
+    )
+    train_parser.add_argument(
+        "--aux-multiclass-loss-weight",
+        type=float,
+        default=0.0,
+        help="Weight for the auxiliary multiclass loss on train nodes and sampled historical backgrounds.",
+    )
+    train_parser.add_argument(
+        "--aux-inference-blend",
+        type=float,
+        default=0.0,
+        help=(
+            "Blend ratio in [0,1] between the primary fraud score and the auxiliary fraud score "
+            "derived from the multiclass head."
+        ),
     )
 
     blend_parser = subparsers.add_parser(
@@ -377,6 +591,12 @@ def parse_args() -> argparse.Namespace:
         "--name",
         default="m6_blend",
         help="Name for the blending output directory.",
+    )
+    blend_parser.add_argument(
+        "--method",
+        choices=("logistic", "mean", "rank_mean"),
+        default="logistic",
+        help="Blending method. rank_mean avoids fitting on the validation set.",
     )
     return parser.parse_args()
 
@@ -438,6 +658,32 @@ def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
         neighbor_sampler=neighbor_sampler,
         recent_window=max(int(args.recent_window), 1),
         recent_ratio=float(args.recent_ratio),
+        consistency_temperature=float(args.consistency_temperature),
+        time_decay_strength=float(args.time_decay_strength),
+        target_time_weight_half_life_days=float(args.target_time_weight_half_life_days),
+        target_time_weight_floor=float(args.target_time_weight_floor),
+        known_label_feature=bool(args.known_label_feature),
+        known_label_feature_dim=int(args.known_label_feature_dim),
+        target_context_fusion=str(args.target_context_fusion),
+        target_context_input_dim=0,
+        primary_multiclass_num_classes=int(args.primary_multiclass_num_classes),
+        prototype_multiclass_num_classes=int(args.prototype_multiclass_num_classes),
+        prototype_loss_weight=float(args.prototype_loss_weight),
+        prototype_temperature=float(args.prototype_temperature),
+        prototype_momentum=float(args.prototype_momentum),
+        prototype_start_epoch=int(args.prototype_start_epoch),
+        prototype_loss_ramp_epochs=int(args.prototype_loss_ramp_epochs),
+        prototype_bucket_mode=str(args.prototype_bucket_mode),
+        prototype_neighbor_blend=float(args.prototype_neighbor_blend),
+        prototype_global_blend=float(args.prototype_global_blend),
+        prototype_consistency_weight=float(args.prototype_consistency_weight),
+        include_historical_background_negatives=bool(args.include_historical_background_negatives),
+        historical_background_negative_ratio=float(args.historical_background_negative_ratio),
+        historical_background_negative_warmup_epochs=int(args.historical_background_negative_warmup_epochs),
+        historical_background_aux_only=bool(args.historical_background_aux_only),
+        aux_multiclass_num_classes=int(args.aux_multiclass_num_classes),
+        aux_multiclass_loss_weight=float(args.aux_multiclass_loss_weight),
+        aux_inference_blend=float(args.aux_inference_blend),
     )
 
 
@@ -515,7 +761,7 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
         split, train_ids, val_ids, external_ids = _prepare_split_ids(args)
         prep_pbar.update(1)
         phase1_y, phase2_y = _load_labels_for_splits(split)
-        feature_groups = default_feature_groups(args.model)
+        feature_groups = resolve_feature_groups(args.model, list(args.extra_groups))
         prep_pbar.update(1)
         phase1_store = FeatureStore("phase1", feature_groups, outdir=args.feature_dir)
         phase2_store = FeatureStore("phase2", feature_groups, outdir=args.feature_dir)
@@ -638,34 +884,6 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
     print(f"Training finished: {run_dir}")
 
 
-def _make_graph_contexts(
-    feature_dir: Path,
-    model_name: str,
-    feature_normalizer_state=None,
-) -> tuple[GraphPhaseContext, GraphPhaseContext]:
-    feature_groups = default_feature_groups(model_name)
-    phase1_store = FeatureStore(
-        "phase1",
-        feature_groups,
-        outdir=feature_dir,
-        normalizer_state=feature_normalizer_state,
-    )
-    phase2_store = FeatureStore(
-        "phase2",
-        feature_groups,
-        outdir=feature_dir,
-        normalizer_state=feature_normalizer_state,
-    )
-    phase1_graph = load_graph_cache("phase1", outdir=feature_dir)
-    phase2_graph = load_graph_cache("phase2", outdir=feature_dir)
-    phase1_y = np.asarray(load_phase_arrays("phase1", keys=("y",))["y"], dtype=np.int8)
-    phase2_y = np.asarray(load_phase_arrays("phase2", keys=("y",))["y"], dtype=np.int8)
-    return (
-        GraphPhaseContext("phase1", phase1_store, phase1_graph, phase1_y),
-        GraphPhaseContext("phase2", phase2_store, phase2_graph, phase2_y),
-    )
-
-
 def run_train_graph(args: argparse.Namespace) -> None:
     with tqdm(
         total=3,
@@ -673,9 +891,22 @@ def run_train_graph(args: argparse.Namespace) -> None:
         unit="step",
         dynamic_ncols=True,
     ) as prep_pbar:
-        split, train_ids, val_ids, external_ids = _prepare_split_ids(args)
-        feature_groups = default_feature_groups(args.model)
+        split, split_train_ids, val_ids, external_ids = _prepare_split_ids(args)
+        feature_groups = resolve_feature_groups(args.model, list(args.extra_groups))
+        target_context_groups = list(args.target_context_extra_groups)
         graph_config = _build_graph_model_config(args)
+        train_ids = np.asarray(split_train_ids, dtype=np.int32)
+        label_artifacts = build_graph_label_artifacts(
+            feature_dir=args.feature_dir,
+            split_train_ids=train_ids,
+            threshold_day=int(split.threshold_day),
+            known_label_feature=graph_config.known_label_feature,
+            include_historical_background_negatives=graph_config.include_historical_background_negatives,
+        )
+        historical_background_ids = np.asarray(
+            label_artifacts["phase1_historical_background_ids"],
+            dtype=np.int32,
+        )
         prep_pbar.update(1)
         feature_normalizer_state = None
         if graph_config.feature_norm == "hybrid":
@@ -685,28 +916,46 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 train_ids=train_ids,
                 outdir=args.feature_dir,
             )
+        target_context_normalizer_state = None
+        if graph_config.feature_norm == "hybrid" and target_context_groups:
+            target_context_normalizer_state = build_hybrid_feature_normalizer(
+                phase="phase1",
+                selected_groups=target_context_groups,
+                train_ids=train_ids,
+                outdir=args.feature_dir,
+            )
         prep_pbar.update(1)
-
-        phase1_context, phase2_context = _make_graph_contexts(
-            args.feature_dir,
-            args.model,
+        phase1_context, phase2_context = make_graph_contexts(
+            feature_dir=args.feature_dir,
+            model_name=args.model,
+            extra_groups=list(args.extra_groups),
             feature_normalizer_state=feature_normalizer_state,
+            target_context_groups=target_context_groups,
+            target_context_normalizer_state=target_context_normalizer_state,
+            phase1_known_label_codes=label_artifacts["phase1_known_label_codes"],
+            phase2_known_label_codes=label_artifacts["phase2_known_label_codes"],
+            phase1_reference_day=int(split.threshold_day),
+            phase2_reference_day=None,
+            phase1_historical_background_ids=historical_background_ids,
+            build_sampling_profile=graph_config.neighbor_sampler in {"consistency_recent", "risk_consistency_recent"},
         )
         prep_pbar.update(1)
     run_dir = _model_run_dir(args.outdir, args.model, args.run_name)
-    input_dim = phase1_context.feature_store.input_dim
+    label_feature_dim = graph_config.known_label_feature_dim if graph_config.known_label_feature else 0
+    input_dim = phase1_context.feature_store.input_dim + int(label_feature_dim)
+    target_context_input_dim = (
+        int(phase1_context.target_context_store.input_dim)
+        if phase1_context.target_context_store is not None
+        else int(input_dim)
+    )
+    graph_config = replace(graph_config, target_context_input_dim=int(target_context_input_dim))
     num_relations = phase1_context.graph_cache.num_relations
     global_max_day = max(phase1_context.graph_cache.max_day, phase2_context.graph_cache.max_day)
     val_predictions: list[np.ndarray] = []
     external_predictions: list[np.ndarray] = []
     metrics: list[dict[str, Any]] = []
 
-    experiment_map = {
-        "m4_graphsage": RelationGraphSAGEExperiment,
-        "m5_temporal_graphsage": TemporalRelationGraphSAGEExperiment,
-        "m6_temporal_gat": TemporalRelationGATExperiment,
-    }
-    experiment_cls = experiment_map[args.model]
+    experiment_cls = resolve_graph_experiment_class(args.model)
 
     with tqdm(
         args.seeds,
@@ -733,6 +982,9 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 device=args.device,
                 graph_config=graph_config,
                 feature_normalizer_state=feature_normalizer_state,
+                target_context_input_dim=target_context_input_dim,
+                target_context_feature_groups=target_context_groups,
+                target_context_normalizer_state=target_context_normalizer_state,
             )
             fit_metrics = experiment.fit(
                 context=phase1_context,
@@ -822,8 +1074,15 @@ def run_train_graph(args: argparse.Namespace) -> None:
         "model_name": args.model,
         "run_name": args.run_name,
         "feature_groups": phase1_context.feature_store.selected_groups,
+        "target_context_feature_groups": (
+            []
+            if phase1_context.target_context_store is None
+            else phase1_context.target_context_store.selected_groups
+        ),
         "seeds": list(args.seeds),
-        "phase1_train_size": int(train_ids.size),
+        "phase1_train_size": int(np.asarray(split_train_ids, dtype=np.int32).size),
+        "phase1_split_train_size": int(np.asarray(split_train_ids, dtype=np.int32).size),
+        "phase1_historical_background_train_size": int(historical_background_ids.size),
         "phase1_val_size": int(val_ids.size),
         "phase2_external_size": int(external_ids.size),
         "phase1_val_auc_mean": float(np.mean([row["val_auc"] for row in metrics])),
@@ -863,16 +1122,6 @@ def run_train_graph(args: argparse.Namespace) -> None:
     write_json(run_dir / "summary.json", summary)
     print(f"Training finished: {run_dir}")
 
-
-def _load_prediction_bundle(path: Path) -> dict[str, np.ndarray]:
-    data = np.load(path)
-    return {
-        "node_ids": np.asarray(data["node_ids"], dtype=np.int32),
-        "y_true": np.asarray(data["y_true"], dtype=np.int8),
-        "probability": np.asarray(data["probability"], dtype=np.float32),
-    }
-
-
 def _logit(probability: np.ndarray) -> np.ndarray:
     clipped = np.clip(probability, 1e-6, 1.0 - 1e-6)
     return np.log(clipped / (1.0 - clipped))
@@ -884,34 +1133,57 @@ def run_blend(args: argparse.Namespace) -> None:
     external_bundles = []
     model_names = []
     for model_run_dir in args.run_dirs:
-        val_path = model_run_dir / "phase1_val_avg_predictions.npz"
-        external_path = model_run_dir / "phase2_external_avg_predictions.npz"
-        if not val_path.exists() or not external_path.exists():
-            raise FileNotFoundError(
-                f"Missing averaged prediction files in {model_run_dir}. Expected "
-                f"{val_path.name} and {external_path.name}."
-            )
-        val_bundles.append(_load_prediction_bundle(val_path))
-        external_bundles.append(_load_prediction_bundle(external_path))
+        val_bundles.append(load_prediction_npz(resolve_prediction_path(model_run_dir, "phase1_val")))
+        external_bundles.append(load_prediction_npz(resolve_prediction_path(model_run_dir, "phase2_external")))
         model_names.append(model_run_dir.parent.name)
 
     base_val = val_bundles[0]
     base_external = external_bundles[0]
-    if any(not np.array_equal(bundle["node_ids"], base_val["node_ids"]) for bundle in val_bundles[1:]):
-        raise AssertionError("Validation node ids are not aligned across model runs.")
-    if any(not np.array_equal(bundle["node_ids"], base_external["node_ids"]) for bundle in external_bundles[1:]):
-        raise AssertionError("External node ids are not aligned across model runs.")
+    for idx in range(1, len(val_bundles)):
+        if not np.array_equal(val_bundles[idx]["node_ids"], base_val["node_ids"]):
+            val_bundles[idx] = align_prediction_bundle(val_bundles[idx], base_val["node_ids"])
+        if not np.array_equal(external_bundles[idx]["node_ids"], base_external["node_ids"]):
+            external_bundles[idx] = align_prediction_bundle(external_bundles[idx], base_external["node_ids"])
+        if not np.array_equal(val_bundles[idx]["y_true"], base_val["y_true"]):
+            raise AssertionError("Validation labels are not aligned across model runs.")
+        if not np.array_equal(external_bundles[idx]["y_true"], base_external["y_true"]):
+            raise AssertionError("External labels are not aligned across model runs.")
 
-    val_matrix = np.column_stack([_logit(bundle["probability"]) for bundle in val_bundles])
-    external_matrix = np.column_stack([_logit(bundle["probability"]) for bundle in external_bundles])
-    logistic = LogisticRegression(
-        max_iter=1000,
-        class_weight="balanced",
-        random_state=0,
-    )
-    logistic.fit(val_matrix, base_val["y_true"])
-    val_prob = logistic.predict_proba(val_matrix)[:, 1].astype(np.float32, copy=False)
-    external_prob = logistic.predict_proba(external_matrix)[:, 1].astype(np.float32, copy=False)
+    coefficients: list[float] | None = None
+    intercept: float | None = None
+    if args.method == "logistic":
+        val_matrix = np.column_stack([_logit(bundle["probability"]) for bundle in val_bundles])
+        external_matrix = np.column_stack([_logit(bundle["probability"]) for bundle in external_bundles])
+        logistic = LogisticRegression(
+            max_iter=1000,
+            class_weight="balanced",
+            random_state=0,
+        )
+        logistic.fit(val_matrix, base_val["y_true"])
+        val_prob = logistic.predict_proba(val_matrix)[:, 1].astype(np.float32, copy=False)
+        external_prob = logistic.predict_proba(external_matrix)[:, 1].astype(np.float32, copy=False)
+        coefficients = logistic.coef_.reshape(-1).astype(float).tolist()
+        intercept = float(logistic.intercept_[0])
+    elif args.method == "mean":
+        val_prob = np.mean(
+            [bundle["probability"] for bundle in val_bundles],
+            axis=0,
+            dtype=np.float32,
+        ).astype(np.float32, copy=False)
+        external_prob = np.mean(
+            [bundle["probability"] for bundle in external_bundles],
+            axis=0,
+            dtype=np.float32,
+        ).astype(np.float32, copy=False)
+    else:
+        val_rank = np.column_stack(
+            [np.argsort(np.argsort(bundle["probability"])).astype(np.float32) for bundle in val_bundles]
+        )
+        external_rank = np.column_stack(
+            [np.argsort(np.argsort(bundle["probability"])).astype(np.float32) for bundle in external_bundles]
+        )
+        val_prob = np.mean(val_rank, axis=1, dtype=np.float32).astype(np.float32, copy=False)
+        external_prob = np.mean(external_rank, axis=1, dtype=np.float32).astype(np.float32, copy=False)
 
     val_metrics = compute_binary_classification_metrics(base_val["y_true"], val_prob)
     external_metrics = compute_binary_classification_metrics(base_external["y_true"], external_prob)
@@ -929,10 +1201,9 @@ def run_blend(args: argparse.Namespace) -> None:
     )
     summary = {
         "blend_name": args.name,
+        "method": args.method,
         "model_runs": [_path_repr(path) for path in args.run_dirs],
         "model_names": model_names,
-        "coefficients": logistic.coef_.reshape(-1).astype(float).tolist(),
-        "intercept": float(logistic.intercept_[0]),
         "phase1_val_auc": val_metrics["auc"],
         "phase1_val_pr_auc": val_metrics["pr_auc"],
         "phase1_val_ap": val_metrics["ap"],
@@ -940,6 +1211,9 @@ def run_blend(args: argparse.Namespace) -> None:
         "phase2_external_pr_auc": external_metrics["pr_auc"],
         "phase2_external_ap": external_metrics["ap"],
     }
+    if coefficients is not None and intercept is not None:
+        summary["coefficients"] = coefficients
+        summary["intercept"] = intercept
     write_json(run_dir / "summary.json", summary)
     print(f"Blend finished: {run_dir}")
 
