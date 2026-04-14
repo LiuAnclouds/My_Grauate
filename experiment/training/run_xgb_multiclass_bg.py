@@ -22,6 +22,10 @@ from experiment.training.common import (
     write_json,
 )
 from experiment.training.features import FeatureStore, load_graph_cache, resolve_feature_groups
+from experiment.training.xgb.domain_adaptation import (
+    add_domain_weight_args,
+    build_domain_adaptation_weights_from_args,
+)
 from experiment.training.xgb_utils import (
     binary_score_from_softprob,
     build_multiclass_bg_sample_weight,
@@ -99,6 +103,7 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Optional lower bound on phase1 historical node activation day used for training.",
     )
+    add_domain_weight_args(parser)
     return parser.parse_args()
 
 
@@ -198,7 +203,18 @@ def main() -> None:
         train_first_active=train_first_active,
         threshold_day=int(split.threshold_day),
     )
-    sample_weight = sample_weight_payload["sample_weight"]
+    sample_weight = np.asarray(sample_weight_payload["sample_weight"], dtype=np.float32)
+    domain_weight, domain_weight_payload = build_domain_adaptation_weights_from_args(
+        args,
+        x_train=x_train,
+        x_val=x_val,
+    )
+    sample_weight *= np.asarray(domain_weight, dtype=np.float32)
+    mean_weight = float(np.mean(sample_weight, dtype=np.float64))
+    if mean_weight > 0.0:
+        sample_weight /= mean_weight
+    sample_weight_payload["sample_weight"] = sample_weight
+    sample_weight_payload["domain_weight"] = domain_weight_payload
 
     dtrain = xgb.DMatrix(x_train, label=y_train, weight=sample_weight)
     dval = xgb.DMatrix(x_val, label=y_val)
@@ -265,6 +281,7 @@ def main() -> None:
         },
         "class_weight": sample_weight_payload["class_weight"],
         "time_weight": sample_weight_payload["time_weight"],
+        "domain_weight": sample_weight_payload["domain_weight"],
         "best_iteration": int(booster.best_iteration),
         "phase1_val_metrics": val_metrics,
         "phase2_external_metrics": external_metrics,

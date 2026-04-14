@@ -5,19 +5,12 @@ from pathlib import Path
 
 import numpy as np
 
+from experiment.datasets.registry import get_active_dataset_spec, get_dataset_spec
 
-PHASE_FILENAMES = {
-    "phase1": "phase1_gdata.npz",
-    "phase2": "phase2_gdata.npz",
-}
 
-LABEL_NAMES = {
-    -100: "test_holdout",
-    0: "normal",
-    1: "fraud",
-    2: "background_2",
-    3: "background_3",
-}
+ACTIVE_DATASET_SPEC = get_active_dataset_spec()
+PHASE_FILENAMES = dict(ACTIVE_DATASET_SPEC.phase_filenames)
+LABEL_NAMES = dict(ACTIVE_DATASET_SPEC.label_names)
 
 
 @dataclass(frozen=True)
@@ -48,15 +41,16 @@ def resolve_dataset_path(phase: str, repo_root: Path | None = None) -> Path:
     if repo_root is None:
         repo_root = Path(__file__).resolve().parents[2]
 
-    dataset_root = repo_root / "experiment" / "dataset" / "XinYe Dataset"
-    matches = sorted(dataset_root.rglob(PHASE_FILENAMES[phase]))
+    spec = get_active_dataset_spec()
+    dataset_root = repo_root / spec.dataset_root_relative
+    matches = sorted(dataset_root.rglob(spec.phase_filenames[phase]))
     if not matches:
         raise FileNotFoundError(
-            f"Could not find {PHASE_FILENAMES[phase]} under {dataset_root}"
+            f"Could not find {spec.phase_filenames[phase]} under {dataset_root}"
         )
     if len(matches) > 1:
         raise RuntimeError(
-            f"Found multiple matches for {PHASE_FILENAMES[phase]}: {matches}"
+            f"Found multiple matches for {spec.phase_filenames[phase]}: {matches}"
         )
     return matches[0]
 

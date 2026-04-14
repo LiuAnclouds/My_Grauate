@@ -9,12 +9,12 @@ from typing import Any
 import numpy as np
 from sklearn.metrics import average_precision_score, precision_recall_curve, roc_auc_score
 
+from experiment.datasets.registry import resolve_output_roots
 from experiment.eda.data_loader import resolve_dataset_path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-EDA_OUTPUT_ROOT = REPO_ROOT / "experiment" / "outputs" / "eda"
-TRAINING_OUTPUT_ROOT = REPO_ROOT / "experiment" / "outputs" / "training"
+EDA_OUTPUT_ROOT, TRAINING_OUTPUT_ROOT = resolve_output_roots(REPO_ROOT)
 FEATURE_OUTPUT_ROOT = TRAINING_OUTPUT_ROOT / "features"
 MODEL_OUTPUT_ROOT = TRAINING_OUTPUT_ROOT / "models"
 BLEND_OUTPUT_ROOT = TRAINING_OUTPUT_ROOT / "blends"
@@ -26,7 +26,10 @@ class ExperimentSplit:
     val_ids: np.ndarray
     external_ids: np.ndarray
     threshold_day: int
-    external_phase: str = "phase2"
+    train_phase: str = "phase1"
+    val_phase: str = "phase1"
+    external_phase: str | None = "phase2"
+    split_style: str = "two_phase"
 
 
 def ensure_dir(path: Path) -> Path:
@@ -97,15 +100,46 @@ def compute_binary_classification_metrics(
 
 def load_experiment_split(eda_root: Path = EDA_OUTPUT_ROOT) -> ExperimentSplit:
     summary = read_json(eda_root / "recommended_split.json")
-    phase1 = summary["phase1_time_split"]
-    phase2 = summary["phase2_external_eval"]
-    return ExperimentSplit(
-        train_ids=np.load(eda_root / phase1["train_id_path"]),
-        val_ids=np.load(eda_root / phase1["val_id_path"]),
-        external_ids=np.load(eda_root / phase2["id_path"]),
-        threshold_day=int(phase1["threshold_day"]),
-        external_phase="phase2",
-    )
+    if "train_split" in summary and "val_split" in summary:
+        train = summary["train_split"]
+        val = summary["val_split"]
+        external = summary.get("external_eval")
+        external_ids = (
+            np.load(eda_root / external["id_path"])
+            if external is not None and external.get("id_path")
+            else np.empty(0, dtype=np.int32)
+        )
+        return ExperimentSplit(
+            train_ids=np.load(eda_root / train["id_path"]),
+            val_ids=np.load(eda_root / val["id_path"]),
+            external_ids=np.asarray(external_ids, dtype=np.int32),
+            threshold_day=int(summary.get("threshold_day", train["threshold_day"])),
+            train_phase=str(summary.get("train_phase", "graph")),
+            val_phase=str(summary.get("val_phase", summary.get("train_phase", "graph"))),
+            external_phase=summary.get("external_phase"),
+            split_style=str(summary.get("split_style", "single_graph")),
+        )
+
+    if "phase1_time_split" in summary:
+        phase1 = summary["phase1_time_split"]
+        phase2 = summary.get("phase2_external_eval", {})
+        external_path = phase2.get("id_path")
+        external_ids = (
+            np.load(eda_root / external_path)
+            if external_path
+            else np.empty(0, dtype=np.int32)
+        )
+        return ExperimentSplit(
+            train_ids=np.load(eda_root / phase1["train_id_path"]),
+            val_ids=np.load(eda_root / phase1["val_id_path"]),
+            external_ids=np.asarray(external_ids, dtype=np.int32),
+            threshold_day=int(phase1["threshold_day"]),
+            train_phase="phase1",
+            val_phase="phase1",
+            external_phase="phase2" if external_path else None,
+            split_style="two_phase",
+        )
+    raise KeyError(f"Unsupported recommended_split.json format under {eda_root}")
 
 
 def load_phase_arrays(

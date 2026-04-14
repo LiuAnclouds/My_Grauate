@@ -33,6 +33,10 @@ from experiment.training.run_xgb_multiclass_bg import (
     _binary_score_from_softprob,
     _build_sample_weight,
 )
+from experiment.training.xgb.domain_adaptation import (
+    add_domain_weight_args,
+    build_domain_adaptation_weights_from_args,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -128,6 +132,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Append the raw feature_model block to stage-2 features in addition to local/propagated scores.",
     )
+    add_domain_weight_args(parser)
     return parser.parse_args()
 
 
@@ -617,7 +622,19 @@ def main() -> None:
         train_first_active=train_first_active,
         threshold_day=int(split.threshold_day),
     )
-    dtrain = xgb.DMatrix(x_train, label=y_train, weight=np.asarray(sample_weight_payload["sample_weight"], dtype=np.float32))
+    sample_weight = np.asarray(sample_weight_payload["sample_weight"], dtype=np.float32)
+    domain_weight, domain_weight_payload = build_domain_adaptation_weights_from_args(
+        args,
+        x_train=x_train,
+        x_val=x_val,
+    )
+    sample_weight *= np.asarray(domain_weight, dtype=np.float32)
+    mean_weight = float(np.mean(sample_weight, dtype=np.float64))
+    if mean_weight > 0.0:
+        sample_weight /= mean_weight
+    sample_weight_payload["sample_weight"] = sample_weight
+    sample_weight_payload["domain_weight"] = domain_weight_payload
+    dtrain = xgb.DMatrix(x_train, label=y_train, weight=sample_weight)
     dval = xgb.DMatrix(x_val, label=y_val)
     dexternal = xgb.DMatrix(x_external, label=y_external)
 
@@ -664,6 +681,7 @@ def main() -> None:
         "historical_train_label_counts": {str(label): int(np.sum(y_train == label)) for label in (0, 1, 2, 3)},
         "class_weight": sample_weight_payload["class_weight"],
         "time_weight": sample_weight_payload["time_weight"],
+        "domain_weight": sample_weight_payload["domain_weight"],
         "stage1_best_iteration": stage1_best_iteration,
         "stage2_best_iteration": stage2_best_iteration,
         "phase1_val_metrics": val_metrics,

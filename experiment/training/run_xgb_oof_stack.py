@@ -86,6 +86,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--outdir", type=Path, default=BLEND_OUTPUT_ROOT)
     parser.add_argument("--feature-dir", type=Path, default=FEATURE_OUTPUT_ROOT)
     parser.add_argument(
+        "--reuse-meta-checkpoint-from",
+        type=Path,
+        default=None,
+        help="Optional run directory whose saved meta-feature checkpoint should be reused.",
+    )
+    parser.add_argument(
         "--meta-model",
         choices=("xgboost", "logistic", "histgb"),
         default="logistic",
@@ -248,6 +254,37 @@ def _load_cached_base_prediction_set(cache_dir: Path) -> BasePredictionSet | Non
         phase2_external_auc=float(meta["phase2_external_auc"]),
         full_rounds=None if meta["full_rounds"] is None else int(meta["full_rounds"]),
     )
+
+
+def _find_cached_base_prediction_set_by_run_dir(
+    *,
+    run_dir: Path,
+    target_train_node_ids: np.ndarray,
+) -> BasePredictionSet | None:
+    if not BASE_OOF_CACHE_ROOT.exists():
+        return None
+    resolved_run_dir = run_dir.resolve()
+    target_ids = np.asarray(target_train_node_ids, dtype=np.int32)
+    for candidate_dir in sorted(BASE_OOF_CACHE_ROOT.iterdir()):
+        cached = _load_cached_base_prediction_set(candidate_dir)
+        if cached is None:
+            continue
+        cached_run_dir = Path(str(cached.run_dir))
+        try:
+            same_run = cached_run_dir.resolve() == resolved_run_dir
+        except FileNotFoundError:
+            same_run = cached_run_dir == run_dir
+        if not same_run:
+            continue
+        if not np.array_equal(np.asarray(cached.train_node_ids, dtype=np.int32), target_ids):
+            continue
+        print(
+            f"[oof-base-cache] recovered run={run_dir.name} key={candidate_dir.name[:12]} "
+            f"val_auc={cached.phase1_val_auc:.6f} external_auc={cached.phase2_external_auc:.6f}",
+            flush=True,
+        )
+        return cached
+    return None
 
 
 def _save_cached_base_prediction_set(cache_dir: Path, pred: BasePredictionSet) -> None:
@@ -1116,6 +1153,13 @@ def _score_base_run(
             flush=True,
         )
         return cached
+    recovered_cached = _find_cached_base_prediction_set_by_run_dir(
+        run_dir=run_dir,
+        target_train_node_ids=np.asarray(train_ids[oof_plan.train_keep_mask], dtype=np.int32, copy=False),
+    )
+    if recovered_cached is not None:
+        _save_cached_base_prediction_set(cache_dir, recovered_cached)
+        return recovered_cached
     family = str(summary["model"])
     if family == "xgboost_gpu_multiclass_bg":
         pred = _build_multiclass_bg_prediction_set(
@@ -1488,6 +1532,109 @@ def _predict_meta_model(model, x: np.ndarray) -> np.ndarray:
     return model.predict_proba(x)[:, 1].astype(np.float32, copy=False)
 
 
+def _meta_feature_checkpoint_paths(run_dir: Path) -> dict[str, Path]:
+    return {
+        "train": run_dir / "phase1_train_meta_features.npz",
+        "val": run_dir / "phase1_val_meta_features.npz",
+        "external": run_dir / "phase2_external_meta_features.npz",
+        "manifest": run_dir / "meta_feature_manifest.json",
+    }
+
+
+def _base_run_summaries(prediction_sets: list[BasePredictionSet]) -> list[dict[str, object]]:
+    return [
+        {
+            "run_dir": str(pred.run_dir),
+            "family": pred.family,
+            "train_mode": pred.train_mode,
+            "phase1_train_auc": pred.phase1_train_auc,
+            "phase1_val_auc": pred.phase1_val_auc,
+            "phase2_external_auc": pred.phase2_external_auc,
+            "full_rounds": pred.full_rounds,
+        }
+        for pred in prediction_sets
+    ]
+
+
+def _save_meta_feature_checkpoint(
+    *,
+    run_dir: Path,
+    meta_train_ids: np.ndarray,
+    y_meta_train: np.ndarray,
+    x_train: np.ndarray,
+    val_ids: np.ndarray,
+    y_val: np.ndarray,
+    x_val: np.ndarray,
+    external_ids: np.ndarray,
+    y_external: np.ndarray,
+    x_external: np.ndarray,
+    feature_names: list[str],
+    base_runs: list[dict[str, object]],
+    oof_plan_diagnostics: dict[str, object],
+) -> None:
+    paths = _meta_feature_checkpoint_paths(run_dir)
+    np.savez_compressed(
+        paths["train"],
+        node_ids=meta_train_ids,
+        y_true=y_meta_train,
+        features=x_train.astype(np.float32, copy=False),
+    )
+    np.savez_compressed(
+        paths["val"],
+        node_ids=val_ids,
+        y_true=y_val,
+        features=x_val.astype(np.float32, copy=False),
+    )
+    np.savez_compressed(
+        paths["external"],
+        node_ids=external_ids,
+        y_true=y_external,
+        features=x_external.astype(np.float32, copy=False),
+    )
+    write_json(
+        paths["manifest"],
+        {
+            "feature_names": feature_names,
+            "base_runs": base_runs,
+            "oof_plan": oof_plan_diagnostics,
+        },
+    )
+
+
+def _load_meta_feature_checkpoint(
+    run_dir: Path,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str], np.ndarray, np.ndarray, np.ndarray, list[dict[str, object]], dict[str, object]] | None:
+    paths = _meta_feature_checkpoint_paths(run_dir)
+    if not all(path.exists() for path in paths.values()):
+        return None
+    manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+    train_npz = np.load(paths["train"])
+    val_npz = np.load(paths["val"])
+    external_npz = np.load(paths["external"])
+    x_train = np.asarray(train_npz["features"], dtype=np.float32)
+    x_val = np.asarray(val_npz["features"], dtype=np.float32)
+    x_external = np.asarray(external_npz["features"], dtype=np.float32)
+    feature_names = [str(name) for name in manifest["feature_names"]]
+    meta_train_ids = np.asarray(train_npz["node_ids"], dtype=np.int32)
+    y_meta_train = np.asarray(train_npz["y_true"], dtype=np.int8)
+    y_val = np.asarray(val_npz["y_true"], dtype=np.int8)
+    y_external = np.asarray(external_npz["y_true"], dtype=np.int8)
+    base_runs = list(manifest["base_runs"])
+    oof_plan_diagnostics = dict(manifest["oof_plan"])
+    return (
+        x_train,
+        x_val,
+        x_external,
+        feature_names,
+        meta_train_ids,
+        y_meta_train,
+        y_val,
+        y_external,
+        base_runs,
+        oof_plan_diagnostics,
+    )
+
+
 def main() -> None:
     args = parse_args()
     split = load_experiment_split()
@@ -1502,72 +1649,130 @@ def main() -> None:
     y_train = phase1_y[train_ids].astype(np.int8, copy=False)
     y_val = phase1_y[val_ids].astype(np.int8, copy=False)
     y_external = phase2_y[external_ids].astype(np.int8, copy=False)
+    output_run_dir = ensure_dir(args.outdir / args.run_name)
     oof_plan = _build_oof_fold_plan(
         train_ids=train_ids,
         y_train=y_train,
         train_first_active=first_active[train_ids].astype(np.int32, copy=False),
         args=args,
     )
-
-    prediction_sets: list[BasePredictionSet] = []
-    for run_dir in args.run_dirs:
-        prediction_sets.append(
-            _score_base_run(
-            run_dir=run_dir,
-            feature_dir=args.feature_dir,
-            train_ids=train_ids,
-            phase1_y=phase1_y,
-            phase2_y=phase2_y,
-            first_active=first_active,
-            oof_plan=oof_plan,
-            args=args,
+    checkpoint_source_dir = output_run_dir
+    if args.reuse_meta_checkpoint_from is not None:
+        checkpoint_source_dir = Path(args.reuse_meta_checkpoint_from)
+    checkpoint = _load_meta_feature_checkpoint(checkpoint_source_dir)
+    if checkpoint is not None:
+        (
+            x_train,
+            x_val,
+            x_external,
+            feature_names,
+            meta_train_ids,
+            y_meta_train,
+            y_val,
+            y_external,
+            base_run_summaries,
+            oof_plan_diagnostics,
+        ) = checkpoint
+        checkpoint_label = "resume" if checkpoint_source_dir == output_run_dir else "reuse"
+        print(
+            f"[meta-checkpoint] {checkpoint_label} run={args.run_name} "
+            f"source={checkpoint_source_dir} feature_dim={x_train.shape[1]}"
         )
-        )
-        gc.collect()
+        if checkpoint_source_dir != output_run_dir:
+            _save_meta_feature_checkpoint(
+                run_dir=output_run_dir,
+                meta_train_ids=meta_train_ids,
+                y_meta_train=y_meta_train,
+                x_train=x_train,
+                val_ids=val_ids,
+                y_val=y_val,
+                x_val=x_val,
+                external_ids=external_ids,
+                y_external=y_external,
+                x_external=x_external,
+                feature_names=feature_names,
+                base_runs=base_run_summaries,
+                oof_plan_diagnostics=oof_plan_diagnostics,
+            )
+            print(f"[meta-checkpoint] materialized run={args.run_name} feature_dim={x_train.shape[1]}")
+    else:
+        prediction_sets: list[BasePredictionSet] = []
+        for base_run_dir in args.run_dirs:
+            prediction_sets.append(
+                _score_base_run(
+                run_dir=base_run_dir,
+                feature_dir=args.feature_dir,
+                train_ids=train_ids,
+                phase1_y=phase1_y,
+                phase2_y=phase2_y,
+                first_active=first_active,
+                oof_plan=oof_plan,
+                args=args,
+            )
+            )
+            gc.collect()
 
-    x_train, x_val, x_external, feature_names, meta_train_ids = _build_meta_features(
-        prediction_sets,
-        include_rank_features=bool(args.include_rank_features),
-    )
-    y_meta_train = phase1_y[meta_train_ids].astype(np.int8, copy=False)
-    if args.append_ensemble_stats:
-        stat_train, stat_val, stat_external, stat_feature_names = _build_ensemble_stat_features(prediction_sets)
-        x_train = np.concatenate([x_train, stat_train], axis=1).astype(np.float32, copy=False)
-        x_val = np.concatenate([x_val, stat_val], axis=1).astype(np.float32, copy=False)
-        x_external = np.concatenate([x_external, stat_external], axis=1).astype(np.float32, copy=False)
-        feature_names.extend(stat_feature_names)
-    if args.append_temporal_prototype_features:
-        if phase2_graph is None:
-            phase2_graph = load_graph_cache("phase2", outdir=args.feature_dir)
-        proto_train, proto_val, proto_external, proto_feature_names = _build_temporal_prototype_features(
+        x_train, x_val, x_external, feature_names, meta_train_ids = _build_meta_features(
+            prediction_sets,
+            include_rank_features=bool(args.include_rank_features),
+        )
+        y_meta_train = phase1_y[meta_train_ids].astype(np.int8, copy=False)
+        if args.append_ensemble_stats:
+            stat_train, stat_val, stat_external, stat_feature_names = _build_ensemble_stat_features(prediction_sets)
+            x_train = np.concatenate([x_train, stat_train], axis=1).astype(np.float32, copy=False)
+            x_val = np.concatenate([x_val, stat_val], axis=1).astype(np.float32, copy=False)
+            x_external = np.concatenate([x_external, stat_external], axis=1).astype(np.float32, copy=False)
+            feature_names.extend(stat_feature_names)
+        if args.append_temporal_prototype_features:
+            if phase2_graph is None:
+                phase2_graph = load_graph_cache("phase2", outdir=args.feature_dir)
+            proto_train, proto_val, proto_external, proto_feature_names = _build_temporal_prototype_features(
+                x_train=x_train,
+                x_val=x_val,
+                x_external=x_external,
+                y_train=y_meta_train,
+                train_ids=meta_train_ids,
+                val_ids=val_ids,
+                external_ids=external_ids,
+                phase1_first_active=first_active,
+                phase2_first_active=np.asarray(phase2_graph.first_active, dtype=np.int32),
+                half_life_days=float(args.prototype_half_life_days),
+            )
+            x_train = np.concatenate([x_train, proto_train], axis=1).astype(np.float32, copy=False)
+            x_val = np.concatenate([x_val, proto_val], axis=1).astype(np.float32, copy=False)
+            x_external = np.concatenate([x_external, proto_external], axis=1).astype(np.float32, copy=False)
+            feature_names.extend([f"prototype__{name}" for name in proto_feature_names])
+        if args.meta_context_model != "none":
+            ctx_train, ctx_val, ctx_external, ctx_feature_names = _load_meta_context_features(
+                feature_dir=args.feature_dir,
+                context_model=str(args.meta_context_model),
+                context_extra_groups=list(args.meta_context_extra_groups),
+                train_ids=meta_train_ids,
+                val_ids=val_ids,
+                external_ids=external_ids,
+            )
+            x_train = np.concatenate([x_train, ctx_train], axis=1).astype(np.float32, copy=False)
+            x_val = np.concatenate([x_val, ctx_val], axis=1).astype(np.float32, copy=False)
+            x_external = np.concatenate([x_external, ctx_external], axis=1).astype(np.float32, copy=False)
+            feature_names.extend(ctx_feature_names)
+        base_run_summaries = _base_run_summaries(prediction_sets)
+        oof_plan_diagnostics = oof_plan.diagnostics
+        _save_meta_feature_checkpoint(
+            run_dir=output_run_dir,
+            meta_train_ids=meta_train_ids,
+            y_meta_train=y_meta_train,
             x_train=x_train,
+            val_ids=val_ids,
+            y_val=y_val,
             x_val=x_val,
+            external_ids=external_ids,
+            y_external=y_external,
             x_external=x_external,
-            y_train=y_meta_train,
-            train_ids=meta_train_ids,
-            val_ids=val_ids,
-            external_ids=external_ids,
-            phase1_first_active=first_active,
-            phase2_first_active=np.asarray(phase2_graph.first_active, dtype=np.int32),
-            half_life_days=float(args.prototype_half_life_days),
+            feature_names=feature_names,
+            base_runs=base_run_summaries,
+            oof_plan_diagnostics=oof_plan_diagnostics,
         )
-        x_train = np.concatenate([x_train, proto_train], axis=1).astype(np.float32, copy=False)
-        x_val = np.concatenate([x_val, proto_val], axis=1).astype(np.float32, copy=False)
-        x_external = np.concatenate([x_external, proto_external], axis=1).astype(np.float32, copy=False)
-        feature_names.extend([f"prototype__{name}" for name in proto_feature_names])
-    if args.meta_context_model != "none":
-        ctx_train, ctx_val, ctx_external, ctx_feature_names = _load_meta_context_features(
-            feature_dir=args.feature_dir,
-            context_model=str(args.meta_context_model),
-            context_extra_groups=list(args.meta_context_extra_groups),
-            train_ids=meta_train_ids,
-            val_ids=val_ids,
-            external_ids=external_ids,
-        )
-        x_train = np.concatenate([x_train, ctx_train], axis=1).astype(np.float32, copy=False)
-        x_val = np.concatenate([x_val, ctx_val], axis=1).astype(np.float32, copy=False)
-        x_external = np.concatenate([x_external, ctx_external], axis=1).astype(np.float32, copy=False)
-        feature_names.extend(ctx_feature_names)
+        print(f"[meta-checkpoint] saved run={args.run_name} feature_dim={x_train.shape[1]}")
     meta_sample_weight = _build_time_decay_sample_weight(
         train_first_active=first_active[meta_train_ids].astype(np.int32, copy=False),
         threshold_day=int(split.threshold_day),
@@ -1588,34 +1793,15 @@ def main() -> None:
     val_metrics = compute_binary_classification_metrics(y_val, val_prob)
     external_metrics = compute_binary_classification_metrics(y_external, external_prob)
 
-    run_dir = ensure_dir(args.outdir / args.run_name)
-    np.savez_compressed(
-        run_dir / "phase1_train_meta_features.npz",
-        node_ids=meta_train_ids,
-        y_true=y_meta_train,
-        features=x_train.astype(np.float32, copy=False),
-    )
-    np.savez_compressed(
-        run_dir / "phase1_val_meta_features.npz",
-        node_ids=val_ids,
-        y_true=y_val,
-        features=x_val.astype(np.float32, copy=False),
-    )
-    np.savez_compressed(
-        run_dir / "phase2_external_meta_features.npz",
-        node_ids=external_ids,
-        y_true=y_external,
-        features=x_external.astype(np.float32, copy=False),
-    )
-    save_prediction_npz(run_dir / "phase1_train_predictions.npz", meta_train_ids, y_meta_train, train_prob)
-    save_prediction_npz(run_dir / "phase1_val_predictions.npz", val_ids, y_val, val_prob)
-    save_prediction_npz(run_dir / "phase2_external_predictions.npz", external_ids, y_external, external_prob)
+    save_prediction_npz(output_run_dir / "phase1_train_predictions.npz", meta_train_ids, y_meta_train, train_prob)
+    save_prediction_npz(output_run_dir / "phase1_val_predictions.npz", val_ids, y_val, val_prob)
+    save_prediction_npz(output_run_dir / "phase2_external_predictions.npz", external_ids, y_external, external_prob)
     if args.meta_model == "xgboost":
-        model.save_model(run_dir / "model.json")
+        model.save_model(output_run_dir / "model.json")
     else:
         import pickle
 
-        with (run_dir / "model.pkl").open("wb") as fp:
+        with (output_run_dir / "model.pkl").open("wb") as fp:
             pickle.dump(model, fp)
 
     summary = {
@@ -1626,36 +1812,26 @@ def main() -> None:
             "Meta-model is fitted only on phase1 train labels using out-of-fold base predictions. "
             "phase1_val and phase2_external are never used to fit the meta stage."
         ),
-        "base_runs": [
-            {
-                "run_dir": str(pred.run_dir),
-                "family": pred.family,
-                "train_mode": pred.train_mode,
-                "phase1_train_auc": pred.phase1_train_auc,
-                "phase1_val_auc": pred.phase1_val_auc,
-                "phase2_external_auc": pred.phase2_external_auc,
-                "full_rounds": pred.full_rounds,
-            }
-            for pred in prediction_sets
-        ],
+        "base_runs": base_run_summaries,
         "n_splits": int(args.n_splits),
         "base_fold_strategy": str(args.base_fold_strategy),
         "base_max_estimators": int(args.base_max_estimators),
         "base_early_stopping_rounds": int(args.base_early_stopping_rounds),
         "base_round_agg": str(args.base_round_agg),
-        "oof_plan": oof_plan.diagnostics,
+        "oof_plan": oof_plan_diagnostics,
         "include_rank_features": bool(args.include_rank_features),
         "append_ensemble_stats": bool(args.append_ensemble_stats),
         "append_temporal_prototype_features": bool(args.append_temporal_prototype_features),
         "prototype_half_life_days": float(args.prototype_half_life_days),
         "meta_context_model": None if args.meta_context_model == "none" else str(args.meta_context_model),
         "meta_context_extra_groups": list(args.meta_context_extra_groups),
+        "meta_checkpoint_source": str(checkpoint_source_dir),
         "feature_dim": int(x_train.shape[1]),
         "feature_names": feature_names,
         "meta_feature_paths": {
-            "phase1_train": str(run_dir / "phase1_train_meta_features.npz"),
-            "phase1_val": str(run_dir / "phase1_val_meta_features.npz"),
-            "phase2_external": str(run_dir / "phase2_external_meta_features.npz"),
+            "phase1_train": str(output_run_dir / "phase1_train_meta_features.npz"),
+            "phase1_val": str(output_run_dir / "phase1_val_meta_features.npz"),
+            "phase2_external": str(output_run_dir / "phase2_external_meta_features.npz"),
         },
         "phase1_train_size": int(meta_train_ids.size),
         "phase1_train_source_size": int(train_ids.size),
@@ -1698,7 +1874,7 @@ def main() -> None:
             **meta_aux,
         },
     }
-    write_json(run_dir / "summary.json", summary)
+    write_json(output_run_dir / "summary.json", summary)
     print(
         f"[xgb_oof_stack] run={args.run_name} "
         f"train_auc={train_metrics['auc']:.6f} "

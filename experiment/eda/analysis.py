@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from experiment.datasets.registry import get_active_dataset_spec
 from experiment.eda.data_loader import LABEL_NAMES, PhaseData, load_phase
 
 
@@ -20,6 +21,7 @@ PLOT_SAMPLE_SIZE = 50_000
 DRIFT_BIN_COUNT = 10
 FEATURE_QUANTILES = (0.0, 0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99, 1.0)
 TIME_WINDOW_COUNT = 4
+ACTIVE_DATASET_SPEC = get_active_dataset_spec()
 
 
 def configure_matplotlib() -> None:
@@ -75,6 +77,46 @@ def write_square_csv(path: Path, headers: list[str], matrix: np.ndarray) -> None
 
 def label_name(label: int) -> str:
     return LABEL_NAMES.get(int(label), f"label_{int(label)}")
+
+
+def background_labels() -> tuple[int, ...]:
+    return tuple(int(label) for label in ACTIVE_DATASET_SPEC.background_labels)
+
+
+def split_train_artifact() -> str:
+    return str(ACTIVE_DATASET_SPEC.split_train_artifact)
+
+
+def split_val_artifact() -> str:
+    return str(ACTIVE_DATASET_SPEC.split_val_artifact)
+
+
+def split_external_artifact() -> str | None:
+    return ACTIVE_DATASET_SPEC.split_external_artifact
+
+
+def background_group_specs(labels: np.ndarray) -> list[tuple[str, np.ndarray]]:
+    specs: list[tuple[str, np.ndarray]] = []
+    for label in background_labels():
+        specs.append(
+            (
+                label_name(label),
+                np.flatnonzero(labels == label).astype(np.int32, copy=False),
+            )
+        )
+    return specs
+
+
+def label_order_for_phase(labels: np.ndarray) -> list[int]:
+    ordered: list[int] = []
+    for label in [-100, 0, 1, *background_labels()]:
+        if np.any(labels == label):
+            ordered.append(int(label))
+    for label in sorted(np.unique(labels).tolist()):
+        label = int(label)
+        if label not in ordered:
+            ordered.append(label)
+    return ordered
 
 
 def quantile_row(prefix: str, values: np.ndarray) -> dict[str, float]:
@@ -274,10 +316,9 @@ def analyze_features(
     missing_group_specs = [
         ("train_normal", data.train_mask[data.y[data.train_mask] == 0]),
         ("train_fraud", data.train_mask[data.y[data.train_mask] == 1]),
-        ("background_2", np.flatnonzero(data.y == 2).astype(np.int32, copy=False)),
-        ("background_3", np.flatnonzero(data.y == 3).astype(np.int32, copy=False)),
         ("test_holdout", data.test_mask),
     ]
+    missing_group_specs[2:2] = background_group_specs(data.y)
     missing_rows: list[dict[str, Any]] = []
     missing_matrix: list[list[float]] = []
     missing_labels: list[str] = []
@@ -504,10 +545,10 @@ def analyze_graph(
         "all_nodes": np.arange(data.num_nodes, dtype=np.int32),
         "train_normal": data.train_mask[labels[data.train_mask] == 0],
         "train_fraud": data.train_mask[labels[data.train_mask] == 1],
-        "background_2": np.flatnonzero(labels == 2).astype(np.int32, copy=False),
-        "background_3": np.flatnonzero(labels == 3).astype(np.int32, copy=False),
         "test_holdout": data.test_mask,
     }
+    for group_name, group_idx in background_group_specs(labels):
+        groups[group_name] = group_idx
 
     for group_name, group_idx in groups.items():
         if group_idx.size == 0:
@@ -551,7 +592,7 @@ def analyze_graph(
             }
         )
 
-    label_order = [-100, 0, 1, 2, 3]
+    label_order = label_order_for_phase(labels)
     label_to_code = {label: idx for idx, label in enumerate(label_order)}
     code_to_label = {idx: label for label, idx in label_to_code.items()}
     node_codes = np.zeros(data.num_nodes, dtype=np.int8)
@@ -584,7 +625,7 @@ def analyze_graph(
                 }
             )
 
-    background_mask = np.isin(labels, (2, 3))
+    background_mask = np.isin(labels, background_labels())
     train_target_mask = np.isin(labels, (0, 1))
     src = data.edge_index[:, 0]
     dst = data.edge_index[:, 1]
@@ -767,9 +808,11 @@ def analyze_temporal(
         "all_nodes": np.arange(data.num_nodes, dtype=np.int32),
         "train_normal": data.train_mask[data.y[data.train_mask] == 0],
         "train_fraud": data.train_mask[data.y[data.train_mask] == 1],
-        "background_nodes": np.flatnonzero(np.isin(data.y, (2, 3))).astype(np.int32, copy=False),
         "test_holdout": data.test_mask,
     }
+    background_nodes = np.flatnonzero(np.isin(data.y, background_labels())).astype(np.int32, copy=False)
+    if background_nodes.size:
+        group_indices["background_nodes"] = background_nodes
     for group_name, group_idx in group_indices.items():
         for metric_name, values in {
             "first_active": first_active[group_idx],
@@ -854,6 +897,11 @@ def _build_drift_bins(values: np.ndarray, n_bins: int = DRIFT_BIN_COUNT) -> np.n
 
 
 def analyze_drift(outdir: Path) -> tuple[list[dict[str, Any]], str]:
+    if ACTIVE_DATASET_SPEC.split_style != "two_phase":
+        summary_text = "# 漂移摘要\n\n- 当前数据集按单图统一协议运行，默认不再生成 phase1 -> phase2 漂移报告。"
+        (outdir / "drift_summary.md").write_text(summary_text, encoding="utf-8")
+        return [], summary_text
+
     phase1 = load_phase("phase1")
     phase2 = load_phase("phase2")
     phase1_train = phase1.x[phase1.train_mask]
@@ -950,11 +998,13 @@ def build_recommended_split(
     outdir: Path,
     temporal_core: dict[str, np.ndarray] | None = None,
 ) -> dict[str, Any]:
-    phase1 = load_phase("phase1")
+    train_artifact = split_train_artifact()
+    val_artifact = split_val_artifact()
+    graph = load_phase(train_artifact)
     if temporal_core is None:
-        temporal_core = compute_temporal_core(phase1)
+        temporal_core = compute_temporal_core(graph)
     first_active = temporal_core["first_active"]
-    train_ids = phase1.train_mask
+    train_ids = graph.train_mask
     train_first_active = first_active[train_ids]
 
     candidate_quantiles = (0.80, 0.75, 0.70, 0.65, 0.60, 0.55)
@@ -966,7 +1016,7 @@ def build_recommended_split(
         val_mask = train_first_active >= threshold
         candidate_val_ids = train_ids[val_mask]
         candidate_train_ids = train_ids[~val_mask]
-        val_labels = phase1.y[candidate_val_ids]
+        val_labels = graph.y[candidate_val_ids]
         if candidate_val_ids.size == 0 or candidate_train_ids.size == 0:
             continue
         if np.any(val_labels == 0) and np.any(val_labels == 1):
@@ -985,38 +1035,54 @@ def build_recommended_split(
             "Recommended split is not time-aware enough: validation median is not later."
         )
 
-    np.save(outdir / "phase1_time_train_ids.npy", split_train_ids)
-    np.save(outdir / "phase1_time_val_ids.npy", split_val_ids)
+    np.save(outdir / "train_ids.npy", split_train_ids)
+    np.save(outdir / "val_ids.npy", split_val_ids)
 
     split_summary: dict[str, Any] = {
-        "phase1_time_split": {
+        "split_style": str(ACTIVE_DATASET_SPEC.split_style),
+        "train_phase": train_artifact,
+        "val_phase": val_artifact,
+        "external_phase": split_external_artifact(),
+        "threshold_day": int(split_threshold),
+        "train_split": {
             "threshold_day": int(split_threshold),
-            "train_size": int(split_train_ids.size),
-            "val_size": int(split_val_ids.size),
-            "train_positive_count": int(np.sum(phase1.y[split_train_ids] == 1)),
-            "val_positive_count": int(np.sum(phase1.y[split_val_ids] == 1)),
-            "train_positive_rate": float(np.mean(phase1.y[split_train_ids] == 1)),
-            "val_positive_rate": float(np.mean(phase1.y[split_val_ids] == 1)),
-            "train_first_active_median": train_first_median,
-            "val_first_active_median": val_first_median,
-            "train_id_path": "phase1_time_train_ids.npy",
-            "val_id_path": "phase1_time_val_ids.npy",
-        }
+            "size": int(split_train_ids.size),
+            "positive_count": int(np.sum(graph.y[split_train_ids] == 1)),
+            "positive_rate": float(np.mean(graph.y[split_train_ids] == 1)),
+            "first_active_median": train_first_median,
+            "id_path": "train_ids.npy",
+        },
+        "val_split": {
+            "threshold_day": int(split_threshold),
+            "size": int(split_val_ids.size),
+            "positive_count": int(np.sum(graph.y[split_val_ids] == 1)),
+            "positive_rate": float(np.mean(graph.y[split_val_ids] == 1)),
+            "first_active_median": val_first_median,
+            "id_path": "val_ids.npy",
+        },
     }
 
-    try:
-        phase2 = load_phase("phase2")
-    except FileNotFoundError:
-        phase2 = None
-
-    if phase2 is not None:
-        np.save(outdir / "phase2_external_eval_ids.npy", phase2.train_mask)
-        split_summary["phase2_external_eval"] = {
-            "size": int(phase2.train_mask.size),
-            "positive_count": int(np.sum(phase2.y[phase2.train_mask] == 1)),
-            "positive_rate": float(np.mean(phase2.y[phase2.train_mask] == 1)),
-            "id_path": "phase2_external_eval_ids.npy",
+    if graph.test_mask.size:
+        np.save(outdir / "unlabeled_ids.npy", graph.test_mask)
+        split_summary["unlabeled_pool"] = {
+            "size": int(graph.test_mask.size),
+            "id_path": "unlabeled_ids.npy",
         }
+
+    external_artifact = split_external_artifact()
+    if external_artifact:
+        try:
+            phase2 = load_phase(external_artifact)
+        except FileNotFoundError:
+            phase2 = None
+        if phase2 is not None:
+            np.save(outdir / "external_eval_ids.npy", phase2.train_mask)
+            split_summary["external_eval"] = {
+                "size": int(phase2.train_mask.size),
+                "positive_count": int(np.sum(phase2.y[phase2.train_mask] == 1)),
+                "positive_rate": float(np.mean(phase2.y[phase2.train_mask] == 1)),
+                "id_path": "external_eval_ids.npy",
+            }
 
     write_json(outdir / "recommended_split.json", split_summary)
     return split_summary
@@ -1041,7 +1107,7 @@ def run_eda(phases: list[str], analyses: list[str], outdir: Path) -> dict[str, A
             "dataset_path": str(data.path),
         }
         temporal_core = None
-        if "feature" in analyses or "temporal" in analyses or ("split" in analyses and phase == "phase1"):
+        if "feature" in analyses or "temporal" in analyses or ("split" in analyses and phase == split_train_artifact()):
             temporal_core = compute_temporal_core(data)
         if "overview" in analyses:
             phase_summary["overview"] = analyze_overview(data, outdir)
@@ -1053,7 +1119,7 @@ def run_eda(phases: list[str], analyses: list[str], outdir: Path) -> dict[str, A
             rows, compact = analyze_graph(data, outdir)
             graph_rows.extend(rows)
             phase_summary["graph"] = compact
-        if "temporal" in analyses or ("split" in analyses and phase == "phase1"):
+        if "temporal" in analyses or ("split" in analyses and phase == split_train_artifact()):
             if temporal_core is None:
                 temporal_core = compute_temporal_core(data)
             temporal_rows_phase, compact, temporal_core = analyze_temporal(
@@ -1072,7 +1138,7 @@ def run_eda(phases: list[str], analyses: list[str], outdir: Path) -> dict[str, A
     if temporal_rows:
         write_csv(outdir / "temporal_profile.csv", temporal_rows)
 
-    if "drift" in analyses:
+    if "drift" in analyses and ACTIVE_DATASET_SPEC.split_style == "two_phase":
         drift_rows, _ = analyze_drift(outdir)
         dataset_summary["drift"] = {
             "top_feature_drift": drift_rows[:5],
@@ -1082,7 +1148,7 @@ def run_eda(phases: list[str], analyses: list[str], outdir: Path) -> dict[str, A
 
     if "split" in analyses:
         split_summary = build_recommended_split(
-            outdir, temporal_core=phase_temporal_cache.get("phase1")
+            outdir, temporal_core=phase_temporal_cache.get(split_train_artifact())
         )
         dataset_summary["recommended_split"] = split_summary
 

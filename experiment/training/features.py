@@ -8,23 +8,80 @@ from typing import Any
 import numpy as np
 from tqdm.auto import tqdm
 
+from experiment.datasets.registry import get_active_dataset_spec
 from experiment.eda.analysis import compute_degree_arrays, compute_temporal_core
 from experiment.eda.data_loader import PhaseData, load_phase
 from experiment.training.common import FEATURE_OUTPUT_ROOT, REPO_ROOT, ensure_dir, write_json
 
-# 特征数
+# Default schema for the original XinYe dataset. These values are updated at runtime
+# when a different dataset is converted into the shared phase contract.
 RAW_FEATURE_COUNT = 17
-# 边类型数
 NUM_EDGE_TYPES = 11
 # 时间窗口
 NUM_TIME_WINDOWS = 4
-STRONG_PAIRS = ((2, 3), (6, 8), (15, 16))
+DEFAULT_STRONG_PAIRS = ((2, 3), (6, 8), (15, 16))
 TEMPORAL_RECENT_WINDOWS = (14, 60)
 TEMPORAL_RELATION_RECENT_WINDOW = 30
 ACTIVATION_EARLY_WINDOWS = (7, 30)
 ACTIVATION_RELATION_WINDOW = 30
 GRAPH_RECENT_WINDOWS = (3, 7, 14, 30)
 TEMPORAL_BUCKET_DAYS = 30
+TEMPORAL_MOTIF_RECENT_DAYS = 14
+TEMPORAL_MOTIF_BURST_DAYS = 7
+TEMPORAL_ADAPTIVE_WINDOWS = (3, 7, 14, 30, 60, 90)
+TEMPORAL_ADAPTIVE_CONTRAST_WINDOWS = (7, 60)
+ACTIVE_FEATURE_STRONG_PAIRS = tuple(get_active_dataset_spec().strong_pairs)
+BACKGROUND_LABELS = tuple(get_active_dataset_spec().background_labels)
+
+
+def _set_feature_schema(
+    raw_feature_count: int,
+    num_edge_types: int,
+    strong_pairs: tuple[tuple[int, int], ...] | list[tuple[int, int]] | None = None,
+    background_labels: tuple[int, ...] | list[int] | None = None,
+) -> None:
+    global RAW_FEATURE_COUNT, NUM_EDGE_TYPES, ACTIVE_FEATURE_STRONG_PAIRS, BACKGROUND_LABELS
+    RAW_FEATURE_COUNT = max(int(raw_feature_count), 1)
+    NUM_EDGE_TYPES = max(int(num_edge_types), 1)
+    ACTIVE_FEATURE_STRONG_PAIRS = tuple(
+        (int(left), int(right))
+        for left, right in (strong_pairs or ())
+    )
+    BACKGROUND_LABELS = tuple(
+        sorted(
+            {
+                int(label)
+                for label in (background_labels or ())
+                if int(label) not in {-100, 0, 1}
+            }
+        )
+    )
+
+
+def _active_background_labels() -> tuple[int, ...]:
+    return BACKGROUND_LABELS
+
+
+def _aux_label_prefix(label: int) -> str:
+    return f"aux_label_{int(label)}"
+
+
+def _feature_schema_payload() -> dict[str, Any]:
+    return {
+        "raw_feature_count": int(RAW_FEATURE_COUNT),
+        "num_edge_types": int(NUM_EDGE_TYPES),
+        "background_labels": [int(label) for label in _active_background_labels()],
+        "strong_pairs": [[int(left), int(right)] for left, right in ACTIVE_FEATURE_STRONG_PAIRS],
+        "num_time_windows": int(NUM_TIME_WINDOWS),
+    }
+
+
+def _active_strong_pairs(raw_feature_count: int) -> list[tuple[int, int]]:
+    return [
+        (left, right)
+        for left, right in ACTIVE_FEATURE_STRONG_PAIRS
+        if left < int(raw_feature_count) and right < int(raw_feature_count)
+    ]
 
 
 @dataclass(frozen=True)
@@ -200,6 +257,7 @@ def _assign_node_time_bucket(
 
 
 def _group_definition() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    active_pairs = _active_strong_pairs(RAW_FEATURE_COUNT)
     core_groups: dict[str, list[str]] = {
         "raw_x": [f"x{i}" for i in range(RAW_FEATURE_COUNT)],
         "missing_mask": [f"x{i}_is_neg1" for i in range(RAW_FEATURE_COUNT)],
@@ -247,6 +305,34 @@ def _group_definition() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
             "gtd_out_last30_ratio_z",
             "gtd_in_last30_ratio_z",
         ],
+        "temporal_motif_lite": [
+            f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_recip_out_unique",
+            f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_recip_in_unique",
+            f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_recip_out_ratio",
+            f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_recip_in_ratio",
+            f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_repeat_out_ratio",
+            f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_repeat_in_ratio",
+            f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_neighbor_totaldeg_out_mean",
+            f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_neighbor_totaldeg_in_mean",
+            f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_neighbor_totaldeg_out_logsum",
+            f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_neighbor_totaldeg_in_logsum",
+            f"tm{TEMPORAL_MOTIF_BURST_DAYS}_out_burst_maxday",
+            f"tm{TEMPORAL_MOTIF_BURST_DAYS}_in_burst_maxday",
+        ],
+        "temporal_adaptive_window": [
+            "taw_out_count_peak_z",
+            "taw_in_count_peak_z",
+            "taw_total_count_peak_z",
+            "taw_out_ratio_peak_z",
+            "taw_in_ratio_peak_z",
+            "taw_total_ratio_peak_z",
+            f"taw_out_density_{TEMPORAL_ADAPTIVE_CONTRAST_WINDOWS[0]}_over_{TEMPORAL_ADAPTIVE_CONTRAST_WINDOWS[1]}_z",
+            f"taw_in_density_{TEMPORAL_ADAPTIVE_CONTRAST_WINDOWS[0]}_over_{TEMPORAL_ADAPTIVE_CONTRAST_WINDOWS[1]}_z",
+            f"taw_total_density_{TEMPORAL_ADAPTIVE_CONTRAST_WINDOWS[0]}_over_{TEMPORAL_ADAPTIVE_CONTRAST_WINDOWS[1]}_z",
+            "taw_out_peak_window",
+            "taw_in_peak_window",
+            "taw_total_peak_window",
+        ],
         "neighbor_similarity": [
             "out_cosine_sum",
             "in_cosine_sum",
@@ -276,7 +362,7 @@ def _group_definition() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
         "temporal_neighbor": [],
         "activation_early": [],
     }
-    for left, right in STRONG_PAIRS:
+    for left, right in active_pairs:
         core_groups["strong_combo"].extend(
             [
                 f"x{left}_x{right}_mean",
@@ -314,16 +400,17 @@ def _group_definition() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
                 f"in_last{recent_days}_ratio_v2",
             ]
         )
-    for bg_label in (2, 3):
+    for bg_label in _active_background_labels():
+        prefix = _aux_label_prefix(bg_label)
         core_groups["graph_stats"].extend(
             [
-                f"bg{bg_label}_out_count",
-                f"bg{bg_label}_in_count",
-                f"bg{bg_label}_total_count",
-                f"bg{bg_label}_out_ratio",
-                f"bg{bg_label}_in_ratio",
-                f"bg{bg_label}_out_last14",
-                f"bg{bg_label}_in_last14",
+                f"{prefix}_out_count",
+                f"{prefix}_in_count",
+                f"{prefix}_total_count",
+                f"{prefix}_out_ratio",
+                f"{prefix}_in_ratio",
+                f"{prefix}_out_last14",
+                f"{prefix}_in_last14",
             ]
         )
     for feature_idx in range(RAW_FEATURE_COUNT):
@@ -498,8 +585,8 @@ def _feature_normalization_type(feature_name: str) -> str:
     if feature_name.startswith("out_last") or feature_name.startswith("in_last"):
         if "_ratio_" not in feature_name and not feature_name.endswith("_ratio"):
             return "log"
-    if feature_name.startswith(("bg2_", "bg3_")):
-        if feature_name.endswith("_count") or feature_name.endswith("_total_count") or feature_name.endswith("_last14"):
+    if feature_name.startswith("aux_label_"):
+        if feature_name.endswith("_count") or feature_name.endswith("_last14"):
             return "log"
     if (
         feature_name.startswith("recent_")
@@ -586,7 +673,8 @@ def _build_temporal_bucket_norm_feature_block(
     bg_total_ratio = _safe_ratio(bg_total_count, total_degree_f)
 
     blocks: list[np.ndarray] = []
-    for feature_idx in range(RAW_FEATURE_COUNT):
+    raw_feature_count = int(x.shape[1])
+    for feature_idx in range(raw_feature_count):
         observed_mask = missing_mask[:, feature_idx] < 0.5
         blocks.append(
             _bucketwise_zscore(
@@ -646,7 +734,8 @@ def _build_temporal_safe_feature_blocks(
 
     snapshot_blocks = np.zeros((num_nodes, 13), dtype=np.float32)
     recent_blocks = np.zeros((num_nodes, len(TEMPORAL_RECENT_WINDOWS) * 8), dtype=np.float32)
-    relation_blocks = np.zeros((num_nodes, NUM_EDGE_TYPES * 2), dtype=np.float32)
+    num_edge_types = max(int(np.max(edge_type)), 1)
+    relation_blocks = np.zeros((num_nodes, num_edge_types * 2), dtype=np.float32)
 
     for bucket_idx, window in enumerate(time_windows):
         bucket_mask = node_time_bucket == bucket_idx
@@ -737,7 +826,7 @@ def _build_temporal_safe_feature_blocks(
         relation_dst = dst[relation_edge_mask]
         relation_type = edge_type[relation_edge_mask]
         relation_columns: list[np.ndarray] = []
-        for current_type in range(1, NUM_EDGE_TYPES + 1):
+        for current_type in range(1, num_edge_types + 1):
             type_mask = relation_type == current_type
             relation_columns.extend(
                 [
@@ -815,7 +904,8 @@ def _build_activation_early_feature_block(
     in_relation_mask = (edge_timestamp >= first_active[dst]) & (
         edge_timestamp <= first_active[dst] + relation_window - 1
     )
-    for current_type in range(1, NUM_EDGE_TYPES + 1):
+    num_edge_types = max(int(np.max(edge_type)), 1)
+    for current_type in range(1, num_edge_types + 1):
         typed_out_mask = out_relation_mask & (edge_type == current_type)
         typed_in_mask = in_relation_mask & (edge_type == current_type)
         columns.extend(
@@ -839,7 +929,8 @@ def _build_temporal_neighbor_feature_block(
     edge_timestamp = np.asarray(data.edge_timestamp, dtype=np.int32)
     src = np.asarray(data.edge_index[:, 0], dtype=np.int32)
     dst = np.asarray(data.edge_index[:, 1], dtype=np.int32)
-    block = np.zeros((num_nodes, RAW_FEATURE_COUNT * 2 * 3), dtype=np.float32)
+    raw_feature_count = int(x.shape[1])
+    block = np.zeros((num_nodes, raw_feature_count * 2 * 3), dtype=np.float32)
 
     for bucket_idx, window in enumerate(time_windows):
         bucket_mask = node_time_bucket == bucket_idx
@@ -857,7 +948,7 @@ def _build_temporal_neighbor_feature_block(
 
         col = 0
         for reducer in ("mean", "max", "missing_ratio"):
-            for feature_idx in range(RAW_FEATURE_COUNT):
+            for feature_idx in range(raw_feature_count):
                 values = x[:, feature_idx] if reducer != "missing_ratio" else missing_mask[:, feature_idx]
                 in_center_values = values[snap_src]
                 out_center_values = values[snap_dst]
@@ -946,9 +1037,9 @@ def _build_graph_stats_feature_block(
             ]
         )
 
-    labels = np.asarray(data.y, dtype=np.int8)
+    labels = np.asarray(data.y, dtype=np.int32)
     recent14_mask = edge_timestamp > (max_day - 14)
-    for bg_label in (2, 3):
+    for bg_label in _active_background_labels():
         bg_out_neighbor = labels[dst] == bg_label
         bg_in_neighbor = labels[src] == bg_label
         bg_out_count = np.bincount(src[bg_out_neighbor], minlength=num_nodes).astype(np.float32, copy=False)
@@ -1038,6 +1129,276 @@ def _build_graph_time_detrend_feature_block(
     return np.column_stack(columns).astype(np.float32, copy=False)
 
 
+def _update_peak_feature(
+    peak_values: np.ndarray,
+    candidate: np.ndarray,
+    window_idx: int,
+    peak_window: np.ndarray | None = None,
+) -> None:
+    better_mask = np.asarray(candidate, dtype=np.float32) > peak_values
+    peak_values[better_mask] = candidate[better_mask]
+    if peak_window is not None:
+        peak_window[better_mask] = float(window_idx)
+
+
+def _build_temporal_adaptive_window_feature_block(
+    data: PhaseData,
+    indegree: np.ndarray,
+    outdegree: np.ndarray,
+    first_active: np.ndarray,
+) -> np.ndarray:
+    num_nodes = data.num_nodes
+    max_day = int(np.max(data.edge_timestamp))
+    src = np.asarray(data.edge_index[:, 0], dtype=np.int32)
+    dst = np.asarray(data.edge_index[:, 1], dtype=np.int32)
+    edge_timestamp = np.asarray(data.edge_timestamp, dtype=np.int32)
+
+    outdegree_f = np.asarray(outdegree, dtype=np.float32)
+    indegree_f = np.asarray(indegree, dtype=np.float32)
+    total_degree_f = (outdegree_f + indegree_f).astype(np.float32, copy=False)
+    out_valid = outdegree_f > 0
+    in_valid = indegree_f > 0
+    total_valid = total_degree_f > 0
+
+    bucket_ids = np.maximum((np.asarray(first_active, dtype=np.int32) - 1) // TEMPORAL_BUCKET_DAYS, 0)
+    num_buckets = int(bucket_ids.max()) + 1 if bucket_ids.size else 1
+
+    out_count_peak_z = np.full(num_nodes, -np.inf, dtype=np.float32)
+    in_count_peak_z = np.full(num_nodes, -np.inf, dtype=np.float32)
+    total_count_peak_z = np.full(num_nodes, -np.inf, dtype=np.float32)
+    out_ratio_peak_z = np.full(num_nodes, -np.inf, dtype=np.float32)
+    in_ratio_peak_z = np.full(num_nodes, -np.inf, dtype=np.float32)
+    total_ratio_peak_z = np.full(num_nodes, -np.inf, dtype=np.float32)
+    out_peak_window = np.zeros(num_nodes, dtype=np.float32)
+    in_peak_window = np.zeros(num_nodes, dtype=np.float32)
+    total_peak_window = np.zeros(num_nodes, dtype=np.float32)
+
+    short_window, long_window = TEMPORAL_ADAPTIVE_CONTRAST_WINDOWS
+    short_out = short_in = short_total = None
+    long_out = long_in = long_total = None
+
+    for window_idx, recent_days in enumerate(TEMPORAL_ADAPTIVE_WINDOWS):
+        recent_mask = edge_timestamp > (max_day - int(recent_days))
+        out_count = np.bincount(src[recent_mask], minlength=num_nodes).astype(np.float32, copy=False)
+        in_count = np.bincount(dst[recent_mask], minlength=num_nodes).astype(np.float32, copy=False)
+        total_count = (out_count + in_count).astype(np.float32, copy=False)
+
+        _update_peak_feature(
+            out_count_peak_z,
+            _bucketwise_zscore(out_count, bucket_ids=bucket_ids, num_buckets=num_buckets),
+            window_idx,
+            peak_window=out_peak_window,
+        )
+        _update_peak_feature(
+            in_count_peak_z,
+            _bucketwise_zscore(in_count, bucket_ids=bucket_ids, num_buckets=num_buckets),
+            window_idx,
+            peak_window=in_peak_window,
+        )
+        _update_peak_feature(
+            total_count_peak_z,
+            _bucketwise_zscore(total_count, bucket_ids=bucket_ids, num_buckets=num_buckets),
+            window_idx,
+            peak_window=total_peak_window,
+        )
+
+        _update_peak_feature(
+            out_ratio_peak_z,
+            _bucketwise_zscore(
+                _safe_ratio(out_count, outdegree_f),
+                bucket_ids=bucket_ids,
+                num_buckets=num_buckets,
+                valid_mask=out_valid,
+            ),
+            window_idx,
+        )
+        _update_peak_feature(
+            in_ratio_peak_z,
+            _bucketwise_zscore(
+                _safe_ratio(in_count, indegree_f),
+                bucket_ids=bucket_ids,
+                num_buckets=num_buckets,
+                valid_mask=in_valid,
+            ),
+            window_idx,
+        )
+        _update_peak_feature(
+            total_ratio_peak_z,
+            _bucketwise_zscore(
+                _safe_ratio(total_count, total_degree_f),
+                bucket_ids=bucket_ids,
+                num_buckets=num_buckets,
+                valid_mask=total_valid,
+            ),
+            window_idx,
+        )
+
+        if recent_days == short_window:
+            short_out = out_count
+            short_in = in_count
+            short_total = total_count
+        if recent_days == long_window:
+            long_out = out_count
+            long_in = in_count
+            long_total = total_count
+
+    if short_out is None or short_in is None or short_total is None:
+        raise AssertionError("Missing short-window counts for temporal adaptive features.")
+    if long_out is None or long_in is None or long_total is None:
+        raise AssertionError("Missing long-window counts for temporal adaptive features.")
+
+    short_out_density = short_out / float(short_window)
+    short_in_density = short_in / float(short_window)
+    short_total_density = short_total / float(short_window)
+    long_out_density = long_out / float(long_window)
+    long_in_density = long_in / float(long_window)
+    long_total_density = long_total / float(long_window)
+    peak_window_scale = float(max(len(TEMPORAL_ADAPTIVE_WINDOWS) - 1, 1))
+
+    return np.column_stack(
+        [
+            out_count_peak_z,
+            in_count_peak_z,
+            total_count_peak_z,
+            out_ratio_peak_z,
+            in_ratio_peak_z,
+            total_ratio_peak_z,
+            _bucketwise_zscore(
+                np.log1p(short_out_density) - np.log1p(long_out_density),
+                bucket_ids=bucket_ids,
+                num_buckets=num_buckets,
+                valid_mask=out_valid,
+            ),
+            _bucketwise_zscore(
+                np.log1p(short_in_density) - np.log1p(long_in_density),
+                bucket_ids=bucket_ids,
+                num_buckets=num_buckets,
+                valid_mask=in_valid,
+            ),
+            _bucketwise_zscore(
+                np.log1p(short_total_density) - np.log1p(long_total_density),
+                bucket_ids=bucket_ids,
+                num_buckets=num_buckets,
+                valid_mask=total_valid,
+            ),
+            out_peak_window / peak_window_scale,
+            in_peak_window / peak_window_scale,
+            total_peak_window / peak_window_scale,
+        ]
+    ).astype(np.float32, copy=False)
+
+
+def _max_daily_burst_feature(
+    centers: np.ndarray,
+    timestamps: np.ndarray,
+    num_nodes: int,
+) -> np.ndarray:
+    if centers.size == 0:
+        return np.zeros(num_nodes, dtype=np.float32)
+    max_day = int(np.max(timestamps)) + 1
+    key = centers.astype(np.int64, copy=False) * np.int64(max_day) + timestamps.astype(np.int64, copy=False)
+    order = np.argsort(key, kind="stable")
+    key_sorted = key[order]
+    centers_sorted = centers[order]
+    _, first_idx, counts = np.unique(key_sorted, return_index=True, return_counts=True)
+    burst = np.zeros(num_nodes, dtype=np.float32)
+    np.maximum.at(
+        burst,
+        centers_sorted[first_idx],
+        counts.astype(np.float32, copy=False),
+    )
+    return burst
+
+
+def _build_temporal_motif_lite_feature_block(
+    data: PhaseData,
+    indegree: np.ndarray,
+    outdegree: np.ndarray,
+) -> np.ndarray:
+    num_nodes = data.num_nodes
+    max_day = int(np.max(data.edge_timestamp))
+    src = np.asarray(data.edge_index[:, 0], dtype=np.int32)
+    dst = np.asarray(data.edge_index[:, 1], dtype=np.int32)
+    edge_timestamp = np.asarray(data.edge_timestamp, dtype=np.int32)
+    outdegree_f = np.asarray(outdegree, dtype=np.float32)
+    indegree_f = np.asarray(indegree, dtype=np.float32)
+    total_degree = (outdegree_f + indegree_f).astype(np.float32, copy=False)
+
+    recent_mask = edge_timestamp > (max_day - TEMPORAL_MOTIF_RECENT_DAYS)
+    recent_src = src[recent_mask]
+    recent_dst = dst[recent_mask]
+    recent_ts = edge_timestamp[recent_mask]
+    recent_out = np.bincount(recent_src, minlength=num_nodes).astype(np.float32, copy=False)
+    recent_in = np.bincount(recent_dst, minlength=num_nodes).astype(np.float32, copy=False)
+
+    if recent_src.size == 0:
+        return np.zeros((num_nodes, 12), dtype=np.float32)
+
+    recent_pair_code = (
+        recent_src.astype(np.int64, copy=False) * np.int64(num_nodes)
+        + recent_dst.astype(np.int64, copy=False)
+    )
+    unique_pair_code = np.unique(recent_pair_code)
+    pair_src = (unique_pair_code // np.int64(num_nodes)).astype(np.int32, copy=False)
+    pair_dst = (unique_pair_code % np.int64(num_nodes)).astype(np.int32, copy=False)
+    reverse_code = (
+        pair_dst.astype(np.int64, copy=False) * np.int64(num_nodes)
+        + pair_src.astype(np.int64, copy=False)
+    )
+    reciprocal_mask = np.isin(reverse_code, unique_pair_code)
+    recip_out_unique = np.bincount(pair_src[reciprocal_mask], minlength=num_nodes).astype(np.float32, copy=False)
+    recip_in_unique = np.bincount(pair_dst[reciprocal_mask], minlength=num_nodes).astype(np.float32, copy=False)
+    unique_out_recent = np.bincount(pair_src, minlength=num_nodes).astype(np.float32, copy=False)
+    unique_in_recent = np.bincount(pair_dst, minlength=num_nodes).astype(np.float32, copy=False)
+
+    repeat_out_ratio = 1.0 - _safe_ratio(unique_out_recent, recent_out)
+    repeat_in_ratio = 1.0 - _safe_ratio(unique_in_recent, recent_in)
+    recip_out_ratio = _safe_ratio(recip_out_unique, unique_out_recent)
+    recip_in_ratio = _safe_ratio(recip_in_unique, unique_in_recent)
+
+    recent_out_neighbor_deg_logsum = np.bincount(
+        recent_src,
+        weights=np.log1p(total_degree[recent_dst]).astype(np.float32, copy=False),
+        minlength=num_nodes,
+    ).astype(np.float32, copy=False)
+    recent_in_neighbor_deg_logsum = np.bincount(
+        recent_dst,
+        weights=np.log1p(total_degree[recent_src]).astype(np.float32, copy=False),
+        minlength=num_nodes,
+    ).astype(np.float32, copy=False)
+    recent_out_neighbor_deg_sum = np.bincount(
+        recent_src,
+        weights=total_degree[recent_dst].astype(np.float32, copy=False),
+        minlength=num_nodes,
+    ).astype(np.float32, copy=False)
+    recent_in_neighbor_deg_sum = np.bincount(
+        recent_dst,
+        weights=total_degree[recent_src].astype(np.float32, copy=False),
+        minlength=num_nodes,
+    ).astype(np.float32, copy=False)
+
+    burst_mask = recent_ts > (max_day - TEMPORAL_MOTIF_BURST_DAYS)
+    out_burst_maxday = _max_daily_burst_feature(recent_src[burst_mask], recent_ts[burst_mask], num_nodes)
+    in_burst_maxday = _max_daily_burst_feature(recent_dst[burst_mask], recent_ts[burst_mask], num_nodes)
+
+    return np.column_stack(
+        [
+            recip_out_unique,
+            recip_in_unique,
+            recip_out_ratio,
+            recip_in_ratio,
+            repeat_out_ratio.astype(np.float32, copy=False),
+            repeat_in_ratio.astype(np.float32, copy=False),
+            recent_out_neighbor_deg_sum / np.maximum(recent_out, 1.0),
+            recent_in_neighbor_deg_sum / np.maximum(recent_in, 1.0),
+            recent_out_neighbor_deg_logsum,
+            recent_in_neighbor_deg_logsum,
+            out_burst_maxday,
+            in_burst_maxday,
+        ]
+    ).astype(np.float32, copy=False)
+
+
 def _build_neighbor_similarity_feature_block(
     x: np.ndarray,
     missing_mask: np.ndarray,
@@ -1047,7 +1408,8 @@ def _build_neighbor_similarity_feature_block(
     outdegree: np.ndarray,
 ) -> np.ndarray:
     num_nodes = x.shape[0]
-    filled = np.where(missing_mask > 0.0, 0.0, x).astype(np.float32, copy=False)
+    invalid_mask = (missing_mask > 0.0) | (~np.isfinite(x))
+    filled = np.where(invalid_mask, 0.0, x).astype(np.float32, copy=False)
     node_norm = np.sqrt(np.sum(filled * filled, axis=1, dtype=np.float32)).astype(np.float32, copy=False)
     dot = np.zeros(src.shape[0], dtype=np.float32)
     for feature_idx in range(filled.shape[1]):
@@ -1216,7 +1578,7 @@ def _build_neighbor_features(
 
     col = 0
     with tqdm(
-        total=3 * RAW_FEATURE_COUNT,
+        total=3 * int(x.shape[1]),
         desc=f"neighbor_features:{phase_dir.name}",
         unit="feat",
         dynamic_ncols=True,
@@ -1224,7 +1586,8 @@ def _build_neighbor_features(
     ) as neighbor_pbar:
         for reducer in ("mean", "max", "missing_ratio"):
             neighbor_pbar.set_postfix(reducer=reducer, refresh=False)
-            for feature_idx in range(RAW_FEATURE_COUNT):
+            raw_feature_count = int(x.shape[1])
+            for feature_idx in range(raw_feature_count):
                 values = x[:, feature_idx] if reducer != "missing_ratio" else missing_mask[:, feature_idx]
                 in_center_values = values[src]
                 out_center_values = values[dst]
@@ -1239,10 +1602,10 @@ def _build_neighbor_features(
                     in_result[indegree == 0] = 0.0
                     out_result[outdegree == 0] = 0.0
                 matrix[:, col] = in_result
-                matrix[:, col + RAW_FEATURE_COUNT] = out_result
+                matrix[:, col + raw_feature_count] = out_result
                 col += 1
                 neighbor_pbar.update(1)
-            col += RAW_FEATURE_COUNT
+            col += raw_feature_count
     del matrix
     return neighbor_path.name, neighbor_spans
 
@@ -1251,7 +1614,7 @@ def build_phase_feature_artifacts(
     phase: str,
     outdir: Path = FEATURE_OUTPUT_ROOT,
     build_neighbor: bool = True,
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
     with tqdm(
         total=13,
         desc=f"build_features:{phase}",
@@ -1259,6 +1622,15 @@ def build_phase_feature_artifacts(
         dynamic_ncols=True,
     ) as phase_pbar:
         data = load_phase(phase, repo_root=REPO_ROOT)
+        dataset_spec = get_active_dataset_spec()
+        raw_feature_count = int(data.x.shape[1])
+        num_edge_types = int(np.max(data.edge_type)) if data.edge_type.size else 1
+        _set_feature_schema(
+            raw_feature_count=raw_feature_count,
+            num_edge_types=num_edge_types,
+            strong_pairs=dataset_spec.strong_pairs,
+            background_labels=dataset_spec.background_labels,
+        )
         phase_dir = ensure_dir(outdir / phase)
         core_groups, _ = _group_definition()
         core_spans = _allocate_group_spans(core_groups)
@@ -1272,8 +1644,22 @@ def build_phase_feature_artifacts(
         )
         phase_pbar.set_postfix(nodes=data.num_nodes, edges=data.num_edges, refresh=False)
         phase_pbar.update(1)
+        existing_manifest_path = phase_dir / "feature_manifest.json"
+        preserved_neighbor_file = None
+        preserved_neighbor_spans: dict[str, dict[str, Any]] = {}
+        if not build_neighbor and existing_manifest_path.exists():
+            existing_manifest = json.loads(existing_manifest_path.read_text(encoding="utf-8"))
+            candidate_neighbor_file = existing_manifest.get("neighbor_file")
+            candidate_neighbor_spans = existing_manifest.get("neighbor_groups", {})
+            if candidate_neighbor_file and (phase_dir / candidate_neighbor_file).exists():
+                # Allow fast core-only rebuilds without invalidating the existing neighbor cache.
+                preserved_neighbor_file = str(candidate_neighbor_file)
+                preserved_neighbor_spans = dict(candidate_neighbor_spans)
 
-        x = np.asarray(data.x, dtype=np.float32)
+        x = np.asarray(data.x, dtype=np.float32).copy()
+        nonfinite_mask = ~np.isfinite(x)
+        if np.any(nonfinite_mask):
+            x[nonfinite_mask] = -1.0
         missing_mask = (x == -1).astype(np.float32, copy=False)
         indegree, outdegree, total_degree = compute_degree_arrays(data)
         temporal = compute_temporal_core(data)
@@ -1286,20 +1672,20 @@ def build_phase_feature_artifacts(
 
         src = data.edge_index[:, 0]
         dst = data.edge_index[:, 1]
-        background_mask = np.isin(data.y, (2, 3))
+        background_mask = np.isin(data.y, _active_background_labels())
 
         col = 0
-        core[:, col : col + RAW_FEATURE_COUNT] = x
-        col += RAW_FEATURE_COUNT
+        core[:, col : col + raw_feature_count] = x
+        col += raw_feature_count
 
-        core[:, col : col + RAW_FEATURE_COUNT] = missing_mask
-        col += RAW_FEATURE_COUNT
+        core[:, col : col + raw_feature_count] = missing_mask
+        col += raw_feature_count
 
         core[:, col] = np.sum(missing_mask, axis=1, dtype=np.float32)
         col += 1
         phase_pbar.update(1)
 
-        for left, right in STRONG_PAIRS:
+        for left, right in _active_strong_pairs(raw_feature_count):
             core[:, col] = (x[:, left] + x[:, right]) / 2.0
             core[:, col + 1] = np.abs(x[:, left] - x[:, right])
             col += 2
@@ -1315,7 +1701,7 @@ def build_phase_feature_artifacts(
         col += 5
         phase_pbar.update(1)
 
-        for edge_type in range(1, NUM_EDGE_TYPES + 1):
+        for edge_type in range(1, num_edge_types + 1):
             mask_t = data.edge_type == edge_type
             core[:, col] = np.bincount(dst[mask_t], minlength=data.num_nodes).astype(np.float32, copy=False)
             core[:, col + 1] = np.bincount(src[mask_t], minlength=data.num_nodes).astype(np.float32, copy=False)
@@ -1337,7 +1723,7 @@ def build_phase_feature_artifacts(
         col += 7
         phase_pbar.update(1)
 
-        for edge_type in range(1, NUM_EDGE_TYPES + 1):
+        for edge_type in range(1, num_edge_types + 1):
             mask_t = data.edge_type == edge_type
             mask_bg_in = mask_t & bg_in_mask
             mask_bg_out = mask_t & bg_out_mask
@@ -1369,8 +1755,12 @@ def build_phase_feature_artifacts(
             core[:, col + 1] = out_count
             core[:, col + 2] = total_count
             col += 3
-        early_total = window_total_counts[0] + window_total_counts[1]
-        late_total = window_total_counts[2] + window_total_counts[3]
+        split_idx = max(len(window_total_counts) // 2, 1)
+        early_total = np.sum(np.stack(window_total_counts[:split_idx], axis=0), axis=0)
+        if split_idx < len(window_total_counts):
+            late_total = np.sum(np.stack(window_total_counts[split_idx:], axis=0), axis=0)
+        else:
+            late_total = np.zeros_like(early_total)
         core[:, col] = (early_total + 1.0) / (late_total + 1.0)
         col += 1
         phase_pbar.update(1)
@@ -1391,6 +1781,23 @@ def build_phase_feature_artifacts(
         )
         core[:, col : col + graph_time_detrend_block.shape[1]] = graph_time_detrend_block
         col += graph_time_detrend_block.shape[1]
+
+        temporal_motif_lite_block = _build_temporal_motif_lite_feature_block(
+            data=data,
+            indegree=indegree,
+            outdegree=outdegree,
+        )
+        core[:, col : col + temporal_motif_lite_block.shape[1]] = temporal_motif_lite_block
+        col += temporal_motif_lite_block.shape[1]
+
+        temporal_adaptive_window_block = _build_temporal_adaptive_window_feature_block(
+            data=data,
+            indegree=indegree,
+            outdegree=outdegree,
+            first_active=first_active,
+        )
+        core[:, col : col + temporal_adaptive_window_block.shape[1]] = temporal_adaptive_window_block
+        col += temporal_adaptive_window_block.shape[1]
 
         neighbor_similarity_block = _build_neighbor_similarity_feature_block(
             x=x,
@@ -1453,8 +1860,8 @@ def build_phase_feature_artifacts(
         del core
         phase_pbar.update(1)
 
-        neighbor_file = None
-        neighbor_spans: dict[str, dict[str, Any]] = {}
+        neighbor_file = preserved_neighbor_file
+        neighbor_spans: dict[str, dict[str, Any]] = preserved_neighbor_spans
         if build_neighbor:
             neighbor_file, neighbor_spans = _build_neighbor_features(
                 data=data,
@@ -1511,11 +1918,12 @@ def build_phase_feature_artifacts(
                 "files": graph_meta,
                 "first_active_file": first_active_file.name,
                 "node_time_bucket_file": node_time_bucket_file.name,
-                "num_edge_types": NUM_EDGE_TYPES,
-                "num_relations": NUM_EDGE_TYPES * 2,
+                "num_edge_types": num_edge_types,
+                "num_relations": num_edge_types * 2,
                 "max_day": int(data.edge_timestamp.max()),
                 "time_windows": time_windows,
             },
+            "feature_schema": _feature_schema_payload(),
         }
         write_json(phase_dir / "feature_manifest.json", manifest)
         phase_pbar.update(1)

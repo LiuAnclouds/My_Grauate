@@ -29,7 +29,27 @@ from experiment.training.features import (
     HybridFeatureNormalizerState,
     default_feature_groups,
 )
-from experiment.training.prototype_memory import PrototypeMemoryBank, PrototypeMemoryConfig
+from experiment.training.prototype_memory import (
+    PrototypeMemoryBank,
+    PrototypeMemoryConfig,
+    TemporalNormalAlignmentBank,
+    TemporalNormalAlignmentConfig,
+)
+
+
+class _GradientReversal(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx: Any, input_tensor: torch.Tensor, scale: float) -> torch.Tensor:
+        ctx.scale = float(scale)
+        return input_tensor.view_as(input_tensor)
+
+    @staticmethod
+    def backward(ctx: Any, grad_output: torch.Tensor) -> tuple[torch.Tensor, None]:
+        return -ctx.scale * grad_output, None
+
+
+def _grad_reverse(input_tensor: torch.Tensor, scale: float = 1.0) -> torch.Tensor:
+    return _GradientReversal.apply(input_tensor, float(scale))
 
 
 @dataclass(frozen=True)
@@ -39,6 +59,10 @@ class GraphPhaseContext:
     graph_cache: GraphCache
     labels: np.ndarray
     target_context_store: FeatureStore | None = None
+    target_aux_features: np.ndarray | None = None
+    target_aux_feature_names: tuple[str, ...] | None = None
+    distill_targets: np.ndarray | None = None
+    distill_target_mask: np.ndarray | None = None
     known_label_codes: np.ndarray | None = None
     reference_day: int | None = None
     historical_background_ids: np.ndarray | None = None
@@ -87,6 +111,8 @@ class GraphModelConfig:
     primary_multiclass_num_classes: int = 0
     prototype_multiclass_num_classes: int = 0
     prototype_loss_weight: float = 0.0
+    prototype_loss_weight_schedule: str = "none"
+    prototype_loss_min_weight: float = 0.0
     prototype_temperature: float = 0.2
     prototype_momentum: float = 0.9
     prototype_start_epoch: int = 1
@@ -95,6 +121,29 @@ class GraphModelConfig:
     prototype_neighbor_blend: float = 0.0
     prototype_global_blend: float = 0.0
     prototype_consistency_weight: float = 0.0
+    prototype_separation_weight: float = 0.0
+    prototype_separation_margin: float = 0.1
+    normal_bucket_align_weight: float = 0.0
+    normal_bucket_shift_strength: float = 0.0
+    target_time_adapter_strength: float = 0.0
+    target_time_adapter_type: str = "affine"
+    target_time_adapter_num_experts: int = 4
+    teacher_distill_weight: float = 0.0
+    teacher_distill_loss: str = "bce"
+    teacher_distill_start_epoch: int = 1
+    teacher_distill_ramp_epochs: int = 0
+    teacher_distill_agreement_floor: float = 0.0
+    teacher_distill_rank_gap: float = 0.0
+    atm_gate_strength: float = 1.0
+    context_residual_scale: float = 1.0
+    context_residual_clip: float = 0.0
+    context_residual_budget: float = 0.0
+    context_residual_budget_weight: float = 0.0
+    context_residual_budget_schedule: str = "none"
+    context_residual_budget_min_weight: float = 0.0
+    context_residual_budget_release_epochs: int = 0
+    context_residual_budget_release_delay_epochs: int = 0
+    normal_bucket_adv_weight: float = 0.0
     include_historical_background_negatives: bool = False
     historical_background_negative_ratio: float = 0.25
     historical_background_negative_warmup_epochs: int = 0
@@ -145,6 +194,8 @@ class GraphModelConfig:
             "primary_multiclass_num_classes": int(self.primary_multiclass_num_classes),
             "prototype_multiclass_num_classes": int(self.prototype_multiclass_num_classes),
             "prototype_loss_weight": float(self.prototype_loss_weight),
+            "prototype_loss_weight_schedule": self.prototype_loss_weight_schedule,
+            "prototype_loss_min_weight": float(self.prototype_loss_min_weight),
             "prototype_temperature": float(self.prototype_temperature),
             "prototype_momentum": float(self.prototype_momentum),
             "prototype_start_epoch": int(self.prototype_start_epoch),
@@ -153,6 +204,31 @@ class GraphModelConfig:
             "prototype_neighbor_blend": float(self.prototype_neighbor_blend),
             "prototype_global_blend": float(self.prototype_global_blend),
             "prototype_consistency_weight": float(self.prototype_consistency_weight),
+            "prototype_separation_weight": float(self.prototype_separation_weight),
+            "prototype_separation_margin": float(self.prototype_separation_margin),
+            "normal_bucket_align_weight": float(self.normal_bucket_align_weight),
+            "normal_bucket_shift_strength": float(self.normal_bucket_shift_strength),
+            "target_time_adapter_strength": float(self.target_time_adapter_strength),
+            "target_time_adapter_type": self.target_time_adapter_type,
+            "target_time_adapter_num_experts": int(self.target_time_adapter_num_experts),
+            "teacher_distill_weight": float(self.teacher_distill_weight),
+            "teacher_distill_loss": self.teacher_distill_loss,
+            "teacher_distill_start_epoch": int(self.teacher_distill_start_epoch),
+            "teacher_distill_ramp_epochs": int(self.teacher_distill_ramp_epochs),
+            "teacher_distill_agreement_floor": float(self.teacher_distill_agreement_floor),
+            "teacher_distill_rank_gap": float(self.teacher_distill_rank_gap),
+            "atm_gate_strength": float(self.atm_gate_strength),
+            "context_residual_scale": float(self.context_residual_scale),
+            "context_residual_clip": float(self.context_residual_clip),
+            "context_residual_budget": float(self.context_residual_budget),
+            "context_residual_budget_weight": float(self.context_residual_budget_weight),
+            "context_residual_budget_schedule": self.context_residual_budget_schedule,
+            "context_residual_budget_min_weight": float(self.context_residual_budget_min_weight),
+            "context_residual_budget_release_epochs": int(self.context_residual_budget_release_epochs),
+            "context_residual_budget_release_delay_epochs": int(
+                self.context_residual_budget_release_delay_epochs
+            ),
+            "normal_bucket_adv_weight": float(self.normal_bucket_adv_weight),
             "include_historical_background_negatives": bool(self.include_historical_background_negatives),
             "historical_background_negative_ratio": float(self.historical_background_negative_ratio),
             "historical_background_negative_warmup_epochs": int(
@@ -209,6 +285,8 @@ class GraphModelConfig:
             primary_multiclass_num_classes=int(payload.get("primary_multiclass_num_classes", 0)),
             prototype_multiclass_num_classes=int(payload.get("prototype_multiclass_num_classes", 0)),
             prototype_loss_weight=float(payload.get("prototype_loss_weight", 0.0)),
+            prototype_loss_weight_schedule=str(payload.get("prototype_loss_weight_schedule", "none")),
+            prototype_loss_min_weight=float(payload.get("prototype_loss_min_weight", 0.0)),
             prototype_temperature=float(payload.get("prototype_temperature", 0.2)),
             prototype_momentum=float(payload.get("prototype_momentum", 0.9)),
             prototype_start_epoch=int(payload.get("prototype_start_epoch", 1)),
@@ -217,6 +295,33 @@ class GraphModelConfig:
             prototype_neighbor_blend=float(payload.get("prototype_neighbor_blend", 0.0)),
             prototype_global_blend=float(payload.get("prototype_global_blend", 0.0)),
             prototype_consistency_weight=float(payload.get("prototype_consistency_weight", 0.0)),
+            prototype_separation_weight=float(payload.get("prototype_separation_weight", 0.0)),
+            prototype_separation_margin=float(payload.get("prototype_separation_margin", 0.1)),
+            normal_bucket_align_weight=float(payload.get("normal_bucket_align_weight", 0.0)),
+            normal_bucket_shift_strength=float(payload.get("normal_bucket_shift_strength", 0.0)),
+            target_time_adapter_strength=float(payload.get("target_time_adapter_strength", 0.0)),
+            target_time_adapter_type=str(payload.get("target_time_adapter_type", "affine")),
+            target_time_adapter_num_experts=int(payload.get("target_time_adapter_num_experts", 4)),
+            teacher_distill_weight=float(payload.get("teacher_distill_weight", 0.0)),
+            teacher_distill_loss=str(payload.get("teacher_distill_loss", "bce")),
+            teacher_distill_start_epoch=int(payload.get("teacher_distill_start_epoch", 1)),
+            teacher_distill_ramp_epochs=int(payload.get("teacher_distill_ramp_epochs", 0)),
+            teacher_distill_agreement_floor=float(payload.get("teacher_distill_agreement_floor", 0.0)),
+            teacher_distill_rank_gap=float(payload.get("teacher_distill_rank_gap", 0.0)),
+            atm_gate_strength=float(payload.get("atm_gate_strength", 1.0)),
+            context_residual_scale=float(payload.get("context_residual_scale", 1.0)),
+            context_residual_clip=float(payload.get("context_residual_clip", 0.0)),
+            context_residual_budget=float(payload.get("context_residual_budget", 0.0)),
+            context_residual_budget_weight=float(payload.get("context_residual_budget_weight", 0.0)),
+            context_residual_budget_schedule=str(payload.get("context_residual_budget_schedule", "none")),
+            context_residual_budget_min_weight=float(payload.get("context_residual_budget_min_weight", 0.0)),
+            context_residual_budget_release_epochs=int(
+                payload.get("context_residual_budget_release_epochs", 0)
+            ),
+            context_residual_budget_release_delay_epochs=int(
+                payload.get("context_residual_budget_release_delay_epochs", 0)
+            ),
+            normal_bucket_adv_weight=float(payload.get("normal_bucket_adv_weight", 0.0)),
             include_historical_background_negatives=bool(
                 payload.get("include_historical_background_negatives", False)
             ),
@@ -249,6 +354,7 @@ class GraphForwardOutput:
     diagnostics: dict[str, float] | None = None
     embedding: torch.Tensor | None = None
     aux_logits: torch.Tensor | None = None
+    context_regularization_loss: torch.Tensor | None = None
 
 
 @dataclass(frozen=True)
@@ -384,6 +490,10 @@ def _consistency_score(
     neighbor_profile = np.asarray(node_profile[neighbor_idx], dtype=np.float32)
     if center_profile.ndim != 1 or neighbor_profile.ndim != 2:
         return None
+    if not np.all(np.isfinite(center_profile)):
+        center_profile = np.nan_to_num(center_profile, nan=0.0, posinf=0.0, neginf=0.0)
+    if not np.all(np.isfinite(neighbor_profile)):
+        neighbor_profile = np.nan_to_num(neighbor_profile, nan=0.0, posinf=0.0, neginf=0.0)
 
     similarity = np.matmul(neighbor_profile, center_profile.astype(np.float32, copy=False)).astype(
         np.float64,
@@ -491,8 +601,13 @@ def _sample_edge_indices(
         if recent_score is None:
             choice = rng.choice(recent_pool, size=fanout, replace=False)
             return np.sort(choice.astype(np.int32, copy=False))
-        weight = recent_score
-        weight = weight / float(np.sum(weight, dtype=np.float64))
+        weight = np.asarray(recent_score, dtype=np.float64)
+        weight = np.where(np.isfinite(weight) & (weight > 0.0), weight, 0.0)
+        total_weight = float(np.sum(weight, dtype=np.float64))
+        if total_weight <= 0.0:
+            choice = rng.choice(recent_pool, size=fanout, replace=False)
+            return np.sort(choice.astype(np.int32, copy=False))
+        weight = weight / total_weight
         choice = rng.choice(recent_pool, size=fanout, replace=False, p=weight)
         return np.sort(choice.astype(np.int32, copy=False))
 
@@ -904,6 +1019,103 @@ class TimeEncoder(nn.Module):
         return self.net(relative_time)
 
 
+class TargetTimeDriftExpertAdapter(nn.Module):
+    """Drift-aware temporal expert router for target-node embedding calibration."""
+
+    def __init__(
+        self,
+        *,
+        embedding_dim: int,
+        context_input_dim: int,
+        dropout: float,
+        num_experts: int,
+    ) -> None:
+        super().__init__()
+        self.embedding_dim = int(embedding_dim)
+        self.num_experts = max(int(num_experts), 2)
+        self.time_encoder = nn.Sequential(
+            nn.Linear(1, embedding_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(embedding_dim, embedding_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+        self.context_encoder = nn.Sequential(
+            nn.Linear(context_input_dim, embedding_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(embedding_dim, embedding_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+        router_input_dim = embedding_dim * 4
+        self.router = nn.Sequential(
+            nn.Linear(router_input_dim, embedding_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(embedding_dim, self.num_experts),
+        )
+        self.experts = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Linear(router_input_dim, embedding_dim),
+                    nn.GELU(),
+                    nn.Dropout(dropout),
+                    nn.Linear(embedding_dim, embedding_dim * 2),
+                )
+                for _ in range(self.num_experts)
+            ]
+        )
+        for expert in self.experts:
+            nn.init.zeros_(expert[-1].weight)
+            nn.init.zeros_(expert[-1].bias)
+
+    def forward(
+        self,
+        *,
+        base_embedding: torch.Tensor,
+        target_time_position: torch.Tensor,
+        target_features: torch.Tensor,
+        strength: float,
+    ) -> tuple[torch.Tensor, dict[str, float]]:
+        time_embedding = self.time_encoder(target_time_position)
+        context_embedding = self.context_encoder(target_features)
+        drift_signal = torch.abs(base_embedding - context_embedding)
+        router_input = torch.cat(
+            [base_embedding, time_embedding, context_embedding, drift_signal],
+            dim=-1,
+        )
+        route_weight = torch.softmax(self.router(router_input), dim=-1)
+        expert_params = torch.stack(
+            [expert(router_input) for expert in self.experts],
+            dim=1,
+        )
+        scale_raw, bias_raw = torch.chunk(expert_params, 2, dim=-1)
+        scale = torch.sum(route_weight.unsqueeze(-1) * torch.tanh(scale_raw), dim=1)
+        bias = torch.sum(route_weight.unsqueeze(-1) * torch.tanh(bias_raw), dim=1)
+        route_entropy = -torch.sum(
+            route_weight * torch.log(route_weight.clamp_min(1e-8)),
+            dim=-1,
+        )
+        entropy_gate = (
+            route_entropy / max(math.log(float(self.num_experts)), 1e-6)
+        ).clamp_(0.0, 1.0)
+        delta = torch.tanh(scale) * base_embedding + bias
+        adapted_embedding = base_embedding + float(strength) * entropy_gate.unsqueeze(-1) * delta
+        diagnostics = {
+            "time_expert_entropy": float(route_entropy.mean().detach().item()),
+            "time_expert_entropy_gate": float(entropy_gate.mean().detach().item()),
+            "time_expert_max_weight": float(route_weight.max(dim=-1).values.mean().detach().item()),
+            "time_expert_delta_norm": float(
+                (adapted_embedding - base_embedding).norm(dim=-1).mean().detach().item()
+            ),
+            "time_expert_context_drift": float(drift_signal.mean().detach().item()),
+            "time_expert_time_emb_norm": float(time_embedding.norm(dim=-1).mean().detach().item()),
+        }
+        return adapted_embedding, diagnostics
+
+
 class SafeBatchNorm1d(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
@@ -970,6 +1182,23 @@ def _pairwise_ranking_loss(
         return logits.new_tensor(0.0)
     margin_term = float(margin) - (pos_logits[:, None] - neg_logits[None, :])
     return F.softplus(margin_term).mean()
+
+
+def _teacher_pairwise_distill_loss(
+    student_logits: torch.Tensor,
+    teacher_scores: torch.Tensor,
+    gap_floor: float,
+) -> torch.Tensor:
+    if student_logits.numel() <= 1 or teacher_scores.numel() <= 1:
+        return student_logits.new_tensor(0.0)
+    teacher_delta = teacher_scores[:, None] - teacher_scores[None, :]
+    pair_mask = teacher_delta > max(float(gap_floor), 0.0)
+    if not torch.any(pair_mask):
+        return student_logits.new_tensor(0.0)
+    student_delta = student_logits[:, None] - student_logits[None, :]
+    pair_weight = teacher_delta[pair_mask]
+    pair_weight = pair_weight / pair_weight.mean().clamp_min(1e-6)
+    return (F.softplus(-student_delta[pair_mask]) * pair_weight).mean()
 
 
 def _dirichlet_energy(
@@ -1301,6 +1530,7 @@ class RelationGraphSAGENetwork(nn.Module):
         self.aggregator_type = aggregator_type
         self.use_legacy = aggregator_type == "sage" and model_config.use_legacy_path()
         self.target_context_fusion = str(model_config.target_context_fusion)
+        self.target_time_adapter_type = str(model_config.target_time_adapter_type)
         self.target_context_input_dim = (
             int(model_config.target_context_input_dim)
             if int(model_config.target_context_input_dim) > 0
@@ -1354,9 +1584,35 @@ class RelationGraphSAGENetwork(nn.Module):
                     output_dim=primary_output_dim,
                     dropout=dropout,
                     mode=self.target_context_fusion,
+                    adaptive_window_strength=float(model_config.atm_gate_strength),
+                    context_residual_scale=float(model_config.context_residual_scale),
+                    context_residual_clip=float(model_config.context_residual_clip),
+                    context_residual_budget=float(model_config.context_residual_budget),
                 )
-                if self.target_context_fusion in {"gate", "concat", "logit_residual"}
+                if self.target_context_fusion in {"gate", "concat", "logit_residual", "atm_residual", "drift_residual"}
                 else None
+            )
+            self.target_time_adapter = (
+                TargetTimeDriftExpertAdapter(
+                    embedding_dim=hidden_dim,
+                    context_input_dim=self.target_context_input_dim,
+                    dropout=dropout,
+                    num_experts=int(model_config.target_time_adapter_num_experts),
+                )
+                if (
+                    float(model_config.target_time_adapter_strength) > 0.0
+                    and self.target_time_adapter_type == "drift_expert"
+                )
+                else (
+                    nn.Sequential(
+                        nn.Linear(1, hidden_dim),
+                        nn.GELU(),
+                        nn.Dropout(dropout),
+                        nn.Linear(hidden_dim, hidden_dim * 2),
+                    )
+                    if float(model_config.target_time_adapter_strength) > 0.0
+                    else None
+                )
             )
             return
 
@@ -1417,9 +1673,35 @@ class RelationGraphSAGENetwork(nn.Module):
                 output_dim=primary_output_dim,
                 dropout=dropout,
                 mode=self.target_context_fusion,
+                adaptive_window_strength=float(model_config.atm_gate_strength),
+                context_residual_scale=float(model_config.context_residual_scale),
+                context_residual_clip=float(model_config.context_residual_clip),
+                context_residual_budget=float(model_config.context_residual_budget),
             )
-            if self.target_context_fusion in {"gate", "concat", "logit_residual"}
+            if self.target_context_fusion in {"gate", "concat", "logit_residual", "atm_residual", "drift_residual"}
             else None
+        )
+        self.target_time_adapter = (
+            TargetTimeDriftExpertAdapter(
+                embedding_dim=hidden_dim,
+                context_input_dim=self.target_context_input_dim,
+                dropout=dropout,
+                num_experts=int(model_config.target_time_adapter_num_experts),
+            )
+            if (
+                float(model_config.target_time_adapter_strength) > 0.0
+                and self.target_time_adapter_type == "drift_expert"
+            )
+            else (
+                nn.Sequential(
+                    nn.Linear(1, hidden_dim),
+                    nn.GELU(),
+                    nn.Dropout(dropout),
+                    nn.Linear(hidden_dim, hidden_dim * 2),
+                )
+                if float(model_config.target_time_adapter_strength) > 0.0
+                else None
+            )
         )
 
     def _build_edge_embedding(
@@ -1594,6 +1876,8 @@ class RelationGraphSAGENetwork(nn.Module):
         edge_relative_time: torch.Tensor | None,
         target_local_idx: torch.Tensor,
         target_context_features: torch.Tensor | None = None,
+        target_embedding_shift: torch.Tensor | None = None,
+        target_time_position: torch.Tensor | None = None,
         node_subgraph_id: torch.Tensor | None = None,
         edge_subgraph_id: torch.Tensor | None = None,
         include_diagnostics: bool = False,
@@ -1632,9 +1916,10 @@ class RelationGraphSAGENetwork(nn.Module):
                 layer_outputs.append(h)
             node_repr = layer_outputs[-1] if layer_outputs else h
             target_representation = node_repr[target_local_idx]
+            active_classifier = self.classifier
             logits, embedding = self._apply_classifier_with_embedding(
                 target_representation,
-                self.classifier,
+                active_classifier,
             )
         else:
             for layer in self.layers:
@@ -1662,24 +1947,54 @@ class RelationGraphSAGENetwork(nn.Module):
                     rel_ids=rel_ids,
                     edge_relative_time=edge_relative_time,
                 )
+                active_classifier = self.subgraph_classifier
                 logits, embedding = self._apply_classifier_with_embedding(
                     target_representation,
-                    self.subgraph_classifier,
+                    active_classifier,
                 )
             else:
                 target_representation = node_repr[target_local_idx]
+                active_classifier = self.classifier
                 logits, embedding = self._apply_classifier_with_embedding(
                     target_representation,
-                    self.classifier,
+                    active_classifier,
                 )
 
         fusion_diagnostics = None
+        adapter_diagnostics = None
+        context_regularization_loss = embedding.new_tensor(0.0)
+        if target_embedding_shift is not None and target_embedding_shift.numel():
+            embedding_norm = embedding.norm(dim=-1, keepdim=True).clamp_min(1e-6)
+            embedding = embedding + embedding_norm * target_embedding_shift
+            logits = active_classifier[3](embedding)
+            if logits.dim() == 2 and logits.shape[-1] == 1:
+                logits = logits.squeeze(-1)
+        if self.target_time_adapter is not None and target_time_position is not None:
+            if self.target_time_adapter_type == "drift_expert":
+                adapter_features = (
+                    target_context_features if target_context_features is not None else x[target_local_idx]
+                )
+                embedding, adapter_diagnostics = self.target_time_adapter(
+                    base_embedding=embedding,
+                    target_time_position=target_time_position,
+                    target_features=adapter_features,
+                    strength=float(self.model_config.target_time_adapter_strength),
+                )
+            else:
+                time_params = self.target_time_adapter(target_time_position)
+                time_scale, time_bias = torch.chunk(time_params, 2, dim=-1)
+                strength = float(self.model_config.target_time_adapter_strength)
+                embedding = embedding * (1.0 + strength * torch.tanh(time_scale)) + strength * time_bias
+            logits = active_classifier[3](embedding)
+            if logits.dim() == 2 and logits.shape[-1] == 1:
+                logits = logits.squeeze(-1)
         if self.context_fusion_head is not None:
             fusion_features = target_context_features if target_context_features is not None else x[target_local_idx]
-            logits, embedding, fusion_diagnostics = self.context_fusion_head(
+            logits, embedding, fusion_diagnostics, context_regularization_loss = self.context_fusion_head(
                 base_embedding=embedding,
                 base_logits=logits,
                 target_features=fusion_features,
+                target_time_position=target_time_position,
             )
 
         diagnostics = None
@@ -1694,12 +2009,23 @@ class RelationGraphSAGENetwork(nn.Module):
             }
             if fusion_diagnostics is not None:
                 diagnostics.update(fusion_diagnostics)
+            if target_embedding_shift is not None and target_embedding_shift.numel():
+                diagnostics["normal_shift_norm"] = float(
+                    target_embedding_shift.norm(dim=-1).mean().detach().item()
+                )
+            if self.target_time_adapter is not None and target_time_position is not None:
+                diagnostics["target_time_position_mean"] = float(
+                    target_time_position.mean().detach().item()
+                )
+            if adapter_diagnostics is not None:
+                diagnostics.update(adapter_diagnostics)
         aux_logits = self._apply_aux_classifier(target_representation) if include_aux else None
         return GraphForwardOutput(
             logits=logits,
             diagnostics=diagnostics,
             embedding=embedding if include_embedding else None,
             aux_logits=aux_logits,
+            context_regularization_loss=context_regularization_loss,
         )
 
     def forward(
@@ -1813,6 +2139,10 @@ class BaseGraphSAGEExperiment:
         self._hard_negative_pools: dict[int, np.ndarray] = {}
         self._hard_negative_pool_stats: dict[int, dict[str, int]] = {}
         self._relation_sampling_weight: np.ndarray | None = None
+        self._normal_alignment_regularizer: TemporalNormalAlignmentBank | None = None
+        self._normal_bucket_discriminator: nn.Module | None = None
+        self._context_budget_schedule_state: dict[str, float] = {}
+        self._prototype_weight_schedule_state: dict[str, float] = {}
 
     def _binary_train_labels(self, labels: np.ndarray) -> np.ndarray:
         labels_arr = np.asarray(labels, dtype=np.int8)
@@ -1832,7 +2162,7 @@ class BaseGraphSAGEExperiment:
     def _prototype_enabled(self) -> bool:
         return (
             float(self.graph_config.prototype_loss_weight) > 0.0
-            and int(self.graph_config.prototype_multiclass_num_classes) >= 3
+            and int(self.graph_config.prototype_multiclass_num_classes) >= 2
         )
 
     def _background_aux_only_enabled(self) -> bool:
@@ -1849,8 +2179,13 @@ class BaseGraphSAGEExperiment:
         num_classes: int,
     ) -> np.ndarray:
         labels_arr = np.asarray(labels, dtype=np.int8)
-        if num_classes < 3:
+        if num_classes < 2:
             return np.full(labels_arr.shape[0], -1, dtype=np.int64)
+        if num_classes == 2:
+            mapped = np.full(labels_arr.shape[0], -1, dtype=np.int64)
+            mapped[labels_arr == 0] = 0
+            mapped[labels_arr == 1] = 1
+            return mapped
         if num_classes == 3:
             mapped = np.full(labels_arr.shape[0], -1, dtype=np.int64)
             mapped[labels_arr == 0] = 0
@@ -1886,7 +2221,7 @@ class BaseGraphSAGEExperiment:
         train_ids: np.ndarray,
         num_classes: int,
     ) -> torch.Tensor | None:
-        if num_classes < 3:
+        if num_classes < 2:
             return None
         label_blocks = [np.asarray(context.labels[np.asarray(train_ids, dtype=np.int32)], dtype=np.int8)]
         if (
@@ -1975,12 +2310,159 @@ class BaseGraphSAGEExperiment:
                 neighbor_blend=float(self.graph_config.prototype_neighbor_blend),
                 global_blend=float(self.graph_config.prototype_global_blend),
                 consistency_weight=float(self.graph_config.prototype_consistency_weight),
+                separation_weight=float(self.graph_config.prototype_separation_weight),
+                separation_margin=float(self.graph_config.prototype_separation_margin),
             ),
             device=self.device,
         )
 
     def _prototype_time_bucketed(self) -> bool:
         return self._prototype_enabled() and str(self.graph_config.prototype_bucket_mode) == "time_bucket"
+
+    def _normal_bucket_alignment_enabled(self) -> bool:
+        return float(self.graph_config.normal_bucket_align_weight) > 0.0
+
+    def _normal_bucket_shift_enabled(self) -> bool:
+        return float(self.graph_config.normal_bucket_shift_strength) > 0.0
+
+    def _normal_alignment_bank_enabled(self) -> bool:
+        return self._normal_bucket_alignment_enabled() or self._normal_bucket_shift_enabled()
+
+    def _normal_bucket_adv_enabled(self) -> bool:
+        return float(self.graph_config.normal_bucket_adv_weight) > 0.0 and self.temporal
+
+    def _build_normal_alignment_regularizer(
+        self,
+        *,
+        context: GraphPhaseContext,
+    ) -> TemporalNormalAlignmentBank | None:
+        if not self._normal_alignment_bank_enabled():
+            return None
+        num_buckets = max(len(context.graph_cache.time_windows), 1)
+        return TemporalNormalAlignmentBank(
+            config=TemporalNormalAlignmentConfig(
+                embedding_dim=int(self.hidden_dim),
+                num_buckets=int(num_buckets),
+                momentum=float(self.graph_config.prototype_momentum),
+                start_epoch=int(self.graph_config.prototype_start_epoch),
+                neighbor_blend=float(self.graph_config.prototype_neighbor_blend),
+                global_blend=float(self.graph_config.prototype_global_blend),
+            ),
+            device=self.device,
+        )
+
+    def _build_normal_bucket_shift(
+        self,
+        *,
+        bucket_ids: torch.Tensor | None,
+    ) -> torch.Tensor | None:
+        if (
+            not self._normal_bucket_shift_enabled()
+            or bucket_ids is None
+            or self._normal_alignment_regularizer is None
+        ):
+            return None
+        return self._normal_alignment_regularizer.build_shift(
+            bucket_ids=bucket_ids,
+            strength=float(self.graph_config.normal_bucket_shift_strength),
+        )
+
+    def _build_target_time_position(
+        self,
+        *,
+        context: GraphPhaseContext,
+        batch_nodes: np.ndarray,
+    ) -> torch.Tensor | None:
+        needs_time_position = (
+            float(self.graph_config.target_time_adapter_strength) > 0.0
+            or str(self.graph_config.target_context_fusion) in {"atm_residual", "drift_residual"}
+        )
+        if not needs_time_position:
+            return None
+        bucket_ids = np.asarray(context.graph_cache.node_time_bucket[np.asarray(batch_nodes, dtype=np.int32)], dtype=np.float32)
+        denominator = max(len(context.graph_cache.time_windows) - 1, 1)
+        bucket_position = (bucket_ids / float(denominator)).reshape(-1, 1).astype(np.float32, copy=False)
+        return torch.as_tensor(bucket_position, dtype=torch.float32, device=self.device)
+
+    def _build_normal_bucket_discriminator(
+        self,
+        *,
+        context: GraphPhaseContext,
+    ) -> nn.Module | None:
+        if not self._normal_bucket_adv_enabled():
+            return None
+        num_buckets = max(len(context.graph_cache.time_windows), 1)
+        if num_buckets < 2:
+            return None
+        return nn.Sequential(
+            nn.Linear(self.hidden_dim, self.hidden_dim),
+            nn.GELU(),
+            nn.Dropout(self.graph_config.dropout),
+            nn.Linear(self.hidden_dim, num_buckets),
+        ).to(self.device)
+
+    def _compute_normal_bucket_adv_loss(
+        self,
+        *,
+        embedding: torch.Tensor | None,
+        raw_labels: torch.Tensor | None,
+        bucket_ids: torch.Tensor | None,
+        discriminator: nn.Module | None,
+        memory_embedding: torch.Tensor | None = None,
+        memory_bucket_ids: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if (
+            not self._normal_bucket_adv_enabled()
+            or embedding is None
+            or raw_labels is None
+            or bucket_ids is None
+            or discriminator is None
+        ):
+            return self.network.input_proj.weight.new_tensor(0.0)
+        normal_mask = raw_labels == 0
+        if int(torch.sum(normal_mask).item()) < 4:
+            return embedding.new_tensor(0.0)
+        normal_bucket_ids = bucket_ids[normal_mask]
+        normal_embedding = F.normalize(embedding[normal_mask], dim=-1)
+        bucket_inputs = [_grad_reverse(normal_embedding)]
+        bucket_targets = [normal_bucket_ids]
+        if memory_embedding is not None and memory_bucket_ids is not None and memory_embedding.numel():
+            bucket_inputs.append(memory_embedding.detach())
+            bucket_targets.append(memory_bucket_ids.detach())
+        merged_targets = torch.cat(bucket_targets, dim=0)
+        if int(torch.unique(merged_targets).numel()) < 2:
+            return embedding.new_tensor(0.0)
+        merged_inputs = torch.cat(bucket_inputs, dim=0)
+        bucket_logits = discriminator(merged_inputs)
+        return F.cross_entropy(bucket_logits, merged_targets)
+
+    def _append_normal_bucket_adv_memory(
+        self,
+        *,
+        embedding: torch.Tensor | None,
+        raw_labels: torch.Tensor | None,
+        bucket_ids: torch.Tensor | None,
+        memory_embedding: torch.Tensor | None,
+        memory_bucket_ids: torch.Tensor | None,
+        memory_limit: int = 4096,
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        if embedding is None or raw_labels is None or bucket_ids is None:
+            return memory_embedding, memory_bucket_ids
+        normal_mask = raw_labels == 0
+        if not torch.any(normal_mask):
+            return memory_embedding, memory_bucket_ids
+        current_embedding = F.normalize(embedding[normal_mask].detach(), dim=-1)
+        current_bucket_ids = bucket_ids[normal_mask].detach()
+        if memory_embedding is None or memory_bucket_ids is None:
+            merged_embedding = current_embedding
+            merged_bucket_ids = current_bucket_ids
+        else:
+            merged_embedding = torch.cat([memory_embedding, current_embedding], dim=0)
+            merged_bucket_ids = torch.cat([memory_bucket_ids, current_bucket_ids], dim=0)
+        if int(merged_embedding.shape[0]) > int(memory_limit):
+            merged_embedding = merged_embedding[-int(memory_limit) :]
+            merged_bucket_ids = merged_bucket_ids[-int(memory_limit) :]
+        return merged_embedding, merged_bucket_ids
 
     def _fraud_probability_from_multiclass_logits(self, logits: torch.Tensor) -> torch.Tensor:
         multiclass_prob = torch.softmax(logits, dim=-1)
@@ -2251,6 +2733,335 @@ class BaseGraphSAGEExperiment:
             return target_ratio
         progress = min(max(int(epoch), 1), warmup_epochs) / float(warmup_epochs)
         return float(target_ratio * progress)
+
+    def _prototype_release_anchor_epoch(self) -> int:
+        prototype_anchor_epoch = max(
+            1,
+            int(self.graph_config.prototype_start_epoch)
+            + max(int(self.graph_config.prototype_loss_ramp_epochs), 1)
+            - 1,
+        )
+        return prototype_anchor_epoch + max(
+            int(self.graph_config.context_residual_budget_release_delay_epochs),
+            0,
+        )
+
+    def _history_metric_values(
+        self,
+        history: list[dict[str, Any]],
+        key: str,
+    ) -> list[float]:
+        values: list[float] = []
+        for row in history:
+            value = row.get(key)
+            if value is None:
+                continue
+            try:
+                values.append(float(value))
+            except (TypeError, ValueError):
+                continue
+        return values
+
+    def _adaptive_prototype_readiness(
+        self,
+        history: list[dict[str, Any]],
+    ) -> float:
+        if not self._prototype_enabled():
+            return 1.0
+        if not history:
+            return 0.0
+
+        memory_init = self._history_metric_values(history, "prototype_memory_initialized_ratio")
+        availability = self._history_metric_values(history, "prototype_target_available_ratio")
+        classification = self._history_metric_values(history, "prototype_classification_ratio")
+        margins = self._history_metric_values(history, "prototype_margin")
+        temporal_stability_values = self._history_metric_values(history, "prototype_temporal_stability")
+        prototype_losses = [
+            value
+            for value in self._history_metric_values(history, "train_prototype_loss")
+            if value > 0.0
+        ]
+
+        margin_scale = max(float(self.graph_config.prototype_separation_margin), 0.05)
+        margin_ready = 0.0
+        if margins:
+            margin_mean = float(np.mean(margins, dtype=np.float64))
+            margin_ready = float(np.clip(0.5 + 0.5 * (margin_mean / margin_scale), 0.0, 1.0))
+
+        stability = 0.0
+        if len(prototype_losses) >= 2:
+            loss_arr = np.asarray(prototype_losses, dtype=np.float64)
+            volatility = float(
+                np.mean(np.abs(np.diff(loss_arr)), dtype=np.float64)
+                / max(float(np.mean(np.abs(loss_arr), dtype=np.float64)), 1e-6)
+            )
+            stability = float(np.clip(1.0 - volatility / 0.35, 0.0, 1.0))
+
+        temporal_stability = 1.0
+        if self._prototype_time_bucketed():
+            temporal_stability = (
+                float(np.mean(temporal_stability_values, dtype=np.float64))
+                if temporal_stability_values
+                else 0.0
+            )
+
+        readiness = (
+            0.18 * (float(np.mean(memory_init, dtype=np.float64)) if memory_init else 0.0)
+            + 0.24 * (float(np.mean(availability, dtype=np.float64)) if availability else 0.0)
+            + 0.12 * (float(np.mean(classification, dtype=np.float64)) if classification else 0.0)
+            + 0.16 * margin_ready
+            + 0.10 * stability
+            + 0.20 * temporal_stability
+        )
+        return float(np.clip(readiness, 0.0, 1.0))
+
+    def _adaptive_context_guard_strength(
+        self,
+        history: list[dict[str, Any]],
+    ) -> float:
+        if not history:
+            return 0.0
+
+        last_row = history[-1]
+        clip_fraction = max(float(last_row.get("context_residual_clip_fraction", 0.0)), 0.0)
+        penalty = max(
+            float(
+                last_row.get(
+                    "train_context_regularization_loss",
+                    last_row.get("context_residual_penalty", 0.0),
+                )
+            ),
+            0.0,
+        )
+        logit_abs = max(float(last_row.get("context_logit_abs_mean", 0.0)), 0.0)
+
+        residual_budget = max(float(self.graph_config.context_residual_budget), 1e-6)
+        clip_target = 0.01
+        penalty_target = max(residual_budget * 0.02, 5e-4)
+        logit_target = max(residual_budget * 0.75, 1e-3)
+        clip_risk = clip_fraction / clip_target
+        penalty_risk = penalty / penalty_target
+        logit_risk = logit_abs / logit_target
+        risk = max(clip_risk, penalty_risk, logit_risk)
+
+        if len(history) >= 2:
+            prev_row = history[-2]
+            prev_clip = max(float(prev_row.get("context_residual_clip_fraction", clip_fraction)), 0.0)
+            prev_penalty = max(
+                float(
+                    prev_row.get(
+                        "train_context_regularization_loss",
+                        prev_row.get("context_residual_penalty", penalty),
+                    )
+                ),
+                0.0,
+            )
+            prev_logit = max(float(prev_row.get("context_logit_abs_mean", logit_abs)), 0.0)
+            growth_risk = max(
+                max(clip_fraction - prev_clip, 0.0) / max(0.5 * clip_target, 1e-6)
+                if clip_fraction > 0.5 * clip_target
+                else 0.0,
+                max(penalty - prev_penalty, 0.0) / max(0.5 * penalty_target, 1e-6)
+                if penalty > 0.5 * penalty_target
+                else 0.0,
+                max(logit_abs - prev_logit, 0.0) / max(0.5 * logit_target, 1e-6)
+                if logit_abs > 0.5 * logit_target
+                else 0.0,
+            )
+            if growth_risk > 0.0:
+                risk = max(risk, 1.0 + growth_risk)
+
+        val_auc_history = self._history_metric_values(history, "val_auc")
+        if val_auc_history:
+            last_val_auc = val_auc_history[-1]
+            best_val_auc = max(val_auc_history)
+            val_gap = max(best_val_auc - last_val_auc, 0.0)
+            if val_gap > 0.0:
+                risk = max(risk, 1.0 + min(val_gap / 0.0015, 1.0))
+
+        return float(np.clip((risk - 1.0) / 0.8, 0.0, 1.0))
+
+    def _adaptive_prototype_trust_score(
+        self,
+        history: list[dict[str, Any]],
+    ) -> float:
+        if not history:
+            return 1.0
+
+        availability = self._history_metric_values(history, "prototype_target_available_ratio")
+        classification_losses = self._history_metric_values(history, "prototype_classification_loss")
+        consistency_losses = self._history_metric_values(history, "prototype_consistency_loss")
+        margins = self._history_metric_values(history, "prototype_margin")
+        temporal_stability_values = self._history_metric_values(history, "prototype_temporal_stability")
+
+        availability_score = float(np.mean(availability, dtype=np.float64)) if availability else 0.0
+        classification_score = 1.0
+        if classification_losses:
+            classification_score = float(
+                np.clip(1.0 - float(np.mean(classification_losses, dtype=np.float64)) / 0.35, 0.0, 1.0)
+            )
+        consistency_score = 1.0
+        if consistency_losses:
+            consistency_score = float(
+                np.clip(1.0 - float(np.mean(consistency_losses, dtype=np.float64)) / 0.25, 0.0, 1.0)
+            )
+        margin_score = 0.0
+        if margins:
+            margin_score = float(
+                np.clip(float(np.mean(margins, dtype=np.float64)) / 0.45, 0.0, 1.0)
+            )
+        temporal_stability_score = 1.0
+        if self._prototype_time_bucketed():
+            temporal_stability_score = (
+                float(np.mean(temporal_stability_values, dtype=np.float64))
+                if temporal_stability_values
+                else 0.0
+            )
+
+        trust_score = (
+            0.18 * availability_score
+            + 0.30 * classification_score
+            + 0.14 * margin_score
+            + 0.10 * consistency_score
+            + 0.28 * temporal_stability_score
+        )
+        return float(np.clip(trust_score, 0.0, 1.0))
+
+    def _current_prototype_loss_weight(self, epoch: int) -> float:
+        base_weight = max(float(self.graph_config.prototype_loss_weight), 0.0)
+        if base_weight <= 0.0 or not self._prototype_enabled():
+            self._prototype_weight_schedule_state = {
+                "trust_score": 0.0,
+            }
+            return 0.0
+
+        schedule = str(self.graph_config.prototype_loss_weight_schedule).strip().lower()
+        min_weight = min(
+            max(float(self.graph_config.prototype_loss_min_weight), 0.0),
+            base_weight,
+        )
+        if not schedule or schedule == "none":
+            self._prototype_weight_schedule_state = {
+                "trust_score": 1.0,
+            }
+            return base_weight
+        if schedule != "adaptive_quality":
+            raise ValueError(f"Unsupported prototype loss weight schedule: {schedule}")
+
+        history = list(getattr(self, "training_history", []))
+        history_window = history[-3:]
+        if len(history_window) < 2:
+            self._prototype_weight_schedule_state = {
+                "trust_score": 1.0,
+            }
+            return base_weight
+
+        trust_score = self._adaptive_prototype_trust_score(history_window)
+        effective_weight = max(min_weight, base_weight * trust_score)
+        self._prototype_weight_schedule_state = {
+            "trust_score": float(trust_score),
+        }
+        return float(effective_weight)
+
+    def _current_teacher_distill_weight(self, epoch: int) -> float:
+        base_weight = max(float(self.graph_config.teacher_distill_weight), 0.0)
+        start_epoch = max(int(self.graph_config.teacher_distill_start_epoch), 1)
+        ramp_epochs = max(int(self.graph_config.teacher_distill_ramp_epochs), 0)
+        if base_weight <= 0.0 or epoch < start_epoch:
+            self._teacher_distill_schedule_state = {
+                "active": 0.0,
+                "progress": 0.0,
+            }
+            return 0.0
+        if ramp_epochs <= 0:
+            self._teacher_distill_schedule_state = {
+                "active": 1.0,
+                "progress": 1.0,
+            }
+            return base_weight
+        progress = min(max(epoch - start_epoch + 1, 0), ramp_epochs) / float(ramp_epochs)
+        self._teacher_distill_schedule_state = {
+            "active": 1.0,
+            "progress": float(progress),
+        }
+        return float(base_weight * progress)
+
+    def _current_context_residual_budget_weight(self, epoch: int) -> float:
+        base_weight = max(float(self.graph_config.context_residual_budget_weight), 0.0)
+        if base_weight <= 0.0:
+            self._context_budget_schedule_state = {
+                "time_progress": 0.0,
+                "prototype_readiness": 0.0,
+                "release_progress": 0.0,
+                "guard_strength": 0.0,
+            }
+            return 0.0
+        schedule = str(self.graph_config.context_residual_budget_schedule).strip().lower()
+        if not schedule or schedule == "none":
+            self._context_budget_schedule_state = {
+                "time_progress": 0.0,
+                "prototype_readiness": 0.0,
+                "release_progress": 0.0,
+                "guard_strength": 0.0,
+            }
+            return base_weight
+
+        min_weight = min(
+            max(float(self.graph_config.context_residual_budget_min_weight), 0.0),
+            base_weight,
+        )
+        if schedule not in {"prototype_release", "prototype_adaptive"}:
+            raise ValueError(f"Unsupported context residual budget schedule: {schedule}")
+
+        release_epochs = int(self.graph_config.context_residual_budget_release_epochs)
+        prototype_anchor_epoch = self._prototype_release_anchor_epoch()
+        if release_epochs <= 0:
+            release_epochs = max(self.epochs - prototype_anchor_epoch, 1)
+        if epoch <= prototype_anchor_epoch:
+            self._context_budget_schedule_state = {
+                "time_progress": 0.0,
+                "prototype_readiness": 0.0,
+                "release_progress": 0.0,
+                "guard_strength": 1.0 if schedule == "prototype_adaptive" else 0.0,
+            }
+            return base_weight
+
+        time_progress = min(max(epoch - prototype_anchor_epoch, 0), release_epochs) / float(release_epochs)
+        cosine_decay = 0.5 * (1.0 + math.cos(math.pi * time_progress))
+        scheduled_weight = float(min_weight + (base_weight - min_weight) * cosine_decay)
+        if schedule == "prototype_release":
+            self._context_budget_schedule_state = {
+                "time_progress": float(time_progress),
+                "prototype_readiness": 1.0,
+                "release_progress": float(time_progress),
+                "guard_strength": 0.0,
+            }
+            return scheduled_weight
+
+        history = list(getattr(self, "training_history", []))
+        history_window = history[-3:]
+        if len(history_window) < 2:
+            self._context_budget_schedule_state = {
+                "time_progress": float(time_progress),
+                "prototype_readiness": 0.0,
+                "release_progress": 0.0,
+                "guard_strength": 1.0,
+            }
+            return base_weight
+
+        prototype_readiness = self._adaptive_prototype_readiness(history_window)
+        release_progress = float(time_progress * prototype_readiness)
+        adaptive_weight = float(min_weight + (base_weight - min_weight) * (1.0 - release_progress))
+        guard_strength = self._adaptive_context_guard_strength(history_window)
+        guarded_floor = float(min_weight + (base_weight - min_weight) * guard_strength)
+        effective_weight = max(adaptive_weight, guarded_floor)
+        self._context_budget_schedule_state = {
+            "time_progress": float(time_progress),
+            "prototype_readiness": float(prototype_readiness),
+            "release_progress": float(release_progress),
+            "guard_strength": float(guard_strength),
+        }
+        return float(effective_weight)
 
     def _current_hard_negative_pool_size(self) -> int:
         return int(sum(pool.shape[0] for pool in self._hard_negative_pools.values()))
@@ -2867,14 +3678,27 @@ class BaseGraphSAGEExperiment:
             )
 
         target_context_x = None
-        if context.target_context_store is not None and subgraph.target_local_idx.size:
+        if subgraph.target_local_idx.size:
             target_global_ids = subgraph.node_ids[np.asarray(subgraph.target_local_idx, dtype=np.int64)]
-            target_context_np = context.target_context_store.take_rows(target_global_ids)
-            target_context_x = torch.as_tensor(
-                target_context_np,
-                dtype=torch.float32,
-                device=self.device,
-            )
+            target_context_blocks: list[np.ndarray] = []
+            if context.target_context_store is not None:
+                target_context_blocks.append(context.target_context_store.take_rows(target_global_ids))
+            if context.target_aux_features is not None:
+                aux_np = np.asarray(context.target_aux_features[target_global_ids], dtype=np.float32)
+                if aux_np.ndim == 1:
+                    aux_np = aux_np.reshape(-1, 1)
+                target_context_blocks.append(aux_np)
+            if target_context_blocks:
+                target_context_np = (
+                    target_context_blocks[0]
+                    if len(target_context_blocks) == 1
+                    else np.concatenate(target_context_blocks, axis=1).astype(np.float32, copy=False)
+                )
+                target_context_x = torch.as_tensor(
+                    target_context_np,
+                    dtype=torch.float32,
+                    device=self.device,
+                )
 
         return (
             x,
@@ -2902,6 +3726,8 @@ class BaseGraphSAGEExperiment:
         val_labels = context.labels[val_ids].astype(np.int8, copy=False)
         primary_class_weight = self._compute_primary_class_weight(context=context, train_ids=train_ids)
         self.training_history: list[dict[str, Any]] = []
+        self._context_budget_schedule_state = {}
+        self._prototype_weight_schedule_state = {}
         aux_class_weight = self._compute_aux_class_weight(context=context, train_ids=train_ids)
         prototype_class_weight = self._compute_prototype_class_weight(context=context, train_ids=train_ids)
         self._relation_sampling_weight = self._build_relation_sampling_weight(
@@ -2909,6 +3735,10 @@ class BaseGraphSAGEExperiment:
             train_ids=train_ids,
         )
         prototype_regularizer = self._build_prototype_regularizer(context=context)
+        self._normal_alignment_regularizer = self._build_normal_alignment_regularizer(context=context)
+        normal_alignment_regularizer = self._normal_alignment_regularizer
+        self._normal_bucket_discriminator = self._build_normal_bucket_discriminator(context=context)
+        normal_bucket_discriminator = self._normal_bucket_discriminator
 
         log_path = None if artifact_dir is None else artifact_dir / "train.log"
         history_jsonl_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.jsonl"
@@ -2921,8 +3751,11 @@ class BaseGraphSAGEExperiment:
                 if path is not None:
                     path.write_text("", encoding="utf-8")
 
+        optimizer_params: list[torch.nn.Parameter] = list(self.network.parameters())
+        if normal_bucket_discriminator is not None:
+            optimizer_params.extend(list(normal_bucket_discriminator.parameters()))
         optimizer = torch.optim.AdamW(
-            self.network.parameters(),
+            optimizer_params,
             lr=self.graph_config.learning_rate,
             weight_decay=self.graph_config.weight_decay,
         )
@@ -2981,6 +3814,8 @@ class BaseGraphSAGEExperiment:
                     f"primary_multiclass_num_classes={self.graph_config.primary_multiclass_num_classes} "
                     f"prototype_multiclass_num_classes={self.graph_config.prototype_multiclass_num_classes} "
                     f"prototype_loss_weight={self.graph_config.prototype_loss_weight:.4f} "
+                    f"prototype_loss_weight_schedule={self.graph_config.prototype_loss_weight_schedule} "
+                    f"prototype_loss_min_weight={self.graph_config.prototype_loss_min_weight:.4f} "
                     f"prototype_temperature={self.graph_config.prototype_temperature:.4f} "
                     f"prototype_momentum={self.graph_config.prototype_momentum:.4f} "
                     f"prototype_start_epoch={self.graph_config.prototype_start_epoch} "
@@ -2989,6 +3824,32 @@ class BaseGraphSAGEExperiment:
                     f"prototype_neighbor_blend={self.graph_config.prototype_neighbor_blend:.4f} "
                     f"prototype_global_blend={self.graph_config.prototype_global_blend:.4f} "
                     f"prototype_consistency_weight={self.graph_config.prototype_consistency_weight:.4f} "
+                    f"prototype_separation_weight={self.graph_config.prototype_separation_weight:.4f} "
+                    f"prototype_separation_margin={self.graph_config.prototype_separation_margin:.4f} "
+                    f"target_context_fusion={self.graph_config.target_context_fusion} "
+                    f"atm_gate_strength={self.graph_config.atm_gate_strength:.4f} "
+                    f"context_residual_scale={self.graph_config.context_residual_scale:.4f} "
+                    f"context_residual_clip={self.graph_config.context_residual_clip:.4f} "
+                    f"context_residual_budget={self.graph_config.context_residual_budget:.4f} "
+                    f"context_residual_budget_weight={self.graph_config.context_residual_budget_weight:.4f} "
+                    f"context_residual_budget_schedule={self.graph_config.context_residual_budget_schedule} "
+                    f"context_residual_budget_min_weight="
+                    f"{self.graph_config.context_residual_budget_min_weight:.4f} "
+                    f"context_residual_budget_release_epochs="
+                    f"{self.graph_config.context_residual_budget_release_epochs} "
+                    f"context_residual_budget_release_delay_epochs="
+                    f"{self.graph_config.context_residual_budget_release_delay_epochs} "
+                    f"normal_bucket_align_weight={self.graph_config.normal_bucket_align_weight:.4f} "
+                    f"normal_bucket_shift_strength={self.graph_config.normal_bucket_shift_strength:.4f} "
+                    f"target_time_adapter_type={self.graph_config.target_time_adapter_type} "
+                    f"target_time_adapter_num_experts={self.graph_config.target_time_adapter_num_experts} "
+                    f"teacher_distill_weight={self.graph_config.teacher_distill_weight:.4f} "
+                    f"teacher_distill_loss={self.graph_config.teacher_distill_loss} "
+                    f"teacher_distill_start_epoch={self.graph_config.teacher_distill_start_epoch} "
+                    f"teacher_distill_ramp_epochs={self.graph_config.teacher_distill_ramp_epochs} "
+                    f"teacher_distill_agreement_floor={self.graph_config.teacher_distill_agreement_floor:.4f} "
+                    f"teacher_distill_rank_gap={self.graph_config.teacher_distill_rank_gap:.4f} "
+                    f"normal_bucket_adv_weight={self.graph_config.normal_bucket_adv_weight:.4f} "
                     f"aux_multiclass_num_classes={self.graph_config.aux_multiclass_num_classes} "
                     f"aux_multiclass_loss_weight={self.graph_config.aux_multiclass_loss_weight:.4f} "
                     f"aux_inference_blend={self.graph_config.aux_inference_blend:.4f} "
@@ -3012,16 +3873,26 @@ class BaseGraphSAGEExperiment:
         ) as epoch_pbar:
             for epoch in epoch_pbar:
                 self.network.train()
+                normal_bucket_adv_memory_embedding = None
+                normal_bucket_adv_memory_bucket_ids = None
+                context_budget_weight = self._current_context_residual_budget_weight(epoch)
+                prototype_loss_weight = self._current_prototype_loss_weight(epoch)
+                teacher_distill_weight = self._current_teacher_distill_weight(epoch)
                 batch_losses: list[float] = []
                 batch_base_losses: list[float] = []
                 batch_ranking_losses: list[float] = []
                 batch_prototype_losses: list[float] = []
+                batch_normal_align_losses: list[float] = []
+                batch_normal_bucket_adv_losses: list[float] = []
                 batch_aux_losses: list[float] = []
+                batch_teacher_distill_losses: list[float] = []
+                batch_context_regularization_losses: list[float] = []
                 batch_subgraph_nodes: list[float] = []
                 batch_subgraph_edges: list[float] = []
                 batch_emb_norm: list[float] = []
                 batch_dirichlet: list[float] = []
                 batch_grad_norm: list[float] = []
+                batch_extra_diagnostics: dict[str, list[float]] = {}
                 hard_negative_refresh = self._maybe_refresh_hard_negative_pools(
                     context=context,
                     train_ids=train_ids,
@@ -3108,9 +3979,27 @@ class BaseGraphSAGEExperiment:
                                 dtype=torch.long,
                                 device=self.device,
                             )
+                        raw_batch_labels = None
+                        if self._normal_bucket_alignment_enabled() or self._normal_bucket_adv_enabled():
+                            raw_batch_labels = torch.as_tensor(
+                                np.asarray(context.labels[batch_nodes], dtype=np.int64),
+                                dtype=torch.long,
+                                device=self.device,
+                            )
                         prototype_bucket_ids = None
                         if self._prototype_time_bucketed():
                             prototype_bucket_ids = torch.as_tensor(
+                                np.asarray(context.graph_cache.node_time_bucket[batch_nodes], dtype=np.int64),
+                                dtype=torch.long,
+                                device=self.device,
+                            )
+                        normal_align_bucket_ids = None
+                        if (
+                            self._normal_bucket_alignment_enabled()
+                            or self._normal_bucket_shift_enabled()
+                            or self._normal_bucket_adv_enabled()
+                        ):
+                            normal_align_bucket_ids = torch.as_tensor(
                                 np.asarray(context.graph_cache.node_time_bucket[batch_nodes], dtype=np.int64),
                                 dtype=torch.long,
                                 device=self.device,
@@ -3132,6 +4021,13 @@ class BaseGraphSAGEExperiment:
                                 )
 
                         optimizer.zero_grad(set_to_none=True)
+                        target_embedding_shift = self._build_normal_bucket_shift(
+                            bucket_ids=normal_align_bucket_ids,
+                        )
+                        target_time_position = self._build_target_time_position(
+                            context=context,
+                            batch_nodes=batch_nodes,
+                        )
                         forward_output = self.network.forward_output(
                             x=x,
                             edge_src=edge_src,
@@ -3140,10 +4036,16 @@ class BaseGraphSAGEExperiment:
                             edge_relative_time=edge_relative_time,
                             target_local_idx=target_idx,
                             target_context_features=target_context_x,
+                            target_embedding_shift=target_embedding_shift,
+                            target_time_position=target_time_position,
                             node_subgraph_id=node_subgraph_id,
                             edge_subgraph_id=edge_subgraph_id,
                             include_diagnostics=True,
-                            include_embedding=self._prototype_enabled(),
+                            include_embedding=(
+                                self._prototype_enabled()
+                                or self._normal_bucket_alignment_enabled()
+                                or self._normal_bucket_adv_enabled()
+                            ),
                             include_aux=self._aux_multiclass_enabled(),
                         )
                         loss, loss_parts = self._compute_loss(
@@ -3156,6 +4058,77 @@ class BaseGraphSAGEExperiment:
                             primary_class_weight=primary_class_weight,
                             aux_class_weight=aux_class_weight,
                         )
+                        teacher_distill_loss = forward_output.logits.new_tensor(0.0)
+                        if (
+                            teacher_distill_weight > 0.0
+                            and context.distill_targets is not None
+                            and context.distill_target_mask is not None
+                            and not self._primary_multiclass_enabled()
+                        ):
+                            distill_mask_np = np.asarray(context.distill_target_mask[batch_nodes], dtype=bool)
+                            if np.any(distill_mask_np):
+                                distill_mask = torch.as_tensor(
+                                    distill_mask_np,
+                                    dtype=torch.bool,
+                                    device=self.device,
+                                )
+                                teacher_target = torch.as_tensor(
+                                    np.asarray(context.distill_targets[batch_nodes], dtype=np.float32)[distill_mask_np],
+                                    dtype=torch.float32,
+                                    device=self.device,
+                                )
+                                student_logits = forward_output.logits[distill_mask]
+                                distill_sample_weight = sample_weight[distill_mask] if sample_weight is not None else None
+                                agreement_floor = max(
+                                    float(self.graph_config.teacher_distill_agreement_floor),
+                                    0.0,
+                                )
+                                if agreement_floor > 0.0:
+                                    student_targets = y_batch[distill_mask]
+                                    agreement_score = torch.where(
+                                        student_targets > 0.5,
+                                        teacher_target,
+                                        1.0 - teacher_target,
+                                    )
+                                    agreement_mask = agreement_score >= agreement_floor
+                                    teacher_target = teacher_target[agreement_mask]
+                                    student_logits = student_logits[agreement_mask]
+                                    if distill_sample_weight is not None:
+                                        distill_sample_weight = distill_sample_weight[agreement_mask]
+                                if teacher_target.numel() > 0:
+                                    distill_loss_name = str(self.graph_config.teacher_distill_loss).strip().lower()
+                                    if distill_loss_name == "mse":
+                                        teacher_distill_loss = F.mse_loss(
+                                            torch.sigmoid(student_logits),
+                                            teacher_target,
+                                            reduction="mean",
+                                        )
+                                    elif distill_loss_name == "rank":
+                                        teacher_distill_loss = _teacher_pairwise_distill_loss(
+                                            student_logits=student_logits,
+                                            teacher_scores=teacher_target,
+                                            gap_floor=float(self.graph_config.teacher_distill_rank_gap),
+                                        )
+                                    else:
+                                        distill_bce = F.binary_cross_entropy_with_logits(
+                                            student_logits,
+                                            teacher_target,
+                                            reduction="none",
+                                        )
+                                        if distill_sample_weight is not None:
+                                            distill_bce = distill_bce * distill_sample_weight
+                                        teacher_distill_loss = distill_bce.mean()
+                                    loss = loss + teacher_distill_weight * teacher_distill_loss
+                        context_regularization_loss = (
+                            forward_output.context_regularization_loss
+                            if forward_output.context_regularization_loss is not None
+                            else forward_output.logits.new_tensor(0.0)
+                        )
+                        if context_budget_weight > 0.0:
+                            loss = (
+                                loss
+                                + context_budget_weight * context_regularization_loss
+                            )
                         prototype_loss = forward_output.logits.new_tensor(0.0)
                         if self._prototype_enabled():
                             if (
@@ -3172,8 +4145,51 @@ class BaseGraphSAGEExperiment:
                                 class_weight=prototype_class_weight,
                                 bucket_ids=prototype_bucket_ids,
                             )
-                            loss = loss + float(self.graph_config.prototype_loss_weight) * prototype_loss
+                            loss = loss + prototype_loss_weight * prototype_loss
+                            for diag_name, diag_value in prototype_regularizer.last_metrics.items():
+                                batch_extra_diagnostics.setdefault(str(diag_name), []).append(float(diag_value))
+                        normal_align_loss = forward_output.logits.new_tensor(0.0)
+                        if (
+                            normal_alignment_regularizer is not None
+                            and forward_output.embedding is not None
+                            and raw_batch_labels is not None
+                            and normal_align_bucket_ids is not None
+                        ):
+                            normal_align_loss = normal_alignment_regularizer.compute_loss(
+                                embedding=forward_output.embedding,
+                                raw_labels=raw_batch_labels,
+                                bucket_ids=normal_align_bucket_ids,
+                                epoch=epoch,
+                            )
+                        if self._normal_bucket_alignment_enabled():
+                            loss = loss + float(self.graph_config.normal_bucket_align_weight) * normal_align_loss
+                        normal_bucket_adv_loss = self._compute_normal_bucket_adv_loss(
+                            embedding=forward_output.embedding,
+                            raw_labels=raw_batch_labels,
+                            bucket_ids=normal_align_bucket_ids,
+                            discriminator=normal_bucket_discriminator,
+                            memory_embedding=normal_bucket_adv_memory_embedding,
+                            memory_bucket_ids=normal_bucket_adv_memory_bucket_ids,
+                        )
+                        if self._normal_bucket_adv_enabled():
+                            loss = loss + float(self.graph_config.normal_bucket_adv_weight) * normal_bucket_adv_loss
+                        (
+                            normal_bucket_adv_memory_embedding,
+                            normal_bucket_adv_memory_bucket_ids,
+                        ) = self._append_normal_bucket_adv_memory(
+                            embedding=forward_output.embedding,
+                            raw_labels=raw_batch_labels,
+                            bucket_ids=normal_align_bucket_ids,
+                            memory_embedding=normal_bucket_adv_memory_embedding,
+                            memory_bucket_ids=normal_bucket_adv_memory_bucket_ids,
+                        )
                         loss_parts["prototype_loss"] = float(prototype_loss.detach().item())
+                        loss_parts["normal_align_loss"] = float(normal_align_loss.detach().item())
+                        loss_parts["normal_bucket_adv_loss"] = float(normal_bucket_adv_loss.detach().item())
+                        loss_parts["teacher_distill_loss"] = float(teacher_distill_loss.detach().item())
+                        loss_parts["context_regularization_loss"] = float(
+                            context_regularization_loss.detach().item()
+                        )
                         loss_parts["total_loss"] = float(loss.detach().item())
                         loss.backward()
 
@@ -3192,11 +4208,22 @@ class BaseGraphSAGEExperiment:
                         batch_base_losses.append(float(loss_parts["base_loss"]))
                         batch_ranking_losses.append(float(loss_parts["ranking_loss"]))
                         batch_prototype_losses.append(float(loss_parts["prototype_loss"]))
+                        batch_normal_align_losses.append(float(loss_parts["normal_align_loss"]))
+                        batch_normal_bucket_adv_losses.append(float(loss_parts["normal_bucket_adv_loss"]))
                         batch_aux_losses.append(float(loss_parts["aux_loss"]))
+                        batch_teacher_distill_losses.append(float(loss_parts["teacher_distill_loss"]))
+                        batch_context_regularization_losses.append(
+                            float(loss_parts["context_regularization_loss"])
+                        )
                         batch_subgraph_nodes.append(float(subgraph.node_ids.shape[0]))
                         batch_subgraph_edges.append(float(subgraph.edge_src.shape[0]))
-                        batch_emb_norm.append(float((forward_output.diagnostics or {})["emb_norm"]))
-                        batch_dirichlet.append(float((forward_output.diagnostics or {})["dirichlet_energy"]))
+                        forward_diagnostics = forward_output.diagnostics or {}
+                        batch_emb_norm.append(float(forward_diagnostics["emb_norm"]))
+                        batch_dirichlet.append(float(forward_diagnostics["dirichlet_energy"]))
+                        for diag_name, diag_value in forward_diagnostics.items():
+                            if diag_name in {"emb_norm", "dirichlet_energy"}:
+                                continue
+                            batch_extra_diagnostics.setdefault(str(diag_name), []).append(float(diag_value))
                         batch_grad_norm.append(float(grad_norm))
                         batch_pbar.set_postfix(
                             loss=f"{batch_losses[-1]:.4f}",
@@ -3237,7 +4264,29 @@ class BaseGraphSAGEExperiment:
                     "train_base_loss": float(np.mean(batch_base_losses)),
                     "train_ranking_loss": float(np.mean(batch_ranking_losses)),
                     "train_prototype_loss": float(np.mean(batch_prototype_losses)),
+                    "train_normal_align_loss": float(np.mean(batch_normal_align_losses)),
+                    "train_normal_bucket_adv_loss": float(np.mean(batch_normal_bucket_adv_losses)),
                     "train_aux_loss": float(np.mean(batch_aux_losses)),
+                    "train_teacher_distill_loss": float(np.mean(batch_teacher_distill_losses)),
+                    "train_context_regularization_loss": float(np.mean(batch_context_regularization_losses)),
+                    "prototype_loss_weight_effective": float(prototype_loss_weight),
+                    "prototype_trust_score": float(
+                        self._prototype_weight_schedule_state.get("trust_score", 1.0)
+                    ),
+                    "teacher_distill_weight_effective": float(teacher_distill_weight),
+                    "teacher_distill_schedule_progress": float(
+                        self._teacher_distill_schedule_state.get("progress", 0.0)
+                    ),
+                    "context_residual_budget_weight_effective": float(context_budget_weight),
+                    "context_residual_budget_release_progress": float(
+                        self._context_budget_schedule_state.get("release_progress", 0.0)
+                    ),
+                    "context_residual_budget_prototype_readiness": float(
+                        self._context_budget_schedule_state.get("prototype_readiness", 0.0)
+                    ),
+                    "context_residual_budget_guard_strength": float(
+                        self._context_budget_schedule_state.get("guard_strength", 0.0)
+                    ),
                     "val_auc": float(val_auc),
                     "val_pr_auc": float(val_metrics["pr_auc"]),
                     "val_ap": float(val_metrics["ap"]),
@@ -3258,14 +4307,38 @@ class BaseGraphSAGEExperiment:
                     "lr": float(current_lr),
                     "loss_pos_weight": float(pos_weight.item()),
                 }
+                for diag_name, diag_values in sorted(batch_extra_diagnostics.items()):
+                    if diag_values:
+                        epoch_row[diag_name] = float(np.mean(diag_values))
                 self.training_history.append(epoch_row)
+                extra_diag_log = " ".join(
+                    f"{diag_name}={epoch_row[diag_name]:.6f}"
+                    for diag_name in sorted(batch_extra_diagnostics)
+                    if diag_name in epoch_row
+                )
                 epoch_log_line = (
                     f"[{self.model_name}] epoch={epoch} "
                     f"train_loss={epoch_row['train_loss']:.6f} "
                     f"train_base_loss={epoch_row['train_base_loss']:.6f} "
                     f"train_ranking_loss={epoch_row['train_ranking_loss']:.6f} "
                     f"train_prototype_loss={epoch_row['train_prototype_loss']:.6f} "
+                    f"train_normal_align_loss={epoch_row['train_normal_align_loss']:.6f} "
+                    f"train_normal_bucket_adv_loss={epoch_row['train_normal_bucket_adv_loss']:.6f} "
                     f"train_aux_loss={epoch_row['train_aux_loss']:.6f} "
+                    f"train_teacher_distill_loss={epoch_row['train_teacher_distill_loss']:.6f} "
+                    f"train_context_regularization_loss={epoch_row['train_context_regularization_loss']:.6f} "
+                    f"prototype_loss_weight_effective={epoch_row['prototype_loss_weight_effective']:.6f} "
+                    f"prototype_trust_score={epoch_row['prototype_trust_score']:.6f} "
+                    f"teacher_distill_weight_effective={epoch_row['teacher_distill_weight_effective']:.6f} "
+                    f"teacher_distill_schedule_progress={epoch_row['teacher_distill_schedule_progress']:.6f} "
+                    f"context_residual_budget_weight_effective="
+                    f"{epoch_row['context_residual_budget_weight_effective']:.6f} "
+                    f"context_residual_budget_release_progress="
+                    f"{epoch_row['context_residual_budget_release_progress']:.6f} "
+                    f"context_residual_budget_prototype_readiness="
+                    f"{epoch_row['context_residual_budget_prototype_readiness']:.6f} "
+                    f"context_residual_budget_guard_strength="
+                    f"{epoch_row['context_residual_budget_guard_strength']:.6f} "
                     f"val_auc={val_auc:.6f} "
                     f"val_pr_auc={val_metrics['pr_auc']:.6f} "
                     f"val_ap={val_metrics['ap']:.6f} "
@@ -3285,6 +4358,8 @@ class BaseGraphSAGEExperiment:
                     f"lr={current_lr:.6g} "
                     f"loss_pos_weight={float(pos_weight.item()):.4f}"
                 )
+                if extra_diag_log:
+                    epoch_log_line = f"{epoch_log_line} {extra_diag_log}"
                 tqdm.write(epoch_log_line)
                 if log_path is not None:
                     _append_text_line(log_path, epoch_log_line)
@@ -3384,6 +4459,18 @@ class BaseGraphSAGEExperiment:
                     subgraph=subgraph,
                     snapshot_end=snapshot_end,
                 )
+                target_bucket_ids = None
+                if self._normal_bucket_shift_enabled():
+                    target_bucket_ids = torch.as_tensor(
+                        np.asarray(context.graph_cache.node_time_bucket[batch_nodes], dtype=np.int64),
+                        dtype=torch.long,
+                        device=self.device,
+                    )
+                target_embedding_shift = self._build_normal_bucket_shift(bucket_ids=target_bucket_ids)
+                target_time_position = self._build_target_time_position(
+                    context=context,
+                    batch_nodes=batch_nodes,
+                )
                 forward_output = self.network.forward_output(
                     x=x,
                     edge_src=edge_src,
@@ -3392,6 +4479,8 @@ class BaseGraphSAGEExperiment:
                     edge_relative_time=edge_relative_time,
                     target_local_idx=target_idx,
                     target_context_features=target_context_x,
+                    target_embedding_shift=target_embedding_shift,
+                    target_time_position=target_time_position,
                     node_subgraph_id=node_subgraph_id,
                     edge_subgraph_id=edge_subgraph_id,
                     include_embedding=return_embeddings,

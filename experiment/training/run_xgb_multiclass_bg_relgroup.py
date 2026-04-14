@@ -31,6 +31,7 @@ from experiment.training.run_xgb_multiclass_bg import (
     _build_sample_weight,
     _multiclass_binary_auc,
 )
+from experiment.training.xgb.domain_adaptation import add_domain_weight_args
 from experiment.training.xgb.multiclass_bg_runtime import (
     build_historical_multiclass_bg_split,
     train_multiclass_bg_xgb,
@@ -74,6 +75,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--time-weight-half-life-days", type=float, default=0.0)
     parser.add_argument("--time-weight-floor", type=float, default=0.25)
     parser.add_argument("--include-future-background", action="store_true")
+    parser.add_argument("--min-train-first-active-day", type=int, default=0)
+    add_domain_weight_args(parser)
     return parser.parse_args()
 
 
@@ -88,6 +91,7 @@ def _cache_key(args: argparse.Namespace, threshold_day: int) -> str:
         "selected_missing_indices": list(args.selected_missing_indices),
         "append_count_features": bool(args.append_count_features),
         "threshold_day": int(threshold_day),
+        "min_train_first_active_day": int(args.min_train_first_active_day),
         "include_future_background": bool(args.include_future_background),
         "feature_dir": str(args.feature_dir.resolve()),
     }
@@ -361,6 +365,7 @@ def main() -> None:
         phase2_y=phase2_y,
         first_active=first_active,
         include_future_background=bool(args.include_future_background),
+        min_train_first_active_day=int(args.min_train_first_active_day),
     )
 
     base_phase1, base_feature_names = _take_feature_matrix(

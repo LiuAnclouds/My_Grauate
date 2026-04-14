@@ -30,6 +30,7 @@ from experiment.training.run_xgb_multiclass_bg import (
     _build_sample_weight,
     _multiclass_binary_auc,
 )
+from experiment.training.xgb.domain_adaptation import add_domain_weight_args
 from experiment.training.xgb.multiclass_bg_runtime import (
     build_historical_multiclass_bg_split,
     train_multiclass_bg_xgb,
@@ -74,8 +75,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fraud-weight-scale", type=float, default=1.0)
     parser.add_argument("--time-weight-half-life-days", type=float, default=0.0)
     parser.add_argument("--time-weight-floor", type=float, default=0.25)
+    parser.add_argument("--min-train-first-active-day", type=int, default=0)
     parser.add_argument("--te-bins", type=int, default=32)
     parser.add_argument("--te-smoothing", type=float, default=200.0)
+    add_domain_weight_args(parser)
     return parser.parse_args()
 
 
@@ -260,6 +263,7 @@ def main() -> None:
         phase2_y=phase2_y,
         first_active=first_active,
         include_future_background=False,
+        min_train_first_active_day=int(args.min_train_first_active_day),
     )
 
     x_train, x_val, x_external, feature_names = _build_feature_matrices(

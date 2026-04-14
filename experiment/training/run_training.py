@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from experiment.datasets.registry import get_active_dataset_spec
 from experiment.training.common import (
     BLEND_OUTPUT_ROOT,
     FEATURE_OUTPUT_ROOT,
@@ -47,11 +48,13 @@ from experiment.training.gbdt_models import LightGBMExperiment
 from experiment.training.gnn_models import (
     GraphModelConfig,
 )
+from experiment.training.xgb_utils import binary_score_from_softprob
 
 
 DEFAULT_SEEDS = [42, 52, 62]
 PROMOTION_DELTA_MIN = 0.003
 PROMOTION_EXTERNAL_DROP_MAX = 0.001
+ACTIVE_DATASET_SPEC = get_active_dataset_spec()
 
 
 def _path_repr(path: Path) -> str:
@@ -62,6 +65,9 @@ def _path_repr(path: Path) -> str:
 
 
 def parse_args() -> argparse.Namespace:
+    dataset_spec = get_active_dataset_spec()
+    build_phase_choices = (*dataset_spec.phase_filenames.keys(), "both")
+    default_build_phase = "both" if len(dataset_spec.default_artifacts) > 1 else dataset_spec.default_artifacts[0]
     parser = argparse.ArgumentParser(
         description="Unified training CLI for the DGraph anti-fraud benchmark framework."
     )
@@ -73,9 +79,9 @@ def parse_args() -> argparse.Namespace:
     )
     build_parser.add_argument(
         "--phase",
-        default="both",
-        choices=("phase1", "phase2", "both"),
-        help="Which phase to build.",
+        default=default_build_phase,
+        choices=build_phase_choices,
+        help="Which dataset artifact to build. `both` expands to the dataset default artifact set.",
     )
     build_parser.add_argument(
         "--outdir",
@@ -416,12 +422,15 @@ def parse_args() -> argparse.Namespace:
     )
     train_parser.add_argument(
         "--target-context-fusion",
-        choices=("none", "gate", "concat", "logit_residual"),
+        choices=("none", "gate", "concat", "logit_residual", "atm_residual", "drift_residual"),
         default="none",
         help=(
             "Optional target-node context fusion applied after the base graph classifier. "
             "`gate` adds a residual gated context expert; `concat` learns a compact post-head fusion; "
-            "`logit_residual` keeps the graph head unchanged and applies a learned context-only logit correction."
+            "`logit_residual` keeps the graph head unchanged and applies a learned context-only logit correction; "
+            "`atm_residual` adds an ATM-GAD-style adaptive temporal-window residual branch; "
+            "`drift_residual` adds a temporal-drift-calibrated residual branch that suppresses "
+            "unstable context corrections."
         ),
     )
     train_parser.add_argument(
@@ -432,6 +441,63 @@ def parse_args() -> argparse.Namespace:
             "Optional extra feature groups loaded only for the target-node context expert. "
             "These groups do not enter graph message passing."
         ),
+    )
+    train_parser.add_argument(
+        "--target-context-prediction-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional run directory providing leakage-safe phase1_train/phase1_val/phase2_external "
+            "prediction bundles appended to the target-context branch."
+        ),
+    )
+    train_parser.add_argument(
+        "--target-context-prediction-transform",
+        choices=("raw", "logit"),
+        default="raw",
+        help="Transform applied to appended target-context prediction features.",
+    )
+    train_parser.add_argument(
+        "--teacher-distill-prediction-dir",
+        type=Path,
+        default=None,
+        help="Optional run directory providing leakage-safe phase1_train predictions for teacher distillation.",
+    )
+    train_parser.add_argument(
+        "--teacher-distill-weight",
+        type=float,
+        default=0.0,
+        help="Weight for teacher distillation on covered phase1-train nodes.",
+    )
+    train_parser.add_argument(
+        "--teacher-distill-loss",
+        choices=("bce", "mse", "rank"),
+        default="bce",
+        help="Teacher distillation loss form.",
+    )
+    train_parser.add_argument(
+        "--teacher-distill-start-epoch",
+        type=int,
+        default=1,
+        help="Epoch index at which teacher distillation becomes active.",
+    )
+    train_parser.add_argument(
+        "--teacher-distill-ramp-epochs",
+        type=int,
+        default=0,
+        help="Optional linear warmup length for teacher distillation weight.",
+    )
+    train_parser.add_argument(
+        "--teacher-distill-agreement-floor",
+        type=float,
+        default=0.0,
+        help="Minimum teacher probability assigned to the true label before distillation is applied.",
+    )
+    train_parser.add_argument(
+        "--teacher-distill-rank-gap",
+        type=float,
+        default=0.0,
+        help="Minimum teacher-score gap used to form pairwise ranking-distillation constraints.",
     )
     train_parser.add_argument(
         "--primary-multiclass-num-classes",
@@ -446,11 +512,11 @@ def parse_args() -> argparse.Namespace:
     train_parser.add_argument(
         "--prototype-multiclass-num-classes",
         type=int,
-        choices=(0, 3, 4),
+        choices=(0, 2, 3, 4),
         default=0,
         help=(
             "Prototype-regularization class count. `0` disables the prototype memory loss, "
-            "`3` uses normal/fraud/background, `4` uses normal/fraud/bg2/bg3."
+            "`2` uses normal/fraud, `3` uses normal/fraud/background, `4` uses normal/fraud/bg2/bg3."
         ),
     )
     train_parser.add_argument(
@@ -458,6 +524,22 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.0,
         help="Weight for the prototype-memory regularization loss on graph embeddings.",
+    )
+    train_parser.add_argument(
+        "--prototype-loss-weight-schedule",
+        choices=("none", "adaptive_quality"),
+        default="none",
+        help=(
+            "Optional schedule for prototype-memory loss trust. "
+            "'adaptive_quality' downweights prototype loss when recent prototype "
+            "classification/margin signals are weak."
+        ),
+    )
+    train_parser.add_argument(
+        "--prototype-loss-min-weight",
+        type=float,
+        default=0.0,
+        help="Minimum effective prototype-memory loss weight under the selected schedule.",
     )
     train_parser.add_argument(
         "--prototype-temperature",
@@ -512,6 +594,149 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.0,
         help="Extra weight on same-class temporal/global prototype anchor consistency inside the prototype loss.",
+    )
+    train_parser.add_argument(
+        "--prototype-separation-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Extra weight for margin-based separation between a sample's target prototype and the "
+            "hardest negative prototype."
+        ),
+    )
+    train_parser.add_argument(
+        "--prototype-separation-margin",
+        type=float,
+        default=0.1,
+        help="Margin used by --prototype-separation-weight for dynamic prototype discrimination.",
+    )
+    train_parser.add_argument(
+        "--normal-bucket-align-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for time-bucket normal-class alignment. Encourages embeddings of normal nodes "
+            "from different temporal buckets to stay consistent under time drift."
+        ),
+    )
+    train_parser.add_argument(
+        "--normal-bucket-shift-strength",
+        type=float,
+        default=0.0,
+        help=(
+            "Strength of explicit normal-anchor temporal shift compensation applied to target "
+            "embeddings using the learned normal bucket memory."
+        ),
+    )
+    train_parser.add_argument(
+        "--target-time-adapter-strength",
+        type=float,
+        default=0.0,
+        help=(
+            "Strength of target-time conditional embedding modulation before the final classifier. "
+            "Useful for learning dataset-specific temporal drift correction."
+        ),
+    )
+    train_parser.add_argument(
+        "--target-time-adapter-type",
+        choices=("affine", "drift_expert"),
+        default="affine",
+        help=(
+            "Target-time adapter form. `affine` keeps the original single expert time modulation; "
+            "`drift_expert` uses drift-aware temporal expert routing."
+        ),
+    )
+    train_parser.add_argument(
+        "--target-time-adapter-num-experts",
+        type=int,
+        default=4,
+        help="Number of temporal experts used when --target-time-adapter-type=drift_expert.",
+    )
+    train_parser.add_argument(
+        "--atm-gate-strength",
+        type=float,
+        default=1.0,
+        help=(
+            "Residual strength for the time-aware context branch when "
+            "--target-context-fusion=atm_residual or drift_residual."
+        ),
+    )
+    train_parser.add_argument(
+        "--context-residual-scale",
+        type=float,
+        default=1.0,
+        help="Multiplicative strength on the post-head target-context residual logits.",
+    )
+    train_parser.add_argument(
+        "--context-residual-clip",
+        type=float,
+        default=0.0,
+        help=(
+            "If > 0, apply smooth tanh clipping to target-context residual logits using this "
+            "absolute cap."
+        ),
+    )
+    train_parser.add_argument(
+        "--context-residual-budget",
+        type=float,
+        default=0.0,
+        help=(
+            "If > 0, residual magnitudes beyond this absolute value incur a training penalty "
+            "before the final classifier."
+        ),
+    )
+    train_parser.add_argument(
+        "--context-residual-budget-weight",
+        type=float,
+        default=0.0,
+        help="Weight for the target-context residual budget penalty.",
+    )
+    train_parser.add_argument(
+        "--context-residual-budget-schedule",
+        choices=("none", "prototype_release", "prototype_adaptive"),
+        default="none",
+        help=(
+            "Optional curriculum for the target-context residual budget penalty. "
+            "'prototype_release' keeps the full penalty until prototype warmup/ramp stabilizes, "
+            "then cosine-decays it; 'prototype_adaptive' further gates the release using "
+            "prototype-coverage/margin diagnostics and context-residual risk."
+        ),
+    )
+    train_parser.add_argument(
+        "--context-residual-budget-min-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Minimum residual budget penalty weight after schedule decay. "
+            "Ignored when --context-residual-budget-schedule=none."
+        ),
+    )
+    train_parser.add_argument(
+        "--context-residual-budget-release-epochs",
+        type=int,
+        default=0,
+        help=(
+            "How many epochs the residual budget penalty takes to decay under the selected "
+            "schedule. <= 0 means decay until the configured epoch budget is exhausted."
+        ),
+    )
+    train_parser.add_argument(
+        "--context-residual-budget-release-delay-epochs",
+        type=int,
+        default=0,
+        help=(
+            "Extra consolidation epochs to wait after prototype warmup/ramp before starting "
+            "the residual budget release schedule."
+        ),
+    )
+    train_parser.add_argument(
+        "--normal-bucket-adv-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for adversarial time-bucket confusion on normal-node embeddings. "
+            "Uses gradient reversal to suppress temporal leakage in normal representations."
+        ),
     )
     train_parser.add_argument(
         "--include-historical-background-negatives",
@@ -605,13 +830,174 @@ def _model_run_dir(outdir: Path, model_name: str, run_name: str) -> Path:
     return ensure_dir(outdir / model_name / run_name)
 
 
-def _load_labels_for_splits(split) -> tuple[np.ndarray, np.ndarray]:
-    phase1 = load_phase_arrays("phase1", keys=("y",))
-    phase2 = load_phase_arrays("phase2", keys=("y",))
-    return (
-        np.asarray(phase1["y"], dtype=np.int8),
-        np.asarray(phase2["y"], dtype=np.int8),
+def _load_labels_for_splits(split) -> dict[str, np.ndarray]:
+    phase_names: list[str] = [split.train_phase, split.val_phase]
+    if split.external_phase:
+        phase_names.append(str(split.external_phase))
+    labels_by_phase: dict[str, np.ndarray] = {}
+    for phase in dict.fromkeys(phase_names):
+        labels_by_phase[str(phase)] = np.asarray(load_phase_arrays(str(phase), keys=("y",))["y"], dtype=np.int8)
+    return labels_by_phase
+
+
+def _metric_mean(metrics: list[dict[str, Any]], key: str) -> float | None:
+    values = [float(row[key]) for row in metrics if row.get(key) is not None]
+    if not values:
+        return None
+    return float(np.mean(values))
+
+
+def _metric_std(metrics: list[dict[str, Any]], key: str) -> float | None:
+    values = [float(row[key]) for row in metrics if row.get(key) is not None]
+    if not values:
+        return None
+    return float(np.std(values))
+
+
+def _format_metric(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.6f}"
+
+
+def _transform_target_context_prediction_features(
+    score: np.ndarray,
+    transform: str,
+) -> np.ndarray:
+    values = np.asarray(score, dtype=np.float32)
+    if values.ndim == 1:
+        values = values.reshape(-1, 1)
+    if str(transform) == "raw":
+        return values.astype(np.float32, copy=False)
+    clipped = np.clip(values, 1e-6, 1.0 - 1e-6)
+    if clipped.shape[1] == 1:
+        return np.log(clipped / (1.0 - clipped)).astype(np.float32, copy=False)
+    return np.log(clipped).astype(np.float32, copy=False)
+
+
+def _load_target_context_prediction_features(
+    *,
+    prediction_dir: Path,
+    prediction_transform: str,
+    train_ids: np.ndarray,
+    val_ids: np.ndarray,
+    external_ids: np.ndarray,
+    phase1_num_nodes: int,
+    phase2_num_nodes: int,
+) -> tuple[np.ndarray, np.ndarray | None, list[str]]:
+    run_dir = Path(prediction_dir)
+    train_bundle = load_prediction_npz(resolve_prediction_path(run_dir, "phase1_train"))
+    val_bundle = load_prediction_npz(resolve_prediction_path(run_dir, "phase1_val"))
+    train_features = _transform_target_context_prediction_features(train_bundle["probability"], prediction_transform)
+    val_features = _transform_target_context_prediction_features(val_bundle["probability"], prediction_transform)
+    if train_features.shape[1] != val_features.shape[1]:
+        raise ValueError(
+            f"{run_dir}: train/val prediction feature dims mismatch "
+            f"{train_features.shape[1]} vs {val_features.shape[1]}."
+        )
+
+    def _scatter_known_scores(
+        target_matrix: np.ndarray,
+        *,
+        target_ids: np.ndarray,
+        bundle: dict[str, np.ndarray],
+        feature_values: np.ndarray,
+    ) -> int:
+        position = {int(node_id): idx for idx, node_id in enumerate(np.asarray(bundle["node_ids"], dtype=np.int32).tolist())}
+        matched_target: list[int] = []
+        matched_source: list[int] = []
+        for node_id in np.asarray(target_ids, dtype=np.int32).tolist():
+            source_idx = position.get(int(node_id))
+            if source_idx is None:
+                continue
+            matched_target.append(int(node_id))
+            matched_source.append(int(source_idx))
+        if not matched_target:
+            return 0
+        target_matrix[np.asarray(matched_target, dtype=np.int32)] = feature_values[
+            np.asarray(matched_source, dtype=np.int64)
+        ]
+        return len(matched_target)
+
+    phase1_features = np.zeros((int(phase1_num_nodes), int(train_features.shape[1])), dtype=np.float32)
+    _scatter_known_scores(
+        phase1_features,
+        target_ids=train_ids,
+        bundle=train_bundle,
+        feature_values=train_features,
     )
+    _scatter_known_scores(
+        phase1_features,
+        target_ids=val_ids,
+        bundle=val_bundle,
+        feature_values=val_features,
+    )
+
+    phase2_features = None
+    if external_ids.size:
+        external_bundle = load_prediction_npz(resolve_prediction_path(run_dir, "phase2_external"))
+        external_features = _transform_target_context_prediction_features(
+            external_bundle["probability"],
+            prediction_transform,
+        )
+        if external_features.shape[1] != train_features.shape[1]:
+            raise ValueError(
+                f"{run_dir}: train/external prediction feature dims mismatch "
+                f"{train_features.shape[1]} vs {external_features.shape[1]}."
+            )
+        phase2_features = np.zeros((int(phase2_num_nodes), int(train_features.shape[1])), dtype=np.float32)
+        _scatter_known_scores(
+            phase2_features,
+            target_ids=external_ids,
+            bundle=external_bundle,
+            feature_values=external_features,
+        )
+
+    feature_names = [f"teacher_pred_{idx}" for idx in range(int(train_features.shape[1]))]
+    return phase1_features, phase2_features, feature_names
+
+
+def _coerce_teacher_binary_score(score: np.ndarray) -> np.ndarray:
+    values = np.asarray(score, dtype=np.float32)
+    if values.ndim == 1:
+        return values.astype(np.float32, copy=False)
+    if values.ndim == 2 and values.shape[1] == 1:
+        return values.reshape(-1).astype(np.float32, copy=False)
+    if values.ndim == 2 and values.shape[1] == 4:
+        return binary_score_from_softprob(values)
+    if values.ndim == 2 and values.shape[1] == 2:
+        denom = np.clip(values[:, 0] + values[:, 1], 1e-6, None)
+        return (values[:, 1] / denom).astype(np.float32, copy=False)
+    raise ValueError(f"Unsupported teacher prediction shape: {values.shape}")
+
+
+def _load_teacher_distill_targets(
+    *,
+    prediction_dir: Path,
+    train_ids: np.ndarray,
+    phase1_num_nodes: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    run_dir = Path(prediction_dir)
+    train_bundle = load_prediction_npz(resolve_prediction_path(run_dir, "phase1_train"))
+    score = _coerce_teacher_binary_score(train_bundle["probability"])
+    targets = np.zeros((int(phase1_num_nodes),), dtype=np.float32)
+    mask = np.zeros((int(phase1_num_nodes),), dtype=bool)
+    position = {
+        int(node_id): idx
+        for idx, node_id in enumerate(np.asarray(train_bundle["node_ids"], dtype=np.int32).tolist())
+    }
+    matched_target: list[int] = []
+    matched_source: list[int] = []
+    for node_id in np.asarray(train_ids, dtype=np.int32).tolist():
+        source_idx = position.get(int(node_id))
+        if source_idx is None:
+            continue
+        matched_target.append(int(node_id))
+        matched_source.append(int(source_idx))
+    if matched_target:
+        matched_target_idx = np.asarray(matched_target, dtype=np.int32)
+        matched_source_idx = np.asarray(matched_source, dtype=np.int64)
+        targets[matched_target_idx] = score[matched_source_idx]
+        mask[matched_target_idx] = True
+    return targets, mask
 
 
 def _prepare_split_ids(args: argparse.Namespace):
@@ -669,6 +1055,8 @@ def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
         primary_multiclass_num_classes=int(args.primary_multiclass_num_classes),
         prototype_multiclass_num_classes=int(args.prototype_multiclass_num_classes),
         prototype_loss_weight=float(args.prototype_loss_weight),
+        prototype_loss_weight_schedule=str(args.prototype_loss_weight_schedule),
+        prototype_loss_min_weight=float(args.prototype_loss_min_weight),
         prototype_temperature=float(args.prototype_temperature),
         prototype_momentum=float(args.prototype_momentum),
         prototype_start_epoch=int(args.prototype_start_epoch),
@@ -677,6 +1065,29 @@ def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
         prototype_neighbor_blend=float(args.prototype_neighbor_blend),
         prototype_global_blend=float(args.prototype_global_blend),
         prototype_consistency_weight=float(args.prototype_consistency_weight),
+        prototype_separation_weight=float(args.prototype_separation_weight),
+        prototype_separation_margin=float(args.prototype_separation_margin),
+        normal_bucket_align_weight=float(args.normal_bucket_align_weight),
+        normal_bucket_shift_strength=float(args.normal_bucket_shift_strength),
+        target_time_adapter_strength=float(args.target_time_adapter_strength),
+        target_time_adapter_type=str(args.target_time_adapter_type),
+        target_time_adapter_num_experts=int(args.target_time_adapter_num_experts),
+        teacher_distill_weight=float(args.teacher_distill_weight),
+        teacher_distill_loss=str(args.teacher_distill_loss),
+        teacher_distill_start_epoch=int(args.teacher_distill_start_epoch),
+        teacher_distill_ramp_epochs=int(args.teacher_distill_ramp_epochs),
+        teacher_distill_agreement_floor=float(args.teacher_distill_agreement_floor),
+        teacher_distill_rank_gap=float(args.teacher_distill_rank_gap),
+        atm_gate_strength=float(args.atm_gate_strength),
+        context_residual_scale=float(args.context_residual_scale),
+        context_residual_clip=float(args.context_residual_clip),
+        context_residual_budget=float(args.context_residual_budget),
+        context_residual_budget_weight=float(args.context_residual_budget_weight),
+        context_residual_budget_schedule=str(args.context_residual_budget_schedule),
+        context_residual_budget_min_weight=float(args.context_residual_budget_min_weight),
+        context_residual_budget_release_epochs=int(args.context_residual_budget_release_epochs),
+        context_residual_budget_release_delay_epochs=int(args.context_residual_budget_release_delay_epochs),
+        normal_bucket_adv_weight=float(args.normal_bucket_adv_weight),
         include_historical_background_negatives=bool(args.include_historical_background_negatives),
         historical_background_negative_ratio=float(args.historical_background_negative_ratio),
         historical_background_negative_warmup_epochs=int(args.historical_background_negative_warmup_epochs),
@@ -725,23 +1136,30 @@ def _build_promotion_decision(
             "reason": "benchmark summary not found",
         }
     benchmark = json.loads(benchmark_path.read_text(encoding="utf-8"))
-    val_delta = float(summary_payload["phase1_val_auc_mean"] - benchmark["phase1_val_auc_mean"])
-    external_delta = float(summary_payload["phase2_external_auc_mean"] - benchmark["phase2_external_auc_mean"])
-    promoted = val_delta >= PROMOTION_DELTA_MIN and external_delta >= -PROMOTION_EXTERNAL_DROP_MAX
-    return {
+    current_val = summary_payload.get("val_auc_mean", summary_payload.get("phase1_val_auc_mean"))
+    benchmark_val = benchmark.get("val_auc_mean", benchmark.get("phase1_val_auc_mean"))
+    val_delta = float(current_val - benchmark_val)
+    current_external = summary_payload.get("external_auc_mean", summary_payload.get("phase2_external_auc_mean"))
+    benchmark_external = benchmark.get("external_auc_mean", benchmark.get("phase2_external_auc_mean"))
+    external_delta = None
+    promoted = val_delta >= PROMOTION_DELTA_MIN
+    decision: dict[str, Any] = {
         "benchmark_reference": _path_repr(benchmark_path),
         "val_delta_vs_m2": val_delta,
-        "external_delta_vs_m2": external_delta,
         "promoted": promoted,
-        "rule": {
-            "min_val_delta": PROMOTION_DELTA_MIN,
-            "max_external_drop": PROMOTION_EXTERNAL_DROP_MAX,
-        },
+        "rule": {"min_val_delta": PROMOTION_DELTA_MIN},
     }
+    if current_external is not None and benchmark_external is not None:
+        external_delta = float(current_external - benchmark_external)
+        promoted = promoted and external_delta >= -PROMOTION_EXTERNAL_DROP_MAX
+        decision["external_delta_vs_m2"] = external_delta
+        decision["rule"]["max_external_drop"] = PROMOTION_EXTERNAL_DROP_MAX
+    decision["promoted"] = promoted
+    return decision
 
 
 def run_build_features(args: argparse.Namespace) -> None:
-    phases = ["phase1", "phase2"] if args.phase == "both" else [args.phase]
+    phases = list(ACTIVE_DATASET_SPEC.default_artifacts) if args.phase == "both" else [args.phase]
     summary = build_feature_artifacts(
         phases=phases,
         outdir=args.outdir,
@@ -760,11 +1178,17 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
     ) as prep_pbar:
         split, train_ids, val_ids, external_ids = _prepare_split_ids(args)
         prep_pbar.update(1)
-        phase1_y, phase2_y = _load_labels_for_splits(split)
+        if split.train_phase != split.val_phase:
+            raise NotImplementedError("LightGBM training currently requires train/val to come from the same graph.")
+        labels_by_phase = _load_labels_for_splits(split)
         feature_groups = resolve_feature_groups(args.model, list(args.extra_groups))
         prep_pbar.update(1)
-        phase1_store = FeatureStore("phase1", feature_groups, outdir=args.feature_dir)
-        phase2_store = FeatureStore("phase2", feature_groups, outdir=args.feature_dir)
+        phase1_store = FeatureStore(split.train_phase, feature_groups, outdir=args.feature_dir)
+        phase2_store = (
+            FeatureStore(str(split.external_phase), feature_groups, outdir=args.feature_dir)
+            if external_ids.size and split.external_phase is not None
+            else None
+        )
         prep_pbar.update(1)
 
     run_dir = _model_run_dir(args.outdir, args.model, args.run_name)
@@ -789,40 +1213,53 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
             fit_metrics = model.fit(
                 train_store=phase1_store,
                 train_ids=train_ids,
-                train_labels=phase1_y[train_ids],
+                train_labels=labels_by_phase[split.train_phase][train_ids],
                 val_ids=val_ids,
-                val_labels=phase1_y[val_ids],
+                val_labels=labels_by_phase[split.val_phase][val_ids],
             )
             val_prob = model.predict_proba(phase1_store, val_ids)
-            external_prob = model.predict_proba(phase2_store, external_ids)
-            val_metrics = compute_binary_classification_metrics(phase1_y[val_ids], val_prob)
-            external_metrics = compute_binary_classification_metrics(phase2_y[external_ids], external_prob)
+            val_metrics = compute_binary_classification_metrics(labels_by_phase[split.val_phase][val_ids], val_prob)
+            external_prob = None
+            external_metrics = None
+            if external_ids.size and phase2_store is not None and split.external_phase is not None:
+                external_prob = model.predict_proba(phase2_store, external_ids)
+                external_metrics = compute_binary_classification_metrics(
+                    labels_by_phase[str(split.external_phase)][external_ids],
+                    external_prob,
+                )
             model.save(seed_dir, feature_names=phase1_store.feature_names)
-            save_prediction_npz(seed_dir / "phase1_val_predictions.npz", val_ids, phase1_y[val_ids], val_prob)
             save_prediction_npz(
-                seed_dir / "phase2_external_predictions.npz",
-                external_ids,
-                phase2_y[external_ids],
-                external_prob,
+                seed_dir / "phase1_val_predictions.npz",
+                val_ids,
+                labels_by_phase[split.val_phase][val_ids],
+                val_prob,
             )
+            if external_prob is not None and external_metrics is not None and split.external_phase is not None:
+                save_prediction_npz(
+                    seed_dir / "phase2_external_predictions.npz",
+                    external_ids,
+                    labels_by_phase[str(split.external_phase)][external_ids],
+                    external_prob,
+                )
             val_predictions.append(val_prob)
-            external_predictions.append(external_prob)
+            if external_prob is not None:
+                external_predictions.append(external_prob)
             metrics.append(
                 {
                     "seed": seed,
                     "val_auc": val_metrics["auc"],
                     "val_pr_auc": val_metrics["pr_auc"],
                     "val_ap": val_metrics["ap"],
-                    "external_auc": external_metrics["auc"],
-                    "external_pr_auc": external_metrics["pr_auc"],
-                    "external_ap": external_metrics["ap"],
+                    "external_auc": None if external_metrics is None else external_metrics["auc"],
+                    "external_pr_auc": None if external_metrics is None else external_metrics["pr_auc"],
+                    "external_ap": None if external_metrics is None else external_metrics["ap"],
                     "best_iteration": fit_metrics["best_iteration"],
                 }
             )
             seed_pbar.set_postfix(
                 val_auc=f"{val_metrics['auc']:.4f}",
                 val_ap=f"{val_metrics['ap']:.4f}",
-                external_auc=f"{external_metrics['auc']:.4f}",
+                external_auc=_format_metric(None if external_metrics is None else external_metrics["auc"]),
                 refresh=False,
             )
             tqdm.write(
@@ -830,24 +1267,28 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
                 f"phase1_val_auc={val_metrics['auc']:.6f} "
                 f"phase1_val_pr_auc={val_metrics['pr_auc']:.6f} "
                 f"phase1_val_ap={val_metrics['ap']:.6f} "
-                f"phase2_external_auc={external_metrics['auc']:.6f} "
-                f"phase2_external_pr_auc={external_metrics['pr_auc']:.6f} "
-                f"phase2_external_ap={external_metrics['ap']:.6f}"
+                f"phase2_external_auc={_format_metric(None if external_metrics is None else external_metrics['auc'])} "
+                f"phase2_external_pr_auc={_format_metric(None if external_metrics is None else external_metrics['pr_auc'])} "
+                f"phase2_external_ap={_format_metric(None if external_metrics is None else external_metrics['ap'])}"
             )
 
     val_avg_path = _save_average_predictions(
         run_dir=run_dir,
         split_name="phase1_val",
         node_ids=val_ids,
-        labels=phase1_y[val_ids],
+        labels=labels_by_phase[split.val_phase][val_ids],
         predictions=val_predictions,
     )
-    external_avg_path = _save_average_predictions(
-        run_dir=run_dir,
-        split_name="phase2_external",
-        node_ids=external_ids,
-        labels=phase2_y[external_ids],
-        predictions=external_predictions,
+    external_avg_path = (
+        _save_average_predictions(
+            run_dir=run_dir,
+            split_name="phase2_external",
+            node_ids=external_ids,
+            labels=labels_by_phase[str(split.external_phase)][external_ids],
+            predictions=external_predictions,
+        )
+        if external_predictions and split.external_phase is not None
+        else None
     )
 
     summary = {
@@ -855,24 +1296,45 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
         "run_name": args.run_name,
         "feature_groups": feature_groups,
         "seeds": list(args.seeds),
+        "split_style": split.split_style,
+        "train_phase": split.train_phase,
+        "val_phase": split.val_phase,
+        "external_phase": split.external_phase,
+        "train_size": int(train_ids.size),
+        "val_size": int(val_ids.size),
+        "external_size": int(external_ids.size),
+        "val_auc_mean": _metric_mean(metrics, "val_auc"),
+        "val_auc_std": _metric_std(metrics, "val_auc"),
+        "val_pr_auc_mean": _metric_mean(metrics, "val_pr_auc"),
+        "val_pr_auc_std": _metric_std(metrics, "val_pr_auc"),
+        "val_ap_mean": _metric_mean(metrics, "val_ap"),
+        "val_ap_std": _metric_std(metrics, "val_ap"),
+        "external_auc_mean": _metric_mean(metrics, "external_auc"),
+        "external_auc_std": _metric_std(metrics, "external_auc"),
+        "external_pr_auc_mean": _metric_mean(metrics, "external_pr_auc"),
+        "external_pr_auc_std": _metric_std(metrics, "external_pr_auc"),
+        "external_ap_mean": _metric_mean(metrics, "external_ap"),
+        "external_ap_std": _metric_std(metrics, "external_ap"),
         "phase1_train_size": int(train_ids.size),
         "phase1_val_size": int(val_ids.size),
         "phase2_external_size": int(external_ids.size),
-        "phase1_val_auc_mean": float(np.mean([row["val_auc"] for row in metrics])),
-        "phase1_val_auc_std": float(np.std([row["val_auc"] for row in metrics])),
-        "phase1_val_pr_auc_mean": float(np.mean([row["val_pr_auc"] for row in metrics])),
-        "phase1_val_pr_auc_std": float(np.std([row["val_pr_auc"] for row in metrics])),
-        "phase1_val_ap_mean": float(np.mean([row["val_ap"] for row in metrics])),
-        "phase1_val_ap_std": float(np.std([row["val_ap"] for row in metrics])),
-        "phase2_external_auc_mean": float(np.mean([row["external_auc"] for row in metrics])),
-        "phase2_external_auc_std": float(np.std([row["external_auc"] for row in metrics])),
-        "phase2_external_pr_auc_mean": float(np.mean([row["external_pr_auc"] for row in metrics])),
-        "phase2_external_pr_auc_std": float(np.std([row["external_pr_auc"] for row in metrics])),
-        "phase2_external_ap_mean": float(np.mean([row["external_ap"] for row in metrics])),
-        "phase2_external_ap_std": float(np.std([row["external_ap"] for row in metrics])),
+        "phase1_val_auc_mean": _metric_mean(metrics, "val_auc"),
+        "phase1_val_auc_std": _metric_std(metrics, "val_auc"),
+        "phase1_val_pr_auc_mean": _metric_mean(metrics, "val_pr_auc"),
+        "phase1_val_pr_auc_std": _metric_std(metrics, "val_pr_auc"),
+        "phase1_val_ap_mean": _metric_mean(metrics, "val_ap"),
+        "phase1_val_ap_std": _metric_std(metrics, "val_ap"),
+        "phase2_external_auc_mean": _metric_mean(metrics, "external_auc"),
+        "phase2_external_auc_std": _metric_std(metrics, "external_auc"),
+        "phase2_external_pr_auc_mean": _metric_mean(metrics, "external_pr_auc"),
+        "phase2_external_pr_auc_std": _metric_std(metrics, "external_pr_auc"),
+        "phase2_external_ap_mean": _metric_mean(metrics, "external_ap"),
+        "phase2_external_ap_std": _metric_std(metrics, "external_ap"),
         "seed_metrics": metrics,
         "phase1_val_avg_predictions": _path_repr(val_avg_path),
-        "phase2_external_avg_predictions": _path_repr(external_avg_path),
+        "phase2_external_avg_predictions": None if external_avg_path is None else _path_repr(external_avg_path),
+        "val_avg_predictions": _path_repr(val_avg_path),
+        "external_avg_predictions": None if external_avg_path is None else _path_repr(external_avg_path),
     }
     summary["promotion_decision"] = _build_promotion_decision(
         model_name=args.model,
@@ -892,16 +1354,21 @@ def run_train_graph(args: argparse.Namespace) -> None:
         dynamic_ncols=True,
     ) as prep_pbar:
         split, split_train_ids, val_ids, external_ids = _prepare_split_ids(args)
+        if split.train_phase != split.val_phase:
+            raise NotImplementedError("Graph training currently requires train/val to come from the same graph.")
         feature_groups = resolve_feature_groups(args.model, list(args.extra_groups))
         target_context_groups = list(args.target_context_extra_groups)
         graph_config = _build_graph_model_config(args)
         train_ids = np.asarray(split_train_ids, dtype=np.int32)
+        eval_phase = str(split.external_phase or split.val_phase)
         label_artifacts = build_graph_label_artifacts(
             feature_dir=args.feature_dir,
             split_train_ids=train_ids,
             threshold_day=int(split.threshold_day),
             known_label_feature=graph_config.known_label_feature,
             include_historical_background_negatives=graph_config.include_historical_background_negatives,
+            train_phase=split.train_phase,
+            eval_phase=eval_phase,
         )
         historical_background_ids = np.asarray(
             label_artifacts["phase1_historical_background_ids"],
@@ -911,7 +1378,7 @@ def run_train_graph(args: argparse.Namespace) -> None:
         feature_normalizer_state = None
         if graph_config.feature_norm == "hybrid":
             feature_normalizer_state = build_hybrid_feature_normalizer(
-                phase="phase1",
+                phase=split.train_phase,
                 selected_groups=feature_groups,
                 train_ids=train_ids,
                 outdir=args.feature_dir,
@@ -919,7 +1386,7 @@ def run_train_graph(args: argparse.Namespace) -> None:
         target_context_normalizer_state = None
         if graph_config.feature_norm == "hybrid" and target_context_groups:
             target_context_normalizer_state = build_hybrid_feature_normalizer(
-                phase="phase1",
+                phase=split.train_phase,
                 selected_groups=target_context_groups,
                 train_ids=train_ids,
                 outdir=args.feature_dir,
@@ -928,6 +1395,8 @@ def run_train_graph(args: argparse.Namespace) -> None:
         phase1_context, phase2_context = make_graph_contexts(
             feature_dir=args.feature_dir,
             model_name=args.model,
+            train_phase=split.train_phase,
+            eval_phase=eval_phase,
             extra_groups=list(args.extra_groups),
             feature_normalizer_state=feature_normalizer_state,
             target_context_groups=target_context_groups,
@@ -939,15 +1408,56 @@ def run_train_graph(args: argparse.Namespace) -> None:
             phase1_historical_background_ids=historical_background_ids,
             build_sampling_profile=graph_config.neighbor_sampler in {"consistency_recent", "risk_consistency_recent"},
         )
+        if args.target_context_prediction_dir is not None:
+            (
+                phase1_prediction_features,
+                phase2_prediction_features,
+                target_context_prediction_feature_names,
+            ) = _load_target_context_prediction_features(
+                prediction_dir=args.target_context_prediction_dir,
+                prediction_transform=args.target_context_prediction_transform,
+                train_ids=train_ids,
+                val_ids=val_ids,
+                external_ids=external_ids,
+                phase1_num_nodes=phase1_context.labels.shape[0],
+                phase2_num_nodes=phase2_context.labels.shape[0],
+            )
+            phase1_context = replace(
+                phase1_context,
+                target_aux_features=phase1_prediction_features,
+                target_aux_feature_names=tuple(target_context_prediction_feature_names),
+            )
+            phase2_context = replace(
+                phase2_context,
+                target_aux_features=phase2_prediction_features,
+                target_aux_feature_names=tuple(target_context_prediction_feature_names),
+            )
+        if args.teacher_distill_prediction_dir is not None and float(args.teacher_distill_weight) > 0.0:
+            phase1_distill_targets, phase1_distill_mask = _load_teacher_distill_targets(
+                prediction_dir=args.teacher_distill_prediction_dir,
+                train_ids=train_ids,
+                phase1_num_nodes=phase1_context.labels.shape[0],
+            )
+            phase1_context = replace(
+                phase1_context,
+                distill_targets=phase1_distill_targets,
+                distill_target_mask=phase1_distill_mask,
+            )
         prep_pbar.update(1)
     run_dir = _model_run_dir(args.outdir, args.model, args.run_name)
     label_feature_dim = graph_config.known_label_feature_dim if graph_config.known_label_feature else 0
     input_dim = phase1_context.feature_store.input_dim + int(label_feature_dim)
-    target_context_input_dim = (
-        int(phase1_context.target_context_store.input_dim)
-        if phase1_context.target_context_store is not None
-        else int(input_dim)
-    )
+    target_context_input_dim = 0
+    if phase1_context.target_context_store is not None:
+        target_context_input_dim += int(phase1_context.target_context_store.input_dim)
+    if phase1_context.target_aux_features is not None:
+        target_context_input_dim += (
+            int(phase1_context.target_aux_features.shape[1])
+            if phase1_context.target_aux_features.ndim == 2
+            else 1
+        )
+    if target_context_input_dim <= 0:
+        target_context_input_dim = int(input_dim)
     graph_config = replace(graph_config, target_context_input_dim=int(target_context_input_dim))
     num_relations = phase1_context.graph_cache.num_relations
     global_max_day = max(phase1_context.graph_cache.max_day, phase2_context.graph_cache.max_day)
@@ -998,17 +1508,20 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 batch_seed=seed + 1000,
                 progress_desc=f"{args.model}:seed{seed}:phase1_val",
             )
-            external_prob = experiment.predict_proba(
-                phase2_context,
-                external_ids,
-                batch_seed=seed + 2000,
-                progress_desc=f"{args.model}:seed{seed}:phase2_external",
-            )
             val_metrics = compute_binary_classification_metrics(phase1_context.labels[val_ids], val_prob)
-            external_metrics = compute_binary_classification_metrics(
-                phase2_context.labels[external_ids],
-                external_prob,
-            )
+            external_prob = None
+            external_metrics = None
+            if external_ids.size:
+                external_prob = experiment.predict_proba(
+                    phase2_context,
+                    external_ids,
+                    batch_seed=seed + 2000,
+                    progress_desc=f"{args.model}:seed{seed}:phase2_external",
+                )
+                external_metrics = compute_binary_classification_metrics(
+                    phase2_context.labels[external_ids],
+                    external_prob,
+                )
             experiment.save(seed_dir)
             save_prediction_npz(
                 seed_dir / "phase1_val_predictions.npz",
@@ -1016,23 +1529,25 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 phase1_context.labels[val_ids],
                 val_prob,
             )
-            save_prediction_npz(
-                seed_dir / "phase2_external_predictions.npz",
-                external_ids,
-                phase2_context.labels[external_ids],
-                external_prob,
-            )
+            if external_prob is not None and external_metrics is not None:
+                save_prediction_npz(
+                    seed_dir / "phase2_external_predictions.npz",
+                    external_ids,
+                    phase2_context.labels[external_ids],
+                    external_prob,
+                )
             val_predictions.append(val_prob)
-            external_predictions.append(external_prob)
+            if external_prob is not None:
+                external_predictions.append(external_prob)
             metrics.append(
                 {
                     "seed": seed,
                     "val_auc": val_metrics["auc"],
                     "val_pr_auc": val_metrics["pr_auc"],
                     "val_ap": val_metrics["ap"],
-                    "external_auc": external_metrics["auc"],
-                    "external_pr_auc": external_metrics["pr_auc"],
-                    "external_ap": external_metrics["ap"],
+                    "external_auc": None if external_metrics is None else external_metrics["auc"],
+                    "external_pr_auc": None if external_metrics is None else external_metrics["pr_auc"],
+                    "external_ap": None if external_metrics is None else external_metrics["ap"],
                     "best_epoch": fit_metrics["best_epoch"],
                     "loss_pos_weight": fit_metrics["loss_pos_weight"],
                     "train_log_path": _path_repr(seed_dir / "train.log"),
@@ -1043,7 +1558,7 @@ def run_train_graph(args: argparse.Namespace) -> None:
             seed_pbar.set_postfix(
                 val_auc=f"{val_metrics['auc']:.4f}",
                 val_ap=f"{val_metrics['ap']:.4f}",
-                external_auc=f"{external_metrics['auc']:.4f}",
+                external_auc=_format_metric(None if external_metrics is None else external_metrics["auc"]),
                 refresh=False,
             )
             tqdm.write(
@@ -1051,9 +1566,9 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 f"phase1_val_auc={val_metrics['auc']:.6f} "
                 f"phase1_val_pr_auc={val_metrics['pr_auc']:.6f} "
                 f"phase1_val_ap={val_metrics['ap']:.6f} "
-                f"phase2_external_auc={external_metrics['auc']:.6f} "
-                f"phase2_external_pr_auc={external_metrics['pr_auc']:.6f} "
-                f"phase2_external_ap={external_metrics['ap']:.6f}"
+                f"phase2_external_auc={_format_metric(None if external_metrics is None else external_metrics['auc'])} "
+                f"phase2_external_pr_auc={_format_metric(None if external_metrics is None else external_metrics['pr_auc'])} "
+                f"phase2_external_ap={_format_metric(None if external_metrics is None else external_metrics['ap'])}"
             )
 
     val_avg_path = _save_average_predictions(
@@ -1063,12 +1578,16 @@ def run_train_graph(args: argparse.Namespace) -> None:
         labels=phase1_context.labels[val_ids],
         predictions=val_predictions,
     )
-    external_avg_path = _save_average_predictions(
-        run_dir=run_dir,
-        split_name="phase2_external",
-        node_ids=external_ids,
-        labels=phase2_context.labels[external_ids],
-        predictions=external_predictions,
+    external_avg_path = (
+        _save_average_predictions(
+            run_dir=run_dir,
+            split_name="phase2_external",
+            node_ids=external_ids,
+            labels=phase2_context.labels[external_ids],
+            predictions=external_predictions,
+        )
+        if external_predictions
+        else None
     )
     summary = {
         "model_name": args.model,
@@ -1079,27 +1598,66 @@ def run_train_graph(args: argparse.Namespace) -> None:
             if phase1_context.target_context_store is None
             else phase1_context.target_context_store.selected_groups
         ),
+        "target_context_prediction_dir": (
+            None
+            if args.target_context_prediction_dir is None
+            else _path_repr(Path(args.target_context_prediction_dir))
+        ),
+        "target_context_prediction_transform": str(args.target_context_prediction_transform),
+        "target_context_prediction_feature_names": list(phase1_context.target_aux_feature_names or ()),
+        "teacher_distill_prediction_dir": (
+            None
+            if args.teacher_distill_prediction_dir is None
+            else _path_repr(Path(args.teacher_distill_prediction_dir))
+        ),
+        "teacher_distill_weight": float(args.teacher_distill_weight),
+        "teacher_distill_loss": str(args.teacher_distill_loss),
+        "teacher_distill_start_epoch": int(args.teacher_distill_start_epoch),
+        "teacher_distill_ramp_epochs": int(args.teacher_distill_ramp_epochs),
+        "teacher_distill_agreement_floor": float(args.teacher_distill_agreement_floor),
+        "teacher_distill_rank_gap": float(args.teacher_distill_rank_gap),
         "seeds": list(args.seeds),
+        "split_style": split.split_style,
+        "train_phase": split.train_phase,
+        "val_phase": split.val_phase,
+        "external_phase": split.external_phase,
+        "train_size": int(np.asarray(split_train_ids, dtype=np.int32).size),
+        "val_size": int(val_ids.size),
+        "external_size": int(external_ids.size),
+        "val_auc_mean": _metric_mean(metrics, "val_auc"),
+        "val_auc_std": _metric_std(metrics, "val_auc"),
+        "val_pr_auc_mean": _metric_mean(metrics, "val_pr_auc"),
+        "val_pr_auc_std": _metric_std(metrics, "val_pr_auc"),
+        "val_ap_mean": _metric_mean(metrics, "val_ap"),
+        "val_ap_std": _metric_std(metrics, "val_ap"),
+        "external_auc_mean": _metric_mean(metrics, "external_auc"),
+        "external_auc_std": _metric_std(metrics, "external_auc"),
+        "external_pr_auc_mean": _metric_mean(metrics, "external_pr_auc"),
+        "external_pr_auc_std": _metric_std(metrics, "external_pr_auc"),
+        "external_ap_mean": _metric_mean(metrics, "external_ap"),
+        "external_ap_std": _metric_std(metrics, "external_ap"),
         "phase1_train_size": int(np.asarray(split_train_ids, dtype=np.int32).size),
         "phase1_split_train_size": int(np.asarray(split_train_ids, dtype=np.int32).size),
         "phase1_historical_background_train_size": int(historical_background_ids.size),
         "phase1_val_size": int(val_ids.size),
         "phase2_external_size": int(external_ids.size),
-        "phase1_val_auc_mean": float(np.mean([row["val_auc"] for row in metrics])),
-        "phase1_val_auc_std": float(np.std([row["val_auc"] for row in metrics])),
-        "phase1_val_pr_auc_mean": float(np.mean([row["val_pr_auc"] for row in metrics])),
-        "phase1_val_pr_auc_std": float(np.std([row["val_pr_auc"] for row in metrics])),
-        "phase1_val_ap_mean": float(np.mean([row["val_ap"] for row in metrics])),
-        "phase1_val_ap_std": float(np.std([row["val_ap"] for row in metrics])),
-        "phase2_external_auc_mean": float(np.mean([row["external_auc"] for row in metrics])),
-        "phase2_external_auc_std": float(np.std([row["external_auc"] for row in metrics])),
-        "phase2_external_pr_auc_mean": float(np.mean([row["external_pr_auc"] for row in metrics])),
-        "phase2_external_pr_auc_std": float(np.std([row["external_pr_auc"] for row in metrics])),
-        "phase2_external_ap_mean": float(np.mean([row["external_ap"] for row in metrics])),
-        "phase2_external_ap_std": float(np.std([row["external_ap"] for row in metrics])),
+        "phase1_val_auc_mean": _metric_mean(metrics, "val_auc"),
+        "phase1_val_auc_std": _metric_std(metrics, "val_auc"),
+        "phase1_val_pr_auc_mean": _metric_mean(metrics, "val_pr_auc"),
+        "phase1_val_pr_auc_std": _metric_std(metrics, "val_pr_auc"),
+        "phase1_val_ap_mean": _metric_mean(metrics, "val_ap"),
+        "phase1_val_ap_std": _metric_std(metrics, "val_ap"),
+        "phase2_external_auc_mean": _metric_mean(metrics, "external_auc"),
+        "phase2_external_auc_std": _metric_std(metrics, "external_auc"),
+        "phase2_external_pr_auc_mean": _metric_mean(metrics, "external_pr_auc"),
+        "phase2_external_pr_auc_std": _metric_std(metrics, "external_pr_auc"),
+        "phase2_external_ap_mean": _metric_mean(metrics, "external_ap"),
+        "phase2_external_ap_std": _metric_std(metrics, "external_ap"),
         "seed_metrics": metrics,
         "phase1_val_avg_predictions": _path_repr(val_avg_path),
-        "phase2_external_avg_predictions": _path_repr(external_avg_path),
+        "phase2_external_avg_predictions": None if external_avg_path is None else _path_repr(external_avg_path),
+        "val_avg_predictions": _path_repr(val_avg_path),
+        "external_avg_predictions": None if external_avg_path is None else _path_repr(external_avg_path),
         "graph_config": {
             "input_dim": input_dim,
             "num_relations": num_relations,

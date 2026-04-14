@@ -18,11 +18,13 @@ from experiment.training.xgb_utils import (
     multiclass_binary_auc,
     write_feature_importance_csv,
 )
+from experiment.training.xgb.domain_adaptation import build_domain_adaptation_weights_from_args
 
 
 @dataclass(frozen=True)
 class HistoricalMulticlassBgSplit:
     threshold_day: int
+    min_train_first_active_day: int
     historical_ids: np.ndarray
     val_ids: np.ndarray
     external_ids: np.ndarray
@@ -39,24 +41,31 @@ def build_historical_multiclass_bg_split(
     first_active: np.ndarray,
     *,
     include_future_background: bool = False,
+    min_train_first_active_day: int = 0,
 ) -> HistoricalMulticlassBgSplit:
     threshold_day = int(split.threshold_day)
+    min_train_day = int(max(min_train_first_active_day, 0))
     labels1 = np.asarray(phase1_y, dtype=np.int8)
     labels2 = np.asarray(phase2_y, dtype=np.int8)
     first_active_arr = np.asarray(first_active, dtype=np.int32)
     if include_future_background:
         train_mask = (
-            ((first_active_arr <= threshold_day) & np.isin(labels1, (0, 1)))
-            | np.isin(labels1, (2, 3))
+            ((first_active_arr <= threshold_day) & (first_active_arr >= min_train_day) & np.isin(labels1, (0, 1)))
+            | ((first_active_arr >= min_train_day) & np.isin(labels1, (2, 3)))
         )
     else:
-        train_mask = (first_active_arr <= threshold_day) & np.isin(labels1, (0, 1, 2, 3))
+        train_mask = (
+            (first_active_arr <= threshold_day)
+            & (first_active_arr >= min_train_day)
+            & np.isin(labels1, (0, 1, 2, 3))
+        )
 
     historical_ids = np.flatnonzero(train_mask).astype(np.int32, copy=False)
     val_ids = np.asarray(split.val_ids, dtype=np.int32)
     external_ids = np.asarray(split.external_ids, dtype=np.int32)
     return HistoricalMulticlassBgSplit(
         threshold_day=threshold_day,
+        min_train_first_active_day=min_train_day,
         historical_ids=historical_ids,
         val_ids=val_ids,
         external_ids=external_ids,
@@ -110,10 +119,22 @@ def train_multiclass_bg_xgb(
         train_first_active=split_data.train_first_active,
         threshold_day=split_data.threshold_day,
     )
+    sample_weight = np.asarray(sample_weight_payload["sample_weight"], dtype=np.float32)
+    domain_weight, domain_weight_payload = build_domain_adaptation_weights_from_args(
+        args,
+        x_train=np.asarray(x_train, dtype=np.float32),
+        x_val=np.asarray(x_val, dtype=np.float32),
+    )
+    sample_weight *= np.asarray(domain_weight, dtype=np.float32)
+    mean_weight = float(np.mean(sample_weight, dtype=np.float64))
+    if mean_weight > 0.0:
+        sample_weight /= mean_weight
+    sample_weight_payload["sample_weight"] = sample_weight
+    sample_weight_payload["domain_weight"] = domain_weight_payload
     dtrain = xgb.DMatrix(
         np.asarray(x_train, dtype=np.float32),
         label=split_data.y_train,
-        weight=np.asarray(sample_weight_payload["sample_weight"], dtype=np.float32),
+        weight=sample_weight,
     )
     dval = xgb.DMatrix(np.asarray(x_val, dtype=np.float32), label=split_data.y_val)
     dexternal = xgb.DMatrix(np.asarray(x_external, dtype=np.float32), label=split_data.y_external)
@@ -162,6 +183,7 @@ def train_multiclass_bg_xgb(
         "seed": int(args.seed),
         "feature_dim": int(len(feature_names)),
         "threshold_day": int(split_data.threshold_day),
+        "min_train_first_active_day": int(split_data.min_train_first_active_day),
         "historical_train_size": int(split_data.historical_ids.size),
         "historical_train_label_counts": {
             str(label): int(np.sum(split_data.y_train == label))
@@ -169,6 +191,7 @@ def train_multiclass_bg_xgb(
         },
         "class_weight": sample_weight_payload["class_weight"],
         "time_weight": sample_weight_payload["time_weight"],
+        "domain_weight": sample_weight_payload["domain_weight"],
         "best_iteration": best_iteration,
         "phase1_val_metrics": val_metrics,
         "phase2_external_metrics": external_metrics,

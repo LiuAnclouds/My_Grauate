@@ -49,6 +49,7 @@ from experiment.training.xgb.label_context import (
     build_known_label_anchor_matrix,
     load_or_build_temporal_label_context_features,
 )
+from experiment.training.xgb.domain_adaptation import add_domain_weight_args
 from experiment.training.xgb_utils import (
     binary_score_from_softprob,
     build_multiclass_bg_sample_weight,
@@ -178,6 +179,7 @@ def parse_args() -> argparse.Namespace:
             "while still restricting 0/1 supervision to the historical side of the split."
         ),
     )
+    parser.add_argument("--min-train-first-active-day", type=int, default=0)
     parser.add_argument(
         "--append-best-groupagg",
         action="store_true",
@@ -216,6 +218,7 @@ def parse_args() -> argparse.Namespace:
         default=BEST_LABEL_CONTEXT_RELATION_ANCHORS,
         help="Anchor set used by the relation-sliced part of the temporal label-context block.",
     )
+    add_domain_weight_args(parser)
     return parser.parse_args()
 
 
@@ -237,6 +240,7 @@ def _cache_key(args: argparse.Namespace, threshold_day: int) -> str:
             else None
         ),
         "threshold_day": int(threshold_day),
+        "min_train_first_active_day": int(args.min_train_first_active_day),
         "include_future_background": bool(args.include_future_background),
         "append_best_label_context": bool(args.append_best_label_context),
         "label_context_anchors": list(args.label_context_anchors),
@@ -591,6 +595,7 @@ def main() -> None:
         phase2_y=phase2_y,
         first_active=first_active,
         include_future_background=bool(args.include_future_background),
+        min_train_first_active_day=int(args.min_train_first_active_day),
     )
 
     graphprop_args = SimpleNamespace(
