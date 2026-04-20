@@ -1,5 +1,12 @@
 # Thesis Mainline
 
+## Quick Links
+
+- [Repository README](../../README.md)
+- [Method Overview](../../docs/thesis_method.md)
+- [Experiment Table](../../docs/thesis_experiments.md)
+- [Official Result JSON](../outputs/thesis_suite/thesis_m7_v4_graphpropblend082/summary.json)
+
 ## Official Surface
 
 毕业设计的正式实验主线只保留一条统一路径，不再接受 teacher 依赖或“一个数据集一套策略”的分叉：
@@ -25,6 +32,12 @@
 - official final decision layer:
   - fixed logit blend with `alpha=0.82`
   - secondary model: leakage-safe `phase1_train` graphprop XGBoost
+
+额外说明：
+
+- `secondary-only` 那一列不是第二个 GNN，而是非 GNN 的 graphprop 分支。
+- 如果只追 `val_auc`，它在 Elliptic / Elliptic++ 上更强。
+- 如果要维持“GNN 是论文主模型”的主线，official 结果就必须使用 `GNN-primary blend`。
 
 ## Unified Design
 
@@ -72,6 +85,26 @@
 - inspect official thesis recipe:
   - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_recipe.py show --dataset xinye_dgraph --recipe thesis_m7_utpm`
 
+## Ablation Recipes
+
+主干内部 3 个核心创新模块都支持通过 `--graph-config-override` 做 official tri-dataset ablation。
+
+- remove prototype memory:
+  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_ablate_noprototype --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --epochs 8 --seeds 42 --graph-config-override prototype_loss_weight=0.0 --graph-config-override prototype_neighbor_blend=0.0 --graph-config-override prototype_global_blend=0.0 --graph-config-override prototype_consistency_weight=0.0 --graph-config-override prototype_separation_weight=0.0`
+- remove pseudo-contrastive temporal mining:
+  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_ablate_nopseudocontrast --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --epochs 8 --seeds 42 --graph-config-override pseudo_contrastive_weight=0.0`
+- remove drift residual target context:
+  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_ablate_nodriftresidual --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --epochs 8 --seeds 42 --graph-config-override target_context_fusion=none --graph-config-override target_time_adapter_strength=0.0 --graph-config-override normal_bucket_align_weight=0.0 --graph-config-override context_residual_clip=0.0 --graph-config-override context_residual_budget=0.0 --graph-config-override context_residual_budget_weight=0.0 --graph-config-override context_residual_budget_min_weight=0.0`
+
+决策层 ablation 已经有现成结果：
+
+- pure backbone:
+  - `thesis_m7_v4_unified_e8`
+- weak hybrid:
+  - `thesis_m7_v4_xgbblend035`
+- official hybrid:
+  - `thesis_m7_v4_graphpropblend082`
+
 ## Current Result
 
 官方最终套跑结果位于：
@@ -89,6 +122,12 @@
   - `0.949435862593804`
 - Elliptic++:
   - `0.9465836685331215`
+
+结论必须写清楚：
+
+- `secondary-only` 数值更强，不应该被隐藏。
+- 但它不是论文主模型，因为它不是 GNN。
+- official thesis mainline 仍然以 `m7_utpm` 为主，只把 graphprop 当作 residual correction。
 
 ## Legacy Boundary
 

@@ -1,33 +1,46 @@
 # Thesis Method
 
+## Quick Links
+
+- [Back to README](../README.md)
+- [Experiment Table](thesis_experiments.md)
+- [Official Result JSON](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/summary.json)
+- [Leakage Audit](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/leakage_audit.md)
+
 ## 1. Problem Setting
 
-目标是用一套统一的动态图异常检测架构，在三个金融/反洗钱图数据集上完成训练、验证和推理，而不是为每个数据集单独发明一套模型。
+目标不是给三个数据集各做一套“特供策略”，而是在严格数据隔离前提下，用一套统一动态图异常检测架构完成训练、验证和推理。
 
 统一约束：
 
 - 数据集彼此隔离，不做跨数据集联合训练
-- 各数据集经过各自预处理后，全部映射到同一特征契约 `utpm_unified`
+- 各数据集各自预处理后，全部映射到同一特征契约 `utpm_unified`
 - 主模型必须是动态图神经网络
 - 二级决策层允许存在，但只能作为 GNN 主干的残差校正
 
-## 2. Unified Pipeline
+## 2. Official Architecture
 
 统一流程如下：
 
-1. 各数据集各自构建 `graph_gdata/phase_gdata` 与统一特征缓存
+1. 各数据集构建自己的 `graph_gdata/phase_gdata` 与统一特征缓存
 2. 根据各自 `recommended_split.json` 读取 `phase1_train / phase1_val / test_pool`
 3. 用 `m7_utpm` 训练动态图 GNN 主干
-4. 在相同数据集的 `phase1_train` 上训练 graphprop residual XGBoost
-5. 用固定 logit 融合得到最终预测
+4. 仅在当前数据集的 `phase1_train` 上训练 `graphprop residual` tree 分支
+5. 用固定 logit 融合形成最终预测
 
-统一而不混训，才是这里“统一模型”的正确定义。
+这里“统一模型”的正确含义是：
 
-## 3. Main Model
+- 统一输入契约
+- 统一主模型族
+- 统一训练协议
+- 统一决策规则
+- 但不混数据集
+
+## 3. Main GNN Backbone
 
 主模型为 `m7_utpm`。
 
-核心点：
+主干固定项：
 
 - 共享输入契约：`utpm_unified`
 - 共享目标上下文组：
@@ -40,43 +53,77 @@
   - fanouts = `(15, 10)`
   - epochs = `8`
 
-这个主干负责学习动态图中的时间漂移、邻域关系与行为上下文，是论文主模型。
+这个主干负责学习动态图中的时间漂移、邻域关系与行为上下文，是论文的主模型，而不是附属模型。
 
-## 4. Effective Innovation
+## 4. Innovation Modules
 
-最终主线的有效创新不在于“再加一套完全不同的 teacher”，而在于：
+当前 thesis mainline 里真正需要做消融的创新模块一共 5 个：
 
-- 用统一 GNN 主干负责动态图表征
-- 用 leakage-safe graph propagation residual head 纠正主干在时间漂移下的局部排序误差
-- 用固定 logit 融合而不是再训练一层会吃掉验证集的 stacker
+| Layer | Module | Role |
+| --- | --- | --- |
+| GNN backbone | `prototype memory` | 用时间桶原型约束稳定类别结构 |
+| GNN backbone | `pseudo-contrastive temporal mining` | 增强时间漂移下的正负分离 |
+| GNN backbone | `drift residual target context` | 对时间漂移和上下文偏移做残差适配 |
+| Decision layer | `graphprop residual head` | 用泄露安全的 graphprop 分支纠正 GNN 局部排序误差 |
+| Decision layer | `fixed logit fusion` | 保证 graphprop 只是残差校正，而不是重新训练一个 stacker |
 
-可以把它概括为：
+这意味着：
+
+- `utpm_unified` 是统一输入契约，不计入 ablation 模块数。
+- 你的方法不是老式的“单纯 GraphSAGE/GAT + 手工特征”。
+- 但也不应该夸成“提出了一个全新的基础图神经网络家族”。
+- 更准确的表述是：这是一个 thesis-level 的统一动态图反欺诈架构，把现代时序 GNN 主干、原型记忆、伪对比约束和 graphprop 残差校正整合到了同一 leakage-safe 合同里。
+
+## 5. Why The Second Column Is Stronger But Not The Official Main Result
+
+这个问题必须说清楚，因为现在 GitHub 上最容易被误读的地方就在这里。
+
+结果上：
+
+- `Secondary-only (non-GNN graphprop)` 在 Elliptic 和 Elliptic++ 上确实比 `Official GNN-primary Blend` 更高。
+- 三数据集宏平均里，`Secondary-only` 也是当前数值最高的一列，达到 `0.908981`。
+
+但它不是 official main result，原因也很明确：
+
+1. 第二列不是第二个 GNN，而是非 GNN 的 graphprop tree 分支。
+2. 你的论文硬约束是“主模型必须是动态图 GNN”，所以不能把树模型直接写成主模型。
+3. 因此，第二列应该被定义为“强上界 secondary branch / ablation”，而不是被包装成论文主干。
+4. 正式论文主线使用 `GNN-primary Blend`，因为它满足“GNN 为主、graphprop 为残差校正”的设计契约。
+
+换句话说：
+
+- 如果只追数值，第二列更强。
+- 如果要满足论文主模型定义，official 结果就必须是第三列。
+
+## 6. Effective Gain
 
 `UTPM Dynamic GNN + Graphprop Residual Correction`
 
-为什么这个创新是有效的：
+在官方主线下，纯 GNN 到 official blend 的提升如下：
 
-- XinYe 上，纯 `m7_utpm` 为 `0.777741`，最终 hybrid 提升到 `0.795293`
-- Elliptic 上，从 `0.801914` 提升到 `0.949436`
-- Elliptic++ 上，从 `0.778276` 提升到 `0.946584`
+| Dataset | Pure `m7_utpm` | Official GNN-primary Blend | Gain |
+| --- | ---: | ---: | ---: |
+| XinYe DGraph | 0.777741 | 0.795293 | +0.017552 |
+| Elliptic | 0.801914 | 0.949436 | +0.147522 |
+| Elliptic++ | 0.778276 | 0.946584 | +0.168308 |
 
-因此，graphprop 分支不是替代 GNN，而是作为统一主架构中的残差校正模块。
+因此，graphprop 分支不是替代 GNN，而是官方主架构中的残差校正层。
 
-## 5. Why This Is Not Hard Leakage
+## 7. Why This Is Not Hard Leakage
 
-本项目最终采用的是“无硬泄露”标准：
+本项目采用的是“无硬泄露”标准：
 
 - `train/val/test_pool/external` 节点集合互不重叠
 - 特征归一化只在 `phase1_train` 上拟合
 - secondary 只在 `phase1_train` 上训练
-- `val` 只参与评估和固定权重选择，不参与二级模型拟合
+- `val` 只参与评估与固定权重选择，不参与二级模型拟合
 - 不存在跨数据集特征缓存、预测缓存或训练样本复用
 
 正式审计文件：
 
-- `experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/leakage_audit.md`
+- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/leakage_audit.md)
 
-## 6. Repro Commands
+## 8. Repro Commands
 
 构建缓存：
 
