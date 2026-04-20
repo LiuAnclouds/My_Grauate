@@ -37,6 +37,29 @@
 - 统一决策规则
 - 但不混数据集
 
+### 2.1 Current Model Breakdown
+
+为了避免把现在的模型误读成“两套模型混着跑”，这里把当前方法直接拆成 5 层：
+
+| Layer | Current Official Choice | Role |
+| --- | --- | --- |
+| Input contract | `utpm_unified` | 把 3 个数据集映射到同一输入空间 |
+| Main backbone | `m7_utpm` | 当前 official 动态图 GNN 主干 |
+| Backbone innovations | `prototype memory` + `pseudo-contrastive temporal mining` + `drift residual target context` | 提升时间漂移下的异常识别能力 |
+| Residual decision branch | leakage-safe `graphprop + XGBoost` | 只做残差校正，不替代主 GNN |
+| Final output | fixed logit fusion | 形成 official 主结果 |
+
+所以当前论文主线真正的方法是：
+
+`统一输入契约 + 动态图 GNN 主干 + 3 个主干创新模块 + 可选残差分支 + 固定融合`
+
+而不是下面这些东西：
+
+- 不是“每个数据集一套单独策略”
+- 不是“XGBoost 先提特征，再喂给 GNN 分类”
+- 不是“graphprop tree 分支才是主模型”
+- 不是“两个 GNN 并列投票”
+
 ## 3. Main GNN Backbone
 
 当前 official 主模型为 `m7_utpm`，统一现代化候选为 `m8_utgt`。
@@ -75,6 +98,23 @@
 | `m8_utgt` | multi-head temporal relation attention | 现代化候选主干 |
 
 因此这次重构的创新点不是“给不同数据集换不同 trick”，而是在统一合同下，把主干升级成更接近时序图 Transformer 的关系注意力结构。
+
+### 3.2 Official Backbone Vs Candidate Backbone
+
+如果只看现在仓库里的方法名，最容易混淆的是下面 4 个概念：
+
+| Name | Is It The Main GNN? | Current Status | Meaning |
+| --- | --- | --- | --- |
+| `m7_utpm` | Yes | official | 当前正式论文主干 |
+| `m8_utgt` | Yes | candidate | 在同一合同下升级成 attention-style 主干的候选版本 |
+| `secondary-only` | No | ablation / upper-bound branch | 非 GNN 的 graphprop tree 分支单独预测 |
+| `official blend` | Yes | official | `m7_utpm` 主干输出再加 graphprop 残差校正后的最终结果 |
+
+其中：
+
+- `m7_utpm` 和 `m8_utgt` 都是主 GNN
+- `secondary-only` 不是 GNN
+- `official blend` 也不是“第二个主模型”，而是以主 GNN 为前提的统一决策层
 
 ## 4. Innovation Modules
 

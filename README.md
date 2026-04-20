@@ -29,6 +29,38 @@
 - 同一二级决策原则：`GNN-primary + graphprop residual correction`
 - 数据集彼此隔离，不做跨数据集联合训练
 
+## Current Model In One View
+
+当前这套 thesis 模型不要再理解成“两套模型乱拼”。
+
+正式口径应该是：
+
+1. 每个数据集先做各自预处理，但最后统一映射到 `utpm_unified`。
+2. 主模型必须是动态图 GNN。
+   当前 official 主干是 `m7_utpm`。
+   正在验证的新主干候选是 `m8_utgt`。
+3. GNN 主干内部真正的 thesis 创新模块有 3 个：
+   `prototype memory`、`pseudo-contrastive temporal mining`、`drift residual target context`。
+4. 如果启用最终 official 决策层，再额外加一个 leakage-safe 的 `graphprop + XGBoost` 残差分支，用固定 logit 融合得到最后输出。
+
+也就是说，当前 official 方法不是“先用 XGBoost 提特征再喂给 GNN”，也不是“每个数据集一套模型”。
+
+它实际上是：
+
+- 输入层：`utpm_unified`
+- 主干层：动态图 GNN
+- 主干增强：3 个时序异常检测模块
+- 决策层：可选 graphprop residual correction
+- 输出层：统一 train/val/test_pool 协议下的预测
+
+当前 official 结果对应的是：
+
+- `m7_utpm` 纯 GNN 主干
+- 再加 `graphprop residual head`
+- 最后做固定融合
+
+`m8_utgt` 不是第二套论文主线，而是在同一个统一合同下，对主干聚合器做 modernize 的候选版本。
+
 ## Backbone Modernization Track
 
 为回应“主模型必须是更新的动态图 GNN，而不是只在旧 GraphSAGE 外面叠模块”的要求，仓库现已加入统一候选主干：

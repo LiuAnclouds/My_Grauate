@@ -65,6 +65,26 @@
 
 不是把三个数据集混在一起做联合训练。
 
+## What The Current Model Actually Is
+
+把当前 thesis 方法拆开看，会更清楚：
+
+| Part | Current Official Choice | Meaning |
+| --- | --- | --- |
+| Input | `utpm_unified` | 三个数据集统一输入契约 |
+| Main GNN | `m7_utpm` | 当前 official 主干 |
+| Candidate GNN | `m8_utgt` | 同一合同下的 transformer-style 主干候选 |
+| Backbone modules | `prototype memory` / `pseudo-contrastive temporal mining` / `drift residual target context` | GNN 主干内部创新 |
+| Secondary branch | `graphprop + XGBoost` | 只做 leakage-safe residual correction |
+| Final decision | fixed logit fusion | 构成 official blend 结果 |
+
+这意味着：
+
+- `secondary-only` 不是第二个 GNN
+- `official blend` 不是两套论文主模型并列
+- `m8_utgt` 也不是另一套数据集特供路线
+- 现在真正统一的是：输入契约、主模型族、训练协议、split guardrails、决策规则
+
 ## Backbone Modernization Track
 
 这次重构新增了一条真正统一的候选主干，而不是“每个数据集一套 teacher / stacking / hack”：
