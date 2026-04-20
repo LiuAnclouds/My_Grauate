@@ -404,6 +404,8 @@ def load_or_build_temporal_label_context_features(
     relation_anchor_names: tuple[str, ...] = BEST_LABEL_CONTEXT_RELATION_ANCHORS,
     recent_windows: tuple[int, ...] = BEST_LABEL_CONTEXT_RECENT_WINDOWS,
     relation_window: int = BEST_LABEL_CONTEXT_RELATION_WINDOW,
+    primary_phase: str = "phase1",
+    external_phase: str = "phase2",
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], list[str]]:
     anchor_names = _validate_anchor_names(anchor_names)
     relation_anchor_names = _validate_anchor_names(relation_anchor_names)
@@ -430,7 +432,7 @@ def load_or_build_temporal_label_context_features(
 
     ensure_dir(cache_dir)
     phase1_output, feature_names = _build_phase_temporal_label_context(
-        phase="phase1",
+        phase=str(primary_phase),
         feature_dir=feature_dir,
         labels=phase1_y,
         split=split,
@@ -440,19 +442,26 @@ def load_or_build_temporal_label_context_features(
         recent_windows=tuple(int(window) for window in recent_windows),
         relation_window=int(relation_window),
     )
-    phase2_output, phase2_feature_names = _build_phase_temporal_label_context(
-        phase="phase2",
-        feature_dir=feature_dir,
-        labels=phase2_y,
-        split=split,
-        split_ids=phase2_ids,
-        anchor_names=anchor_names,
-        relation_anchor_names=relation_anchor_names,
-        recent_windows=tuple(int(window) for window in recent_windows),
-        relation_window=int(relation_window),
-    )
-    if phase2_feature_names != feature_names:
-        raise AssertionError("Phase1/phase2 temporal label context feature names are not aligned.")
+    phase2_has_rows = any(np.asarray(node_ids, dtype=np.int32).size for node_ids in phase2_ids.values())
+    if phase2_has_rows:
+        phase2_output, phase2_feature_names = _build_phase_temporal_label_context(
+            phase=str(external_phase),
+            feature_dir=feature_dir,
+            labels=phase2_y,
+            split=split,
+            split_ids=phase2_ids,
+            anchor_names=anchor_names,
+            relation_anchor_names=relation_anchor_names,
+            recent_windows=tuple(int(window) for window in recent_windows),
+            relation_window=int(relation_window),
+        )
+        if phase2_feature_names != feature_names:
+            raise AssertionError("Phase1/phase2 temporal label context feature names are not aligned.")
+    else:
+        phase2_output = {
+            split_name: np.zeros((np.asarray(node_ids, dtype=np.int32).size, len(feature_names)), dtype=np.float32)
+            for split_name, node_ids in phase2_ids.items()
+        }
 
     np.save(phase1_train_path, np.asarray(phase1_output["train"], dtype=np.float32))
     np.save(phase1_val_path, np.asarray(phase1_output["val"], dtype=np.float32))

@@ -3,6 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from experiment.datasets.registry import get_dataset_spec
+from experiment.training.thesis_contract import (
+    OFFICIAL_BACKBONE_MODEL,
+    OFFICIAL_BACKBONE_PRESET,
+    OFFICIAL_MAINLINE_BATCH_SIZE,
+    OFFICIAL_MAINLINE_FANOUTS,
+    OFFICIAL_MAINLINE_HIDDEN_DIM,
+    OFFICIAL_MAINLINE_REL_DIM,
+    OFFICIAL_SUITE_EPOCHS,
+)
 
 
 @dataclass(frozen=True)
@@ -12,6 +21,7 @@ class GraphRecipe:
     model: str
     build_args: tuple[str, ...]
     train_args: tuple[str, ...]
+    entrypoint: str = "run_training.py"
 
 
 def _known_label_dim(dataset_name: str) -> str:
@@ -85,7 +95,71 @@ def _base_m5_args(dataset_name: str, *, known_label_dim: str | None = None) -> l
     ]
 
 
+def _thesis_entry_args(model_name: str, *, epochs: str, preset_name: str) -> tuple[str, ...]:
+    return (
+        "--model",
+        model_name,
+        "--preset",
+        preset_name,
+        "--device",
+        "cuda",
+        "--seeds",
+        "42",
+        "52",
+        "62",
+        "--epochs",
+        epochs,
+        "--batch-size",
+        str(OFFICIAL_MAINLINE_BATCH_SIZE),
+        "--hidden-dim",
+        str(OFFICIAL_MAINLINE_HIDDEN_DIM),
+        "--rel-dim",
+        str(OFFICIAL_MAINLINE_REL_DIM),
+        "--fanouts",
+        *[str(v) for v in OFFICIAL_MAINLINE_FANOUTS],
+    )
+
+
 def get_graph_recipe(recipe_name: str, dataset_name: str) -> GraphRecipe:
+    if recipe_name == "baseline_m5_unified":
+        return GraphRecipe(
+            name=recipe_name,
+            description=(
+                "Official unified baseline: one shared UTPM feature schema plus temporal GraphSAGE, "
+                "without the thesis auxiliary regularizer."
+            ),
+            model="m5_temporal_graphsage",
+            build_args=(
+                "--phase",
+                "both",
+            ),
+            train_args=_thesis_entry_args(
+                "m5_temporal_graphsage",
+                epochs="16",
+                preset_name="unified_baseline",
+            ),
+            entrypoint="run_thesis_mainline.py",
+        )
+    if recipe_name == "thesis_m7_utpm":
+        return GraphRecipe(
+            name=recipe_name,
+            description=(
+                "Official thesis mainline: unified UTPM feature schema, temporal prototype memory, "
+                "drift-residual adaptation, and pseudo-contrastive test-pool regularization in one shared "
+                "dynamic-GNN path."
+            ),
+            model="m7_utpm",
+            build_args=(
+                "--phase",
+                "both",
+            ),
+            train_args=_thesis_entry_args(
+                OFFICIAL_BACKBONE_MODEL,
+                epochs=str(OFFICIAL_SUITE_EPOCHS),
+                preset_name=OFFICIAL_BACKBONE_PRESET,
+            ),
+            entrypoint="run_thesis_mainline.py",
+        )
     if recipe_name == "mainline_temporal_m5":
         return GraphRecipe(
             name=recipe_name,
@@ -2892,6 +2966,8 @@ def get_graph_recipe(recipe_name: str, dataset_name: str) -> GraphRecipe:
 
 def list_recipe_names() -> tuple[str, ...]:
     return (
+        "baseline_m5_unified",
+        "thesis_m7_utpm",
         "mainline_temporal_m5",
         "context_motifadapt_m5",
         "prototype_temporal_bucket_m5",

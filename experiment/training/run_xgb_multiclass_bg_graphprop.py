@@ -223,9 +223,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def _cache_key(args: argparse.Namespace, threshold_day: int) -> str:
+    def _id_hash(values: np.ndarray) -> str:
+        arr = np.asarray(values, dtype=np.int32)
+        return hashlib.sha1(arr.tobytes()).hexdigest()[:12]
+
     base_extra_groups = list(args.extra_groups) if args.base_extra_groups is None else list(args.base_extra_groups)
     prop_extra_groups = list(args.extra_groups) if args.prop_extra_groups is None else list(args.prop_extra_groups)
     payload = {
+        "cache_schema_version": 2,
         "base_model": args.base_model,
         "prop_model": args.prop_model,
         "prop_blocks": list(args.prop_blocks),
@@ -248,6 +253,12 @@ def _cache_key(args: argparse.Namespace, threshold_day: int) -> str:
         "label_context_version": BEST_LABEL_CONTEXT_PRESET_VERSION,
         "feature_dir": str(args.feature_dir.resolve()),
         "train_scope": "historical_multiclass_bg",
+        "train_ids_hash": _id_hash(getattr(args, "_cache_train_ids")),
+        "val_ids_hash": _id_hash(getattr(args, "_cache_val_ids")),
+        "external_ids_hash": _id_hash(getattr(args, "_cache_external_ids")),
+        "train_size": int(np.asarray(getattr(args, "_cache_train_ids")).size),
+        "val_size": int(np.asarray(getattr(args, "_cache_val_ids")).size),
+        "external_size": int(np.asarray(getattr(args, "_cache_external_ids")).size),
     }
     raw = json.dumps(payload, sort_keys=True).encode("utf-8")
     return hashlib.sha1(raw).hexdigest()[:12]
@@ -303,6 +314,9 @@ def _load_best_groupagg_preset(
     phase1_ids: dict[str, np.ndarray],
     phase2_ids: dict[str, np.ndarray],
     extra_groups: list[str],
+    *,
+    primary_phase: str = "phase1",
+    external_phase: str = "phase2",
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], list[str]]:
     preset_args = SimpleNamespace(
         feature_dir=feature_dir,
@@ -312,6 +326,7 @@ def _load_best_groupagg_preset(
         agg_half_life_days=list(BEST_GROUPAGG_HALF_LIVES),
         append_count_features=True,
         include_future_background=False,
+        min_train_first_active_day=0,
         cache_root=MODEL_OUTPUT_ROOT / "_multiclass_bg_groupagg_cache",
     )
     cache_dir = ensure_dir(
@@ -326,6 +341,8 @@ def _load_best_groupagg_preset(
         phase1_ids=phase1_ids,
         phase2_ids=phase2_ids,
         agg_half_lives=_resolve_half_lives(list(BEST_GROUPAGG_HALF_LIVES)),
+        primary_phase=primary_phase,
+        external_phase=external_phase,
     )
 
 
@@ -337,6 +354,9 @@ def _load_best_relgroup_preset(
     phase1_ids: dict[str, np.ndarray],
     phase2_ids: dict[str, np.ndarray],
     extra_groups: list[str],
+    *,
+    primary_phase: str = "phase1",
+    external_phase: str = "phase2",
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], list[str]]:
     preset_args = SimpleNamespace(
         feature_dir=feature_dir,
@@ -349,6 +369,7 @@ def _load_best_relgroup_preset(
         selected_missing_indices=list(BEST_RELGROUP_MISSING_INDICES),
         append_count_features=True,
         include_future_background=False,
+        min_train_first_active_day=0,
         cache_root=MODEL_OUTPUT_ROOT / "_multiclass_bg_relgroup_cache",
     )
     cache_dir = ensure_dir(
@@ -362,6 +383,8 @@ def _load_best_relgroup_preset(
         phase2_y=phase2_y,
         phase1_ids=phase1_ids,
         phase2_ids=phase2_ids,
+        primary_phase=primary_phase,
+        external_phase=external_phase,
     )
 
 def _empty_split_mats(split_ids: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -583,12 +606,29 @@ def main() -> None:
     args = parse_args()
     set_global_seed(args.seed)
     split = load_experiment_split()
+    primary_phase = str(split.train_phase)
+    val_phase = str(split.val_phase)
+    if val_phase != primary_phase:
+        raise NotImplementedError(
+            "run_xgb_multiclass_bg_graphprop currently expects train/val to come from the same phase. "
+            f"Got train_phase={primary_phase!r}, val_phase={val_phase!r}."
+        )
+    external_phase = str(split.external_phase or primary_phase)
+    if args.label_prop_blocks and (primary_phase != "phase1" or external_phase != "phase2"):
+        raise NotImplementedError(
+            "label_prop_blocks still assumes phase1/phase2 caches. "
+            "Disable known-label propagation blocks for single-graph datasets."
+        )
     half_lives = _resolve_half_lives(list(args.prop_half_life_days))
     label_prop_half_lives = _resolved_label_prop_half_lives(args)
-    phase1_y = np.asarray(load_phase_arrays("phase1", keys=("y",))["y"], dtype=np.int8)
-    phase2_y = np.asarray(load_phase_arrays("phase2", keys=("y",))["y"], dtype=np.int8)
-    phase1_graph = load_graph_cache("phase1", outdir=args.feature_dir)
-    first_active = np.asarray(phase1_graph.first_active, dtype=np.int32)
+    phase1_y = np.asarray(load_phase_arrays(primary_phase, keys=("y",))["y"], dtype=np.int8)
+    phase2_y = (
+        np.asarray(load_phase_arrays(external_phase, keys=("y",))["y"], dtype=np.int8)
+        if split.external_ids.size
+        else np.empty(0, dtype=np.int8)
+    )
+    primary_graph = load_graph_cache(primary_phase, outdir=args.feature_dir)
+    first_active = np.asarray(primary_graph.first_active, dtype=np.int32)
     split_data = build_historical_multiclass_bg_split(
         split=split,
         phase1_y=phase1_y,
@@ -597,6 +637,9 @@ def main() -> None:
         include_future_background=bool(args.include_future_background),
         min_train_first_active_day=int(args.min_train_first_active_day),
     )
+    setattr(args, "_cache_train_ids", np.asarray(split_data.historical_ids, dtype=np.int32))
+    setattr(args, "_cache_val_ids", np.asarray(split_data.val_ids, dtype=np.int32))
+    setattr(args, "_cache_external_ids", np.asarray(split_data.external_ids, dtype=np.int32))
 
     graphprop_args = SimpleNamespace(
         feature_dir=args.feature_dir,
@@ -621,6 +664,8 @@ def main() -> None:
         phase1_ids={"train": split_data.historical_ids, "val": split_data.val_ids},
         phase2_ids={"external": split_data.external_ids},
         half_lives=half_lives,
+        primary_phase=primary_phase,
+        external_phase=external_phase,
     )
     phase1_labelprop, phase2_labelprop, labelprop_feature_names = _load_or_build_labelprop_features(
         args=args,
@@ -647,6 +692,8 @@ def main() -> None:
                 phase2_ids={"external": split_data.external_ids},
                 anchor_names=tuple(args.label_context_anchors),
                 relation_anchor_names=tuple(args.label_context_relation_anchors),
+                primary_phase=primary_phase,
+                external_phase=external_phase,
             )
         )
 
@@ -690,6 +737,8 @@ def main() -> None:
             phase1_ids={"train": split_data.historical_ids, "val": split_data.val_ids},
             phase2_ids={"external": split_data.external_ids},
             extra_groups=list(args.extra_groups),
+            primary_phase=primary_phase,
+            external_phase=external_phase,
         )
         x_train = np.concatenate(
             [x_train, np.asarray(phase1_groupagg["train"], dtype=np.float32)],
@@ -713,6 +762,8 @@ def main() -> None:
             phase1_ids={"train": split_data.historical_ids, "val": split_data.val_ids},
             phase2_ids={"external": split_data.external_ids},
             extra_groups=list(args.extra_groups),
+            primary_phase=primary_phase,
+            external_phase=external_phase,
         )
         x_train = np.concatenate(
             [x_train, np.asarray(phase1_relgroup["train"], dtype=np.float32)],
@@ -738,6 +789,9 @@ def main() -> None:
         run_dir=run_dir,
         model_name="xgboost_gpu_multiclass_bg_graphprop",
         summary_extra={
+            "train_phase": primary_phase,
+            "val_phase": val_phase,
+            "external_phase": None if not split.external_ids.size else external_phase,
             "base_model": args.base_model,
             "prop_model": args.prop_model,
             "prop_blocks": list(args.prop_blocks),

@@ -15,6 +15,8 @@ if str(REPO_ROOT) not in sys.path:
 from experiment.datasets.registry import DATASET_ENV_VAR, DEFAULT_DATASET_NAME
 from experiment.training.recipes import get_graph_recipe, list_recipe_names
 
+OFFICIAL_THESIS_RECIPE_NAMES = ("baseline_m5_unified", "thesis_m7_utpm")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -55,10 +57,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _base_command(subcommand: str) -> list[str]:
+def _base_command(subcommand: str, entrypoint: str) -> list[str]:
     return [
         sys.executable,
-        str(REPO_ROOT / "experiment" / "training" / "run_training.py"),
+        str(REPO_ROOT / "experiment" / "training" / entrypoint),
         subcommand,
     ]
 
@@ -79,11 +81,16 @@ def _execute(command: list[str], dataset_name: str, dry_run: bool) -> None:
 
 def main() -> None:
     args = parse_args()
+    if args.recipe in OFFICIAL_THESIS_RECIPE_NAMES:
+        raise ValueError(
+            f"`{args.recipe}` is now an official thesis-only recipe. "
+            "Use `experiment/training/run_thesis_recipe.py` instead of the legacy `run_recipe.py` wrapper."
+        )
     recipe = get_graph_recipe(args.recipe, args.dataset)
-    train_command = _base_command("train") + ["--run-name", args.run_name or recipe.name] + list(
+    train_command = _base_command("train", recipe.entrypoint) + ["--run-name", args.run_name or recipe.name] + list(
         recipe.train_args
     ) + list(args.train_extra_args)
-    build_command = _base_command("build_features") + list(recipe.build_args)
+    build_command = _base_command("build_features", recipe.entrypoint) + list(recipe.build_args)
 
     if args.command == "show":
         print(f"recipe={recipe.name}")

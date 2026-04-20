@@ -92,6 +92,7 @@ class GraphModelConfig:
     hard_negative_candidate_cap: int = 100000
     hard_negative_candidate_multiplier: float = 4.0
     hard_negative_pool_multiplier: float = 2.0
+    hard_negative_teacher_blend: float = 0.0
     loss_type: str = "bce"
     focal_gamma: float = 2.0
     focal_alpha: float = -1.0
@@ -104,6 +105,7 @@ class GraphModelConfig:
     time_decay_strength: float = 0.0
     target_time_weight_half_life_days: float = 0.0
     target_time_weight_floor: float = 0.25
+    message_risk_strength: float = 0.0
     known_label_feature: bool = False
     known_label_feature_dim: int = 5
     target_context_fusion: str = "none"
@@ -123,11 +125,22 @@ class GraphModelConfig:
     prototype_consistency_weight: float = 0.0
     prototype_separation_weight: float = 0.0
     prototype_separation_margin: float = 0.1
+    pseudo_contrastive_weight: float = 0.0
+    pseudo_contrastive_temperature: float = 0.2
+    pseudo_contrastive_sample_size: int = 128
+    pseudo_contrastive_low_quantile: float = 0.1
+    pseudo_contrastive_high_quantile: float = 0.9
+    pseudo_contrastive_interval: int = 4
+    pseudo_contrastive_start_epoch: int = 1
+    pseudo_contrastive_time_balanced: bool = False
+    pseudo_contrastive_min_confidence_gap: float = 0.0
     normal_bucket_align_weight: float = 0.0
     normal_bucket_shift_strength: float = 0.0
     target_time_adapter_strength: float = 0.0
     target_time_adapter_type: str = "affine"
     target_time_adapter_num_experts: int = 4
+    target_time_expert_entropy_floor: float = 0.0
+    target_time_expert_entropy_weight: float = 0.0
     teacher_distill_weight: float = 0.0
     teacher_distill_loss: str = "bce"
     teacher_distill_start_epoch: int = 1
@@ -175,6 +188,7 @@ class GraphModelConfig:
             "hard_negative_candidate_cap": int(self.hard_negative_candidate_cap),
             "hard_negative_candidate_multiplier": float(self.hard_negative_candidate_multiplier),
             "hard_negative_pool_multiplier": float(self.hard_negative_pool_multiplier),
+            "hard_negative_teacher_blend": float(self.hard_negative_teacher_blend),
             "loss_type": self.loss_type,
             "focal_gamma": float(self.focal_gamma),
             "focal_alpha": float(self.focal_alpha),
@@ -187,6 +201,7 @@ class GraphModelConfig:
             "time_decay_strength": float(self.time_decay_strength),
             "target_time_weight_half_life_days": float(self.target_time_weight_half_life_days),
             "target_time_weight_floor": float(self.target_time_weight_floor),
+            "message_risk_strength": float(self.message_risk_strength),
             "known_label_feature": bool(self.known_label_feature),
             "known_label_feature_dim": int(self.known_label_feature_dim),
             "target_context_fusion": self.target_context_fusion,
@@ -206,11 +221,24 @@ class GraphModelConfig:
             "prototype_consistency_weight": float(self.prototype_consistency_weight),
             "prototype_separation_weight": float(self.prototype_separation_weight),
             "prototype_separation_margin": float(self.prototype_separation_margin),
+            "pseudo_contrastive_weight": float(self.pseudo_contrastive_weight),
+            "pseudo_contrastive_temperature": float(self.pseudo_contrastive_temperature),
+            "pseudo_contrastive_sample_size": int(self.pseudo_contrastive_sample_size),
+            "pseudo_contrastive_low_quantile": float(self.pseudo_contrastive_low_quantile),
+            "pseudo_contrastive_high_quantile": float(self.pseudo_contrastive_high_quantile),
+            "pseudo_contrastive_interval": int(self.pseudo_contrastive_interval),
+            "pseudo_contrastive_start_epoch": int(self.pseudo_contrastive_start_epoch),
+            "pseudo_contrastive_time_balanced": bool(self.pseudo_contrastive_time_balanced),
+            "pseudo_contrastive_min_confidence_gap": float(
+                self.pseudo_contrastive_min_confidence_gap
+            ),
             "normal_bucket_align_weight": float(self.normal_bucket_align_weight),
             "normal_bucket_shift_strength": float(self.normal_bucket_shift_strength),
             "target_time_adapter_strength": float(self.target_time_adapter_strength),
             "target_time_adapter_type": self.target_time_adapter_type,
             "target_time_adapter_num_experts": int(self.target_time_adapter_num_experts),
+            "target_time_expert_entropy_floor": float(self.target_time_expert_entropy_floor),
+            "target_time_expert_entropy_weight": float(self.target_time_expert_entropy_weight),
             "teacher_distill_weight": float(self.teacher_distill_weight),
             "teacher_distill_loss": self.teacher_distill_loss,
             "teacher_distill_start_epoch": int(self.teacher_distill_start_epoch),
@@ -266,6 +294,7 @@ class GraphModelConfig:
             hard_negative_candidate_cap=int(payload.get("hard_negative_candidate_cap", 100000)),
             hard_negative_candidate_multiplier=float(payload.get("hard_negative_candidate_multiplier", 4.0)),
             hard_negative_pool_multiplier=float(payload.get("hard_negative_pool_multiplier", 2.0)),
+            hard_negative_teacher_blend=float(payload.get("hard_negative_teacher_blend", 0.0)),
             loss_type=str(payload.get("loss_type", "bce")),
             focal_gamma=float(payload.get("focal_gamma", 2.0)),
             focal_alpha=float(payload.get("focal_alpha", -1.0)),
@@ -278,6 +307,7 @@ class GraphModelConfig:
             time_decay_strength=float(payload.get("time_decay_strength", 0.0)),
             target_time_weight_half_life_days=float(payload.get("target_time_weight_half_life_days", 0.0)),
             target_time_weight_floor=float(payload.get("target_time_weight_floor", 0.25)),
+            message_risk_strength=float(payload.get("message_risk_strength", 0.0)),
             known_label_feature=bool(payload.get("known_label_feature", False)),
             known_label_feature_dim=int(payload.get("known_label_feature_dim", 5)),
             target_context_fusion=str(payload.get("target_context_fusion", "none")),
@@ -297,11 +327,30 @@ class GraphModelConfig:
             prototype_consistency_weight=float(payload.get("prototype_consistency_weight", 0.0)),
             prototype_separation_weight=float(payload.get("prototype_separation_weight", 0.0)),
             prototype_separation_margin=float(payload.get("prototype_separation_margin", 0.1)),
+            pseudo_contrastive_weight=float(payload.get("pseudo_contrastive_weight", 0.0)),
+            pseudo_contrastive_temperature=float(payload.get("pseudo_contrastive_temperature", 0.2)),
+            pseudo_contrastive_sample_size=int(payload.get("pseudo_contrastive_sample_size", 128)),
+            pseudo_contrastive_low_quantile=float(payload.get("pseudo_contrastive_low_quantile", 0.1)),
+            pseudo_contrastive_high_quantile=float(payload.get("pseudo_contrastive_high_quantile", 0.9)),
+            pseudo_contrastive_interval=int(payload.get("pseudo_contrastive_interval", 4)),
+            pseudo_contrastive_start_epoch=int(payload.get("pseudo_contrastive_start_epoch", 1)),
+            pseudo_contrastive_time_balanced=bool(
+                payload.get("pseudo_contrastive_time_balanced", False)
+            ),
+            pseudo_contrastive_min_confidence_gap=float(
+                payload.get("pseudo_contrastive_min_confidence_gap", 0.0)
+            ),
             normal_bucket_align_weight=float(payload.get("normal_bucket_align_weight", 0.0)),
             normal_bucket_shift_strength=float(payload.get("normal_bucket_shift_strength", 0.0)),
             target_time_adapter_strength=float(payload.get("target_time_adapter_strength", 0.0)),
             target_time_adapter_type=str(payload.get("target_time_adapter_type", "affine")),
             target_time_adapter_num_experts=int(payload.get("target_time_adapter_num_experts", 4)),
+            target_time_expert_entropy_floor=float(
+                payload.get("target_time_expert_entropy_floor", 0.0)
+            ),
+            target_time_expert_entropy_weight=float(
+                payload.get("target_time_expert_entropy_weight", 0.0)
+            ),
             teacher_distill_weight=float(payload.get("teacher_distill_weight", 0.0)),
             teacher_distill_loss=str(payload.get("teacher_distill_loss", "bce")),
             teacher_distill_start_epoch=int(payload.get("teacher_distill_start_epoch", 1)),
@@ -355,6 +404,7 @@ class GraphForwardOutput:
     embedding: torch.Tensor | None = None
     aux_logits: torch.Tensor | None = None
     context_regularization_loss: torch.Tensor | None = None
+    adapter_regularization_loss: torch.Tensor | None = None
 
 
 @dataclass(frozen=True)
@@ -400,7 +450,11 @@ def _write_history_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     ensure_dir(path.parent)
     if not rows:
         return
-    fieldnames = list(rows[0].keys())
+    fieldnames: list[str] = []
+    for row in rows:
+        for key in row.keys():
+            if key not in fieldnames:
+                fieldnames.append(key)
     with path.open("w", encoding="utf-8-sig", newline="") as fp:
         writer = csv.DictWriter(fp, fieldnames=fieldnames)
         writer.writeheader()
@@ -1078,7 +1132,8 @@ class TargetTimeDriftExpertAdapter(nn.Module):
         target_time_position: torch.Tensor,
         target_features: torch.Tensor,
         strength: float,
-    ) -> tuple[torch.Tensor, dict[str, float]]:
+        entropy_floor: float = 0.0,
+    ) -> tuple[torch.Tensor, dict[str, float], torch.Tensor]:
         time_embedding = self.time_encoder(target_time_position)
         context_embedding = self.context_encoder(target_features)
         drift_signal = torch.abs(base_embedding - context_embedding)
@@ -1098,14 +1153,18 @@ class TargetTimeDriftExpertAdapter(nn.Module):
             route_weight * torch.log(route_weight.clamp_min(1e-8)),
             dim=-1,
         )
-        entropy_gate = (
+        normalized_entropy = (
             route_entropy / max(math.log(float(self.num_experts)), 1e-6)
         ).clamp_(0.0, 1.0)
+        entropy_gate = normalized_entropy
         delta = torch.tanh(scale) * base_embedding + bias
         adapted_embedding = base_embedding + float(strength) * entropy_gate.unsqueeze(-1) * delta
+        entropy_penalty = F.relu(float(entropy_floor) - normalized_entropy).mean()
         diagnostics = {
             "time_expert_entropy": float(route_entropy.mean().detach().item()),
+            "time_expert_entropy_norm": float(normalized_entropy.mean().detach().item()),
             "time_expert_entropy_gate": float(entropy_gate.mean().detach().item()),
+            "time_expert_entropy_penalty": float(entropy_penalty.detach().item()),
             "time_expert_max_weight": float(route_weight.max(dim=-1).values.mean().detach().item()),
             "time_expert_delta_norm": float(
                 (adapted_embedding - base_embedding).norm(dim=-1).mean().detach().item()
@@ -1113,7 +1172,7 @@ class TargetTimeDriftExpertAdapter(nn.Module):
             "time_expert_context_drift": float(drift_signal.mean().detach().item()),
             "time_expert_time_emb_norm": float(time_embedding.norm(dim=-1).mean().detach().item()),
         }
-        return adapted_embedding, diagnostics
+        return adapted_embedding, diagnostics, entropy_penalty
 
 
 class SafeBatchNorm1d(nn.Module):
@@ -1307,6 +1366,7 @@ class RelationSAGELayer(nn.Module):
         rel_ids: torch.Tensor,
         time_feature: torch.Tensor | None = None,
         time_weight: torch.Tensor | None = None,
+        message_node_scale: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if edge_src.numel() == 0:
             return F.relu(self.self_linear(x))
@@ -1317,6 +1377,9 @@ class RelationSAGELayer(nn.Module):
         msg = self.msg_linear(torch.cat(msg_parts, dim=-1))
         if time_weight is not None:
             msg = msg * time_weight
+        if message_node_scale is not None:
+            edge_scale = 0.5 * (message_node_scale[edge_src] + message_node_scale[edge_dst])
+            msg = msg * edge_scale
         agg = x.new_zeros((x.shape[0], msg.shape[1]))
         agg.index_add_(0, edge_dst, msg)
         deg = x.new_zeros((x.shape[0], 1))
@@ -1381,6 +1444,7 @@ class ModernRelationBlock(nn.Module):
         edge_dst: torch.Tensor,
         edge_emb: torch.Tensor,
         time_weight: torch.Tensor | None = None,
+        message_node_scale: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         h_in = x
         h = self.norm1(x)
@@ -1398,6 +1462,9 @@ class ModernRelationBlock(nn.Module):
                 edge_repr = msg
             if time_weight is not None:
                 edge_repr = edge_repr * time_weight
+            if message_node_scale is not None:
+                edge_scale = 0.5 * (message_node_scale[edge_src] + message_node_scale[edge_dst])
+                edge_repr = edge_repr * edge_scale
             agg = h.new_zeros((h.shape[0], self.hidden_dim))
             agg.index_add_(0, edge_dst, edge_repr)
             deg = h.new_zeros((h.shape[0], 1))
@@ -1477,6 +1544,7 @@ class ModernRelationAttentionBlock(nn.Module):
         edge_dst: torch.Tensor,
         edge_emb: torch.Tensor,
         time_weight: torch.Tensor | None = None,
+        message_node_scale: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         h_in = x
         h = self.norm1(x)
@@ -1490,6 +1558,9 @@ class ModernRelationAttentionBlock(nn.Module):
                 msg = msg * torch.sigmoid(self.gate_mlp(edge_context))
             if time_weight is not None:
                 msg = msg * time_weight
+            if message_node_scale is not None:
+                edge_scale = 0.5 * (message_node_scale[edge_src] + message_node_scale[edge_dst])
+                msg = msg * edge_scale
             attn_score = self.attn_mlp(edge_context).squeeze(-1)
             attn_weight = _segment_softmax(attn_score, edge_dst, h.shape[0]).unsqueeze(-1)
             edge_repr = self.attn_dropout(attn_weight) * msg
@@ -1531,6 +1602,8 @@ class RelationGraphSAGENetwork(nn.Module):
         self.use_legacy = aggregator_type == "sage" and model_config.use_legacy_path()
         self.target_context_fusion = str(model_config.target_context_fusion)
         self.target_time_adapter_type = str(model_config.target_time_adapter_type)
+        self.message_risk_strength = float(model_config.message_risk_strength)
+        self.message_risk_feature_slice: tuple[int, int] | None = None
         self.target_context_input_dim = (
             int(model_config.target_context_input_dim)
             if int(model_config.target_context_input_dim) > 0
@@ -1589,7 +1662,16 @@ class RelationGraphSAGENetwork(nn.Module):
                     context_residual_clip=float(model_config.context_residual_clip),
                     context_residual_budget=float(model_config.context_residual_budget),
                 )
-                if self.target_context_fusion in {"gate", "concat", "logit_residual", "atm_residual", "drift_residual"}
+                if self.target_context_fusion in {
+                    "gate",
+                    "concat",
+                    "logit_residual",
+                    "atm_residual",
+                    "drift_residual",
+                    "drift_mix",
+                    "drift_uncertainty_mix",
+                    "risk_drift_residual",
+                }
                 else None
             )
             self.target_time_adapter = (
@@ -1678,7 +1760,16 @@ class RelationGraphSAGENetwork(nn.Module):
                 context_residual_clip=float(model_config.context_residual_clip),
                 context_residual_budget=float(model_config.context_residual_budget),
             )
-            if self.target_context_fusion in {"gate", "concat", "logit_residual", "atm_residual", "drift_residual"}
+            if self.target_context_fusion in {
+                "gate",
+                "concat",
+                "logit_residual",
+                "atm_residual",
+                "drift_residual",
+                "drift_mix",
+                "drift_uncertainty_mix",
+                "risk_drift_residual",
+            }
             else None
         )
         self.target_time_adapter = (
@@ -1729,6 +1820,42 @@ class RelationGraphSAGENetwork(nn.Module):
         else:
             edge_emb = relation
         return edge_emb, time_feature
+
+    def set_message_risk_feature_slice(
+        self,
+        feature_slice: tuple[int, int] | None,
+    ) -> None:
+        self.message_risk_feature_slice = feature_slice
+
+    def _compute_message_node_scale(
+        self,
+        x: torch.Tensor,
+    ) -> tuple[torch.Tensor | None, dict[str, float] | None]:
+        if self.message_risk_strength <= 0.0 or self.message_risk_feature_slice is None:
+            return None, None
+        start, end = self.message_risk_feature_slice
+        if end <= start or x.shape[1] < end:
+            return None, None
+
+        concentration_block = x[:, start:end]
+        if concentration_block.shape[1] == 0:
+            return None, None
+
+        if concentration_block.shape[1] >= 6 and concentration_block.shape[1] % 6 == 0:
+            concentration_view = concentration_block.reshape(concentration_block.shape[0], -1, 6)
+            top_share_signal = concentration_view[:, :, :3].mean(dim=(1, 2))
+            entropy_signal = concentration_view[:, :, 3:].mean(dim=(1, 2))
+            risk_signal = top_share_signal - entropy_signal
+        else:
+            risk_signal = concentration_block.mean(dim=-1)
+
+        risk_score = torch.sigmoid(risk_signal)
+        node_scale = (1.0 + self.message_risk_strength * (risk_score - 0.5)).unsqueeze(-1)
+        diagnostics = {
+            "message_risk_score_mean": float(risk_score.mean().detach().item()),
+            "message_risk_scale_mean": float(node_scale.mean().detach().item()),
+        }
+        return node_scale, diagnostics
 
     def _subgraph_stats(
         self,
@@ -1899,6 +2026,7 @@ class RelationGraphSAGENetwork(nn.Module):
             time_weight = torch.exp(
                 -float(self.model_config.time_decay_strength) * edge_relative_time
             )
+        message_node_scale, message_risk_diagnostics = self._compute_message_node_scale(x)
         last_edge_repr = h.new_zeros((0, self.hidden_dim))
         layer_outputs: list[torch.Tensor] = []
 
@@ -1911,6 +2039,7 @@ class RelationGraphSAGENetwork(nn.Module):
                     rel_ids=rel_ids,
                     time_feature=time_feature,
                     time_weight=time_weight,
+                    message_node_scale=message_node_scale,
                 )
                 h = self.input_dropout(h)
                 layer_outputs.append(h)
@@ -1929,6 +2058,7 @@ class RelationGraphSAGENetwork(nn.Module):
                     edge_dst=edge_dst,
                     edge_emb=edge_emb,
                     time_weight=time_weight,
+                    message_node_scale=message_node_scale,
                 )
                 layer_outputs.append(h)
             node_repr = (
@@ -1963,6 +2093,7 @@ class RelationGraphSAGENetwork(nn.Module):
         fusion_diagnostics = None
         adapter_diagnostics = None
         context_regularization_loss = embedding.new_tensor(0.0)
+        adapter_regularization_loss = embedding.new_tensor(0.0)
         if target_embedding_shift is not None and target_embedding_shift.numel():
             embedding_norm = embedding.norm(dim=-1, keepdim=True).clamp_min(1e-6)
             embedding = embedding + embedding_norm * target_embedding_shift
@@ -1974,11 +2105,12 @@ class RelationGraphSAGENetwork(nn.Module):
                 adapter_features = (
                     target_context_features if target_context_features is not None else x[target_local_idx]
                 )
-                embedding, adapter_diagnostics = self.target_time_adapter(
+                embedding, adapter_diagnostics, adapter_regularization_loss = self.target_time_adapter(
                     base_embedding=embedding,
                     target_time_position=target_time_position,
                     target_features=adapter_features,
                     strength=float(self.model_config.target_time_adapter_strength),
+                    entropy_floor=float(self.model_config.target_time_expert_entropy_floor),
                 )
             else:
                 time_params = self.target_time_adapter(target_time_position)
@@ -2019,6 +2151,8 @@ class RelationGraphSAGENetwork(nn.Module):
                 )
             if adapter_diagnostics is not None:
                 diagnostics.update(adapter_diagnostics)
+            if message_risk_diagnostics is not None:
+                diagnostics.update(message_risk_diagnostics)
         aux_logits = self._apply_aux_classifier(target_representation) if include_aux else None
         return GraphForwardOutput(
             logits=logits,
@@ -2026,6 +2160,7 @@ class RelationGraphSAGENetwork(nn.Module):
             embedding=embedding if include_embedding else None,
             aux_logits=aux_logits,
             context_regularization_loss=context_regularization_loss,
+            adapter_regularization_loss=adapter_regularization_loss,
         )
 
     def forward(
@@ -2137,12 +2272,37 @@ class BaseGraphSAGEExperiment:
             aggregator_type=aggregator_type,
         ).to(self.device)
         self._hard_negative_pools: dict[int, np.ndarray] = {}
-        self._hard_negative_pool_stats: dict[int, dict[str, int]] = {}
+        self._hard_negative_pool_stats: dict[int, dict[str, float | int]] = {}
         self._relation_sampling_weight: np.ndarray | None = None
         self._normal_alignment_regularizer: TemporalNormalAlignmentBank | None = None
         self._normal_bucket_discriminator: nn.Module | None = None
         self._context_budget_schedule_state: dict[str, float] = {}
         self._prototype_weight_schedule_state: dict[str, float] = {}
+
+    def _resolve_local_feature_group_slice(
+        self,
+        context: GraphPhaseContext,
+        group_name: str,
+    ) -> tuple[int, int] | None:
+        offset = 0
+        for spec in getattr(context.feature_store, "_group_specs", []):
+            width = int(spec["end"] - spec["start"])
+            if str(spec.get("group_name", "")) == str(group_name):
+                return offset, offset + width
+            offset += width
+        return None
+
+    def _refresh_message_risk_feature_slice(
+        self,
+        context: GraphPhaseContext,
+    ) -> None:
+        feature_slice = None
+        if float(self.graph_config.message_risk_strength) > 0.0:
+            feature_slice = self._resolve_local_feature_group_slice(
+                context=context,
+                group_name="temporal_counterparty_concentration",
+            )
+        self.network.set_message_risk_feature_slice(feature_slice)
 
     def _binary_train_labels(self, labels: np.ndarray) -> np.ndarray:
         labels_arr = np.asarray(labels, dtype=np.int8)
@@ -2164,6 +2324,9 @@ class BaseGraphSAGEExperiment:
             float(self.graph_config.prototype_loss_weight) > 0.0
             and int(self.graph_config.prototype_multiclass_num_classes) >= 2
         )
+
+    def _pseudo_contrastive_enabled(self) -> bool:
+        return float(self.graph_config.pseudo_contrastive_weight) > 0.0
 
     def _background_aux_only_enabled(self) -> bool:
         return (
@@ -2319,6 +2482,235 @@ class BaseGraphSAGEExperiment:
     def _prototype_time_bucketed(self) -> bool:
         return self._prototype_enabled() and str(self.graph_config.prototype_bucket_mode) == "time_bucket"
 
+    def _rebalance_pseudo_sample_by_time_bucket(
+        self,
+        *,
+        context: GraphPhaseContext,
+        node_ids: np.ndarray,
+        sample_size: int,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        candidates = np.asarray(node_ids, dtype=np.int32)
+        if candidates.size <= sample_size:
+            return candidates
+
+        bucket_ids = np.asarray(context.graph_cache.node_time_bucket[candidates], dtype=np.int32)
+        unique_buckets = np.unique(bucket_ids)
+        if unique_buckets.size <= 1:
+            choice = rng.choice(candidates.size, size=sample_size, replace=False)
+            return np.asarray(candidates[choice], dtype=np.int32, copy=False)
+
+        base_take = max(sample_size // unique_buckets.size, 1)
+        selected_parts: list[np.ndarray] = []
+        leftover_parts: list[np.ndarray] = []
+        for bucket_id in unique_buckets:
+            bucket_mask = bucket_ids == int(bucket_id)
+            bucket_nodes = np.asarray(candidates[bucket_mask], dtype=np.int32, copy=False)
+            if bucket_nodes.size == 0:
+                continue
+            permutation = rng.permutation(bucket_nodes.size)
+            take = min(bucket_nodes.size, base_take)
+            if take > 0:
+                selected_parts.append(bucket_nodes[permutation[:take]])
+            if bucket_nodes.size > take:
+                leftover_parts.append(bucket_nodes[permutation[take:]])
+
+        selected = (
+            np.concatenate(selected_parts).astype(np.int32, copy=False)
+            if selected_parts
+            else np.empty(0, dtype=np.int32)
+        )
+        if selected.size < sample_size and leftover_parts:
+            leftover = np.concatenate(leftover_parts).astype(np.int32, copy=False)
+            need = sample_size - selected.size
+            if leftover.size > need:
+                fill_choice = rng.choice(leftover.size, size=need, replace=False)
+                leftover = np.asarray(leftover[fill_choice], dtype=np.int32, copy=False)
+            selected = np.concatenate([selected, leftover]).astype(np.int32, copy=False)
+        if selected.size > sample_size:
+            trim_choice = rng.choice(selected.size, size=sample_size, replace=False)
+            selected = np.asarray(selected[trim_choice], dtype=np.int32, copy=False)
+        if selected.size < sample_size:
+            remaining_mask = ~np.isin(candidates, selected, assume_unique=False)
+            remaining = np.asarray(candidates[remaining_mask], dtype=np.int32, copy=False)
+            if remaining.size:
+                need = min(sample_size - selected.size, remaining.size)
+                fill_choice = rng.choice(remaining.size, size=need, replace=False)
+                selected = np.concatenate([selected, remaining[fill_choice]]).astype(np.int32, copy=False)
+        return selected
+
+    def _compute_pseudo_contrastive_loss(
+        self,
+        *,
+        context: GraphPhaseContext,
+        test_pool_ids: np.ndarray,
+        snapshot_end: int | None,
+        epoch: int,
+        rng: np.random.Generator,
+    ) -> tuple[torch.Tensor, dict[str, float]]:
+        disabled = (
+            not self._pseudo_contrastive_enabled()
+            or test_pool_ids.size == 0
+            or self._primary_multiclass_enabled()
+            or epoch < max(int(self.graph_config.pseudo_contrastive_start_epoch), 1)
+        )
+        if disabled:
+            return self.network.classifier[-1].weight.new_tensor(0.0), {}
+
+        pool = np.asarray(test_pool_ids, dtype=np.int32)
+        if snapshot_end is not None:
+            first_active = np.asarray(context.graph_cache.first_active[pool], dtype=np.int32)
+            pool = pool[first_active <= int(snapshot_end)].astype(np.int32, copy=False)
+        sample_size = min(
+            int(pool.size),
+            max(int(self.graph_config.pseudo_contrastive_sample_size), 0),
+        )
+        if sample_size < 8:
+            return self.network.classifier[-1].weight.new_tensor(0.0), {}
+        if pool.size > sample_size:
+            if bool(self.graph_config.pseudo_contrastive_time_balanced):
+                candidate_size = min(pool.size, max(sample_size * 4, sample_size))
+                choice = rng.choice(pool.size, size=candidate_size, replace=False)
+                candidates = np.asarray(pool[choice], dtype=np.int32, copy=False)
+                sampled_nodes = self._rebalance_pseudo_sample_by_time_bucket(
+                    context=context,
+                    node_ids=candidates,
+                    sample_size=sample_size,
+                    rng=rng,
+                )
+            else:
+                choice = rng.choice(pool.size, size=sample_size, replace=False)
+                sampled_nodes = np.asarray(pool[choice], dtype=np.int32, copy=False)
+        else:
+            sampled_nodes = pool
+
+        subgraph = self._sample_batch_subgraph(
+            graph=context.graph_cache,
+            context=context,
+            batch_nodes=sampled_nodes,
+            rng=rng,
+            snapshot_end=snapshot_end,
+            training=False,
+        )
+        (
+            x,
+            edge_src,
+            edge_dst,
+            rel_ids,
+            edge_relative_time,
+            target_idx,
+            node_subgraph_id,
+            edge_subgraph_id,
+            target_context_x,
+        ) = self._tensorize_subgraph(
+            context=context,
+            subgraph=subgraph,
+            snapshot_end=snapshot_end,
+        )
+        target_time_position = self._build_target_time_position(
+            context=context,
+            batch_nodes=sampled_nodes,
+        )
+        forward_output = self.network.forward_output(
+            x=x,
+            edge_src=edge_src,
+            edge_dst=edge_dst,
+            rel_ids=rel_ids,
+            edge_relative_time=edge_relative_time,
+            target_local_idx=target_idx,
+            target_context_features=target_context_x,
+            target_embedding_shift=None,
+            target_time_position=target_time_position,
+            node_subgraph_id=node_subgraph_id,
+            edge_subgraph_id=edge_subgraph_id,
+            include_diagnostics=False,
+            include_embedding=True,
+            include_aux=False,
+        )
+        if forward_output.embedding is None or forward_output.logits.ndim != 1:
+            return self.network.classifier[-1].weight.new_tensor(0.0), {}
+
+        detached_score = torch.sigmoid(forward_output.logits.detach())
+        low_q = float(np.clip(self.graph_config.pseudo_contrastive_low_quantile, 0.0, 0.5))
+        high_q = float(np.clip(self.graph_config.pseudo_contrastive_high_quantile, 0.5, 1.0))
+        if high_q <= low_q:
+            return self.network.classifier[-1].weight.new_tensor(0.0), {}
+        low_threshold = torch.quantile(detached_score, low_q)
+        high_threshold = torch.quantile(detached_score, high_q)
+        min_confidence_gap = max(float(self.graph_config.pseudo_contrastive_min_confidence_gap), 0.0)
+        normal_threshold = low_threshold
+        anomaly_threshold = high_threshold
+        if min_confidence_gap > 0.0:
+            normal_threshold = torch.minimum(
+                low_threshold,
+                low_threshold.new_tensor(max(0.5 - min_confidence_gap, 0.0)),
+            )
+            anomaly_threshold = torch.maximum(
+                high_threshold,
+                high_threshold.new_tensor(min(0.5 + min_confidence_gap, 1.0)),
+            )
+        pseudo_normal = detached_score <= normal_threshold
+        pseudo_anomaly = detached_score >= anomaly_threshold
+        selected_mask = pseudo_normal | pseudo_anomaly
+        if int(selected_mask.sum().item()) < 4:
+            return self.network.classifier[-1].weight.new_tensor(0.0), {}
+
+        embedding = F.normalize(forward_output.embedding[selected_mask], dim=-1)
+        pseudo_labels = pseudo_anomaly[selected_mask].to(dtype=torch.long)
+        bucket_ids = torch.as_tensor(
+            np.asarray(context.graph_cache.node_time_bucket[sampled_nodes], dtype=np.int64)[
+                selected_mask.detach().cpu().numpy()
+            ],
+            dtype=torch.long,
+            device=self.device,
+        )
+        if int(torch.sum(pseudo_labels == 0).item()) < 2 or int(torch.sum(pseudo_labels == 1).item()) < 2:
+            return self.network.classifier[-1].weight.new_tensor(0.0), {}
+
+        global_centroids: list[torch.Tensor | None] = []
+        for label_value in (0, 1):
+            mask = pseudo_labels == label_value
+            if torch.any(mask):
+                centroid = F.normalize(torch.mean(embedding[mask], dim=0, keepdim=True), dim=-1).squeeze(0)
+                global_centroids.append(centroid)
+            else:
+                global_centroids.append(None)
+
+        bucket_centroids: dict[tuple[int, int], torch.Tensor] = {}
+        unique_bucket_ids = torch.unique(bucket_ids).tolist()
+        for bucket_id in unique_bucket_ids:
+            for label_value in (0, 1):
+                mask = (bucket_ids == int(bucket_id)) & (pseudo_labels == label_value)
+                if torch.any(mask):
+                    bucket_centroids[(int(bucket_id), label_value)] = F.normalize(
+                        torch.mean(embedding[mask], dim=0, keepdim=True),
+                        dim=-1,
+                    ).squeeze(0)
+
+        pos_terms: list[torch.Tensor] = []
+        neg_terms: list[torch.Tensor] = []
+        for idx in range(embedding.shape[0]):
+            bucket_id = int(bucket_ids[idx].item())
+            label_value = int(pseudo_labels[idx].item())
+            pos_centroid = bucket_centroids.get((bucket_id, label_value), global_centroids[label_value])
+            neg_centroid = bucket_centroids.get((bucket_id, 1 - label_value), global_centroids[1 - label_value])
+            if pos_centroid is None or neg_centroid is None:
+                continue
+            pos_terms.append(1.0 - torch.sum(embedding[idx] * pos_centroid))
+            neg_terms.append(F.relu(torch.sum(embedding[idx] * neg_centroid) - 0.15))
+
+        if not pos_terms:
+            return self.network.classifier[-1].weight.new_tensor(0.0), {}
+        temperature = max(float(self.graph_config.pseudo_contrastive_temperature), 1e-3)
+        loss = (torch.stack(pos_terms).mean() + torch.stack(neg_terms).mean()) / temperature
+        diagnostics = {
+            "pseudo_contrastive_selected_ratio": float(selected_mask.to(dtype=torch.float32).mean().detach().item()),
+            "pseudo_contrastive_normal_count": float(torch.sum(pseudo_labels == 0).detach().item()),
+            "pseudo_contrastive_anomaly_count": float(torch.sum(pseudo_labels == 1).detach().item()),
+            "pseudo_contrastive_bucket_count": float(torch.unique(bucket_ids).numel()),
+        }
+        return loss, diagnostics
+
     def _normal_bucket_alignment_enabled(self) -> bool:
         return float(self.graph_config.normal_bucket_align_weight) > 0.0
 
@@ -2375,7 +2767,14 @@ class BaseGraphSAGEExperiment:
     ) -> torch.Tensor | None:
         needs_time_position = (
             float(self.graph_config.target_time_adapter_strength) > 0.0
-            or str(self.graph_config.target_context_fusion) in {"atm_residual", "drift_residual"}
+            or str(self.graph_config.target_context_fusion)
+            in {
+                "atm_residual",
+                "drift_residual",
+                "drift_mix",
+                "drift_uncertainty_mix",
+                "risk_drift_residual",
+            }
         )
         if not needs_time_position:
             return None
@@ -2499,6 +2898,101 @@ class BaseGraphSAGEExperiment:
             self.graph_config.train_negative_ratio > 0.0
             and self.graph_config.negative_sampler in {"hard", "mixed"}
         )
+
+    def _hard_negative_teacher_blend(self) -> float:
+        return float(np.clip(self.graph_config.hard_negative_teacher_blend, 0.0, 1.0))
+
+    def _teacher_scores_for_nodes(
+        self,
+        context: GraphPhaseContext,
+        node_ids: np.ndarray,
+    ) -> tuple[np.ndarray | None, np.ndarray | None]:
+        if context.distill_targets is None or context.distill_target_mask is None:
+            return None, None
+        ids = np.asarray(node_ids, dtype=np.int32)
+        teacher_scores = np.asarray(context.distill_targets[ids], dtype=np.float32)
+        teacher_mask = np.asarray(context.distill_target_mask[ids], dtype=bool)
+        return teacher_scores, teacher_mask
+
+    def _select_hard_negative_candidates(
+        self,
+        context: GraphPhaseContext,
+        neg_nodes: np.ndarray,
+        candidate_count: int,
+        rng: np.random.Generator,
+    ) -> tuple[np.ndarray, float]:
+        neg_nodes = np.asarray(neg_nodes, dtype=np.int32)
+        if candidate_count >= neg_nodes.size:
+            teacher_scores, teacher_mask = self._teacher_scores_for_nodes(context, neg_nodes)
+            coverage = float(np.mean(teacher_mask, dtype=np.float64)) if teacher_mask is not None and teacher_mask.size else 0.0
+            return neg_nodes.astype(np.int32, copy=False), coverage
+
+        teacher_blend = self._hard_negative_teacher_blend()
+        teacher_scores, teacher_mask = self._teacher_scores_for_nodes(context, neg_nodes)
+        if (
+            teacher_blend <= 0.0
+            or teacher_scores is None
+            or teacher_mask is None
+            or not np.any(teacher_mask)
+        ):
+            choice = rng.choice(neg_nodes.size, size=candidate_count, replace=False)
+            return neg_nodes[choice].astype(np.int32, copy=False), 0.0
+
+        teacher_take = min(candidate_count, max(1, int(round(candidate_count * teacher_blend))))
+        teacher_nodes = neg_nodes[teacher_mask]
+        teacher_values = teacher_scores[teacher_mask]
+        if teacher_take >= teacher_nodes.size:
+            teacher_selected = teacher_nodes.astype(np.int32, copy=False)
+        else:
+            teacher_top_idx = np.argpartition(teacher_values, -teacher_take)[-teacher_take:]
+            teacher_top_idx = teacher_top_idx[np.argsort(-teacher_values[teacher_top_idx], kind="stable")]
+            teacher_selected = teacher_nodes[teacher_top_idx].astype(np.int32, copy=False)
+
+        remaining_take = max(candidate_count - teacher_selected.size, 0)
+        if remaining_take <= 0:
+            return teacher_selected.astype(np.int32, copy=False), 1.0
+
+        available_mask = ~np.isin(neg_nodes, teacher_selected, assume_unique=False)
+        available_idx = np.flatnonzero(available_mask)
+        if available_idx.size <= remaining_take:
+            random_selected = neg_nodes[available_idx].astype(np.int32, copy=False)
+        else:
+            random_choice = rng.choice(available_idx.size, size=remaining_take, replace=False)
+            random_selected = neg_nodes[available_idx[random_choice]].astype(np.int32, copy=False)
+
+        candidate_nodes = np.concatenate([teacher_selected, random_selected]).astype(np.int32, copy=False)
+        teacher_scores_sel, teacher_mask_sel = self._teacher_scores_for_nodes(context, candidate_nodes)
+        coverage = (
+            float(np.mean(teacher_mask_sel, dtype=np.float64))
+            if teacher_mask_sel is not None and teacher_mask_sel.size
+            else 0.0
+        )
+        return candidate_nodes, coverage
+
+    def _blend_hard_negative_scores(
+        self,
+        context: GraphPhaseContext,
+        candidate_nodes: np.ndarray,
+        student_scores: np.ndarray,
+    ) -> tuple[np.ndarray, float]:
+        scores = np.asarray(student_scores, dtype=np.float32)
+        teacher_blend = self._hard_negative_teacher_blend()
+        teacher_scores, teacher_mask = self._teacher_scores_for_nodes(context, candidate_nodes)
+        if (
+            teacher_blend <= 0.0
+            or teacher_scores is None
+            or teacher_mask is None
+            or not np.any(teacher_mask)
+        ):
+            return scores, 0.0
+
+        blended = scores.copy()
+        blended[teacher_mask] = (
+            (1.0 - teacher_blend) * blended[teacher_mask]
+            + teacher_blend * teacher_scores[teacher_mask]
+        ).astype(np.float32, copy=False)
+        teacher_mean = float(np.mean(teacher_scores[teacher_mask], dtype=np.float64))
+        return blended, teacher_mean
 
     def _relation_risk_sampler_enabled(self) -> bool:
         return _sampler_uses_relation_risk(self.graph_config.neighbor_sampler)
@@ -3071,13 +3565,21 @@ class BaseGraphSAGEExperiment:
             sum(int(stats.get("candidate_count", 0)) for stats in self._hard_negative_pool_stats.values())
         )
 
+    def _current_hard_negative_teacher_coverage(self) -> float:
+        coverages = [
+            float(stats.get("teacher_coverage", 0.0))
+            for stats in self._hard_negative_pool_stats.values()
+            if int(stats.get("candidate_count", 0)) > 0
+        ]
+        return float(np.mean(coverages, dtype=np.float64)) if coverages else 0.0
+
     def _maybe_refresh_hard_negative_pools(
         self,
         context: GraphPhaseContext,
         train_ids: np.ndarray,
         epoch: int,
         rng: np.random.Generator,
-    ) -> dict[str, int | bool]:
+    ) -> dict[str, int | bool | float]:
         if not self._hard_negative_enabled():
             self._hard_negative_pools = {}
             self._hard_negative_pool_stats = {}
@@ -3086,6 +3588,7 @@ class BaseGraphSAGEExperiment:
                 "pool_size": 0,
                 "candidate_count": 0,
                 "partition_count": 0,
+                "teacher_coverage": 0.0,
             }
 
         warmup_epochs = max(int(self.graph_config.hard_negative_warmup_epochs), 0)
@@ -3097,6 +3600,7 @@ class BaseGraphSAGEExperiment:
                 "pool_size": 0,
                 "candidate_count": 0,
                 "partition_count": 0,
+                "teacher_coverage": 0.0,
             }
 
         refresh_every = max(int(self.graph_config.hard_negative_refresh), 1)
@@ -3109,6 +3613,7 @@ class BaseGraphSAGEExperiment:
                 "pool_size": self._current_hard_negative_pool_size(),
                 "candidate_count": self._current_hard_negative_candidate_count(),
                 "partition_count": len(self._hard_negative_pools),
+                "teacher_coverage": self._current_hard_negative_teacher_coverage(),
             }
 
         negative_ratio = max(float(self.graph_config.train_negative_ratio), 0.0)
@@ -3139,11 +3644,12 @@ class BaseGraphSAGEExperiment:
             if candidate_count <= 0:
                 continue
 
-            if candidate_count >= neg_nodes.size:
-                candidate_nodes = neg_nodes.astype(np.int32, copy=False)
-            else:
-                choice = rng.choice(neg_nodes.size, size=candidate_count, replace=False)
-                candidate_nodes = neg_nodes[choice].astype(np.int32, copy=False)
+            candidate_nodes, teacher_coverage = self._select_hard_negative_candidates(
+                context=context,
+                neg_nodes=neg_nodes,
+                candidate_count=candidate_count,
+                rng=rng,
+            )
 
             candidate_scores = self.predict_proba(
                 context=context,
@@ -3154,6 +3660,11 @@ class BaseGraphSAGEExperiment:
             )
             if candidate_scores.size == 0:
                 continue
+            candidate_scores, teacher_score_mean = self._blend_hard_negative_scores(
+                context=context,
+                candidate_nodes=candidate_nodes,
+                student_scores=candidate_scores,
+            )
 
             pool_count = min(
                 candidate_nodes.size,
@@ -3171,6 +3682,8 @@ class BaseGraphSAGEExperiment:
                 "candidate_count": int(candidate_nodes.size),
                 "pool_count": int(pool_nodes.size),
                 "sampled_negatives": int(sampled_negatives),
+                "teacher_coverage": float(teacher_coverage),
+                "teacher_score_mean": float(teacher_score_mean),
             }
 
         self._hard_negative_pools = hard_pools
@@ -3180,6 +3693,7 @@ class BaseGraphSAGEExperiment:
             "pool_size": self._current_hard_negative_pool_size(),
             "candidate_count": self._current_hard_negative_candidate_count(),
             "partition_count": len(self._hard_negative_pools),
+            "teacher_coverage": self._current_hard_negative_teacher_coverage(),
         }
 
     def _sample_negative_partition(
@@ -3717,13 +4231,20 @@ class BaseGraphSAGEExperiment:
         context: GraphPhaseContext,
         train_ids: np.ndarray,
         val_ids: np.ndarray,
+        test_pool_ids: np.ndarray | None = None,
         artifact_dir: Path | None = None,
     ) -> dict[str, float]:
         set_global_seed(self.seed)
         train_ids = np.asarray(train_ids, dtype=np.int32)
         val_ids = np.asarray(val_ids, dtype=np.int32)
+        test_pool_ids = (
+            np.empty(0, dtype=np.int32)
+            if test_pool_ids is None
+            else np.asarray(test_pool_ids, dtype=np.int32)
+        )
         train_labels = self._binary_train_labels(context.labels[train_ids]).astype(np.float32, copy=False)
         val_labels = context.labels[val_ids].astype(np.int8, copy=False)
+        self._refresh_message_risk_feature_slice(context)
         primary_class_weight = self._compute_primary_class_weight(context=context, train_ids=train_ids)
         self.training_history: list[dict[str, Any]] = []
         self._context_budget_schedule_state = {}
@@ -3799,6 +4320,7 @@ class BaseGraphSAGEExperiment:
                     f"recent_window={self.graph_config.recent_window} "
                     f"recent_ratio={self.graph_config.recent_ratio:.4f} "
                     f"consistency_temperature={self.graph_config.consistency_temperature:.4f} "
+                    f"message_risk_strength={self.graph_config.message_risk_strength:.4f} "
                     f"train_negative_ratio={self.graph_config.train_negative_ratio:.4f} "
                     f"historical_background_negative_ratio="
                     f"{self.graph_config.historical_background_negative_ratio:.4f} "
@@ -3806,6 +4328,7 @@ class BaseGraphSAGEExperiment:
                     f"{self.graph_config.historical_background_negative_warmup_epochs} "
                     f"historical_background_aux_only={self.graph_config.historical_background_aux_only} "
                     f"negative_sampler={self.graph_config.negative_sampler} "
+                    f"hard_negative_teacher_blend={self.graph_config.hard_negative_teacher_blend:.4f} "
                     f"loss_type={self.graph_config.loss_type} "
                     f"ranking_weight={self.graph_config.ranking_weight:.4f} "
                     f"ranking_margin={self.graph_config.ranking_margin:.4f} "
@@ -3841,8 +4364,13 @@ class BaseGraphSAGEExperiment:
                     f"{self.graph_config.context_residual_budget_release_delay_epochs} "
                     f"normal_bucket_align_weight={self.graph_config.normal_bucket_align_weight:.4f} "
                     f"normal_bucket_shift_strength={self.graph_config.normal_bucket_shift_strength:.4f} "
+                    f"target_time_adapter_strength={self.graph_config.target_time_adapter_strength:.4f} "
                     f"target_time_adapter_type={self.graph_config.target_time_adapter_type} "
                     f"target_time_adapter_num_experts={self.graph_config.target_time_adapter_num_experts} "
+                    f"target_time_expert_entropy_floor="
+                    f"{self.graph_config.target_time_expert_entropy_floor:.4f} "
+                    f"target_time_expert_entropy_weight="
+                    f"{self.graph_config.target_time_expert_entropy_weight:.4f} "
                     f"teacher_distill_weight={self.graph_config.teacher_distill_weight:.4f} "
                     f"teacher_distill_loss={self.graph_config.teacher_distill_loss} "
                     f"teacher_distill_start_epoch={self.graph_config.teacher_distill_start_epoch} "
@@ -3853,8 +4381,19 @@ class BaseGraphSAGEExperiment:
                     f"aux_multiclass_num_classes={self.graph_config.aux_multiclass_num_classes} "
                     f"aux_multiclass_loss_weight={self.graph_config.aux_multiclass_loss_weight:.4f} "
                     f"aux_inference_blend={self.graph_config.aux_inference_blend:.4f} "
+                    f"pseudo_contrastive_weight={self.graph_config.pseudo_contrastive_weight:.4f} "
+                    f"pseudo_contrastive_temperature={self.graph_config.pseudo_contrastive_temperature:.4f} "
+                    f"pseudo_contrastive_sample_size={self.graph_config.pseudo_contrastive_sample_size} "
+                    f"pseudo_contrastive_low_quantile={self.graph_config.pseudo_contrastive_low_quantile:.4f} "
+                    f"pseudo_contrastive_high_quantile={self.graph_config.pseudo_contrastive_high_quantile:.4f} "
+                    f"pseudo_contrastive_interval={self.graph_config.pseudo_contrastive_interval} "
+                    f"pseudo_contrastive_start_epoch={self.graph_config.pseudo_contrastive_start_epoch} "
+                    f"pseudo_contrastive_time_balanced={self.graph_config.pseudo_contrastive_time_balanced} "
+                    f"pseudo_contrastive_min_confidence_gap="
+                    f"{self.graph_config.pseudo_contrastive_min_confidence_gap:.4f} "
                     f"historical_background_pool="
                     f"{0 if context.historical_background_ids is None else int(context.historical_background_ids.size)} "
+                    f"test_pool_size={int(test_pool_ids.size)} "
                     f"loss_pos_weight={float(pos_weight.item()):.4f}"
                 ),
             )
@@ -3887,6 +4426,8 @@ class BaseGraphSAGEExperiment:
                 batch_aux_losses: list[float] = []
                 batch_teacher_distill_losses: list[float] = []
                 batch_context_regularization_losses: list[float] = []
+                batch_adapter_regularization_losses: list[float] = []
+                batch_pseudo_contrastive_losses: list[float] = []
                 batch_subgraph_nodes: list[float] = []
                 batch_subgraph_edges: list[float] = []
                 batch_emb_norm: list[float] = []
@@ -3904,7 +4445,8 @@ class BaseGraphSAGEExperiment:
                         f"[{self.model_name}] hard_negative_refresh epoch={epoch} "
                         f"partitions={hard_negative_refresh['partition_count']} "
                         f"candidates={hard_negative_refresh['candidate_count']} "
-                        f"pool_size={hard_negative_refresh['pool_size']}"
+                        f"pool_size={hard_negative_refresh['pool_size']} "
+                        f"teacher_coverage={float(hard_negative_refresh['teacher_coverage']):.4f}"
                     )
                     tqdm.write(refresh_line)
                     if log_path is not None:
@@ -3923,7 +4465,7 @@ class BaseGraphSAGEExperiment:
                     dynamic_ncols=True,
                     leave=False,
                 ) as batch_pbar:
-                    for batch_nodes, batch_positions, snapshot_end in batch_pbar:
+                    for batch_idx, (batch_nodes, batch_positions, snapshot_end) in enumerate(batch_pbar, start=1):
                         subgraph = self._sample_batch_subgraph(
                             graph=context.graph_cache,
                             context=context,
@@ -4129,6 +4671,17 @@ class BaseGraphSAGEExperiment:
                                 loss
                                 + context_budget_weight * context_regularization_loss
                             )
+                        adapter_regularization_loss = (
+                            forward_output.adapter_regularization_loss
+                            if forward_output.adapter_regularization_loss is not None
+                            else forward_output.logits.new_tensor(0.0)
+                        )
+                        adapter_entropy_weight = max(
+                            float(self.graph_config.target_time_expert_entropy_weight),
+                            0.0,
+                        )
+                        if adapter_entropy_weight > 0.0:
+                            loss = loss + adapter_entropy_weight * adapter_regularization_loss
                         prototype_loss = forward_output.logits.new_tensor(0.0)
                         if self._prototype_enabled():
                             if (
@@ -4183,12 +4736,40 @@ class BaseGraphSAGEExperiment:
                             memory_embedding=normal_bucket_adv_memory_embedding,
                             memory_bucket_ids=normal_bucket_adv_memory_bucket_ids,
                         )
+                        pseudo_contrastive_loss = forward_output.logits.new_tensor(0.0)
+                        pseudo_interval = max(int(self.graph_config.pseudo_contrastive_interval), 1)
+                        should_run_pseudo = (
+                            float(self.graph_config.pseudo_contrastive_weight) > 0.0
+                            and test_pool_ids.size > 0
+                            and (batch_idx % pseudo_interval == 0)
+                        )
+                        if should_run_pseudo:
+                            pseudo_contrastive_loss, pseudo_diagnostics = self._compute_pseudo_contrastive_loss(
+                                context=context,
+                                test_pool_ids=test_pool_ids,
+                                snapshot_end=snapshot_end,
+                                epoch=epoch,
+                                rng=epoch_rng,
+                            )
+                            if pseudo_diagnostics:
+                                for diag_name, diag_value in pseudo_diagnostics.items():
+                                    batch_extra_diagnostics.setdefault(str(diag_name), []).append(float(diag_value))
+                            loss = (
+                                loss
+                                + float(self.graph_config.pseudo_contrastive_weight) * pseudo_contrastive_loss
+                            )
                         loss_parts["prototype_loss"] = float(prototype_loss.detach().item())
                         loss_parts["normal_align_loss"] = float(normal_align_loss.detach().item())
                         loss_parts["normal_bucket_adv_loss"] = float(normal_bucket_adv_loss.detach().item())
                         loss_parts["teacher_distill_loss"] = float(teacher_distill_loss.detach().item())
                         loss_parts["context_regularization_loss"] = float(
                             context_regularization_loss.detach().item()
+                        )
+                        loss_parts["adapter_regularization_loss"] = float(
+                            adapter_regularization_loss.detach().item()
+                        )
+                        loss_parts["pseudo_contrastive_loss"] = float(
+                            pseudo_contrastive_loss.detach().item()
                         )
                         loss_parts["total_loss"] = float(loss.detach().item())
                         loss.backward()
@@ -4214,6 +4795,12 @@ class BaseGraphSAGEExperiment:
                         batch_teacher_distill_losses.append(float(loss_parts["teacher_distill_loss"]))
                         batch_context_regularization_losses.append(
                             float(loss_parts["context_regularization_loss"])
+                        )
+                        batch_adapter_regularization_losses.append(
+                            float(loss_parts["adapter_regularization_loss"])
+                        )
+                        batch_pseudo_contrastive_losses.append(
+                            float(loss_parts["pseudo_contrastive_loss"])
                         )
                         batch_subgraph_nodes.append(float(subgraph.node_ids.shape[0]))
                         batch_subgraph_edges.append(float(subgraph.edge_src.shape[0]))
@@ -4269,6 +4856,12 @@ class BaseGraphSAGEExperiment:
                     "train_aux_loss": float(np.mean(batch_aux_losses)),
                     "train_teacher_distill_loss": float(np.mean(batch_teacher_distill_losses)),
                     "train_context_regularization_loss": float(np.mean(batch_context_regularization_losses)),
+                    "train_adapter_regularization_loss": float(
+                        np.mean(batch_adapter_regularization_losses)
+                    ),
+                    "train_pseudo_contrastive_loss": float(
+                        np.mean(batch_pseudo_contrastive_losses)
+                    ),
                     "prototype_loss_weight_effective": float(prototype_loss_weight),
                     "prototype_trust_score": float(
                         self._prototype_weight_schedule_state.get("trust_score", 1.0)
@@ -4298,6 +4891,7 @@ class BaseGraphSAGEExperiment:
                     "train_pos_rate": float(train_batch_stats.positive_rate),
                     "hard_negative_pool_size": int(self._current_hard_negative_pool_size()),
                     "hard_negative_candidate_count": int(self._current_hard_negative_candidate_count()),
+                    "hard_negative_teacher_coverage": float(self._current_hard_negative_teacher_coverage()),
                     "avg_subgraph_nodes": float(np.mean(batch_subgraph_nodes)),
                     "avg_subgraph_edges": float(np.mean(batch_subgraph_edges)),
                     "emb_norm": float(np.mean(batch_emb_norm)),
@@ -4327,6 +4921,9 @@ class BaseGraphSAGEExperiment:
                     f"train_aux_loss={epoch_row['train_aux_loss']:.6f} "
                     f"train_teacher_distill_loss={epoch_row['train_teacher_distill_loss']:.6f} "
                     f"train_context_regularization_loss={epoch_row['train_context_regularization_loss']:.6f} "
+                    f"train_adapter_regularization_loss="
+                    f"{epoch_row['train_adapter_regularization_loss']:.6f} "
+                    f"train_pseudo_contrastive_loss={epoch_row['train_pseudo_contrastive_loss']:.6f} "
                     f"prototype_loss_weight_effective={epoch_row['prototype_loss_weight_effective']:.6f} "
                     f"prototype_trust_score={epoch_row['prototype_trust_score']:.6f} "
                     f"teacher_distill_weight_effective={epoch_row['teacher_distill_weight_effective']:.6f} "
@@ -4349,6 +4946,7 @@ class BaseGraphSAGEExperiment:
                     f"train_bg_neg={train_batch_stats.background_negative_count} "
                     f"train_pos_rate={train_batch_stats.positive_rate:.4f} "
                     f"hard_negative_pool_size={self._current_hard_negative_pool_size()} "
+                    f"hard_negative_teacher_coverage={self._current_hard_negative_teacher_coverage():.4f} "
                     f"avg_subgraph_nodes={np.mean(batch_subgraph_nodes):.2f} "
                     f"avg_subgraph_edges={np.mean(batch_subgraph_edges):.2f} "
                     f"emb_norm={np.mean(batch_emb_norm):.6f} "
@@ -4411,6 +5009,7 @@ class BaseGraphSAGEExperiment:
         return_embeddings: bool = False,
     ) -> tuple[np.ndarray, np.ndarray | None]:
         self.network.eval()
+        self._refresh_message_risk_feature_slice(context)
         node_ids = np.asarray(node_ids, dtype=np.int32)
         rng = np.random.default_rng(self.seed if batch_seed is None else batch_seed)
         probabilities = np.zeros(node_ids.shape[0], dtype=np.float32)

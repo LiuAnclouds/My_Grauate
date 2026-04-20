@@ -317,14 +317,50 @@ def _rank_norm(values: np.ndarray) -> np.ndarray:
     return ranks
 
 
+def _split_phase_names(split) -> tuple[str, str]:
+    train_phase = str(split.train_phase)
+    external_phase = str(split.external_phase) if split.external_phase else str(split.val_phase)
+    return train_phase, external_phase
+
+
+def _safe_auc_or_nan(y_true: np.ndarray, y_score: np.ndarray) -> float:
+    y_true = np.asarray(y_true, dtype=np.int8)
+    y_score = np.asarray(y_score, dtype=np.float32)
+    if y_true.size == 0 or np.unique(y_true).size < 2:
+        return float("nan")
+    return float(roc_auc_score(y_true, y_score))
+
+
 def _historical_ids_from_summary(summary: dict[str, object], feature_dir: Path) -> np.ndarray:
     split = load_experiment_split()
-    phase1_y = np.asarray(load_phase_arrays("phase1", keys=("y",))["y"], dtype=np.int8)
-    phase1_graph = load_graph_cache("phase1", outdir=feature_dir)
+    historical_selection_mode = str(summary.get("historical_selection_mode", ""))
+    expected_size = int(summary["historical_train_size"])
+    train_phase, _ = _split_phase_names(split)
+    phase1_y = np.asarray(load_phase_arrays(train_phase, keys=("y",))["y"], dtype=np.int8)
+    phase1_graph = load_graph_cache(train_phase, outdir=feature_dir)
     first_active = np.asarray(phase1_graph.first_active, dtype=np.int32)
     threshold_day = int(summary.get("threshold_day", split.threshold_day))
     min_train_day = int(summary.get("min_train_first_active_day", 0))
     include_future_background = bool(summary.get("include_future_background", False))
+    if historical_selection_mode in {
+        "split_train_ids",
+        "split_train_ids_recent_start",
+    }:
+        split_train_ids = np.asarray(split.train_ids, dtype=np.int32)
+        if min_train_day > 0:
+            split_train_ids = split_train_ids[first_active[split_train_ids] >= min_train_day].astype(
+                np.int32,
+                copy=False,
+            )
+        historical_ids = split_train_ids
+        if historical_ids.size != expected_size:
+            raise AssertionError(
+                f"historical train size mismatch: rebuilt={historical_ids.size} summary={expected_size}"
+            )
+        overlap = np.intersect1d(historical_ids, np.asarray(split.val_ids, dtype=np.int32))
+        if overlap.size:
+            raise AssertionError(f"historical train ids overlap validation ids: overlap={overlap.size}")
+        return historical_ids
     if include_future_background:
         train_mask = (
             ((first_active <= threshold_day) & (first_active >= min_train_day) & np.isin(phase1_y, (0, 1)))
@@ -337,11 +373,13 @@ def _historical_ids_from_summary(summary: dict[str, object], feature_dir: Path) 
             & np.isin(phase1_y, (0, 1, 2, 3))
         )
     historical_ids = np.flatnonzero(train_mask).astype(np.int32, copy=False)
-    expected_size = int(summary["historical_train_size"])
     if historical_ids.size != expected_size:
         raise AssertionError(
             f"historical train size mismatch: rebuilt={historical_ids.size} summary={expected_size}"
         )
+    overlap = np.intersect1d(historical_ids, np.asarray(split.val_ids, dtype=np.int32))
+    if overlap.size:
+        raise AssertionError(f"historical train ids overlap validation ids: overlap={overlap.size}")
     if not np.all(np.isin(np.asarray(split.train_ids, dtype=np.int32), historical_ids)):
         raise AssertionError("phase1 split train ids are not contained in rebuilt historical ids.")
     return historical_ids
@@ -528,7 +566,7 @@ def _summary_to_weight_args(summary: dict[str, object], y_hist: np.ndarray | Non
 
 def _multiclass_binary_auc_loss(labels: np.ndarray, predt: np.ndarray) -> float:
     labels = np.asarray(labels, dtype=np.int32)
-    prob = np.asarray(predt, dtype=np.float32).reshape(labels.shape[0], 4)
+    prob = np.asarray(predt, dtype=np.float32).reshape(labels.shape[0], -1)
     score = _binary_score_from_softprob(prob)
     return 1.0 - float(roc_auc_score(labels, score))
 
@@ -563,9 +601,10 @@ def _make_base_xgb(
     early_stopping_rounds: int | None = None,
 ) -> xgb.XGBClassifier:
     params = summary["params"]
+    num_class = int(summary.get("num_class", params.get("num_class", 4)))
     return xgb.XGBClassifier(
         objective="multi:softprob",
-        num_class=4,
+        num_class=num_class,
         tree_method="hist",
         device=str(device),
         n_estimators=int(n_estimators),
@@ -677,14 +716,16 @@ def _run_oof_multiclass_stack_base(
         verbose=False,
     )
     val_score = _binary_score_from_softprob(full_model.predict_proba(x_val).astype(np.float32, copy=False))
-    external_score = _binary_score_from_softprob(
-        full_model.predict_proba(x_external).astype(np.float32, copy=False)
+    external_score = (
+        _binary_score_from_softprob(full_model.predict_proba(x_external).astype(np.float32, copy=False))
+        if external_ids.size
+        else np.empty(0, dtype=np.float32)
     )
     train_node_ids = np.asarray(train_ids[oof_plan.train_keep_mask], dtype=np.int32, copy=False)
     train_score = np.asarray(train_oof[oof_plan.train_keep_mask], dtype=np.float32, copy=False)
-    phase1_train_auc = float(roc_auc_score(phase1_y[train_node_ids].astype(np.int8, copy=False), train_score))
-    phase1_val_auc = float(roc_auc_score(y_val, val_score))
-    phase2_external_auc = float(roc_auc_score(y_external, external_score))
+    phase1_train_auc = _safe_auc_or_nan(phase1_y[train_node_ids].astype(np.int8, copy=False), train_score)
+    phase1_val_auc = _safe_auc_or_nan(y_val, val_score)
+    phase2_external_auc = _safe_auc_or_nan(y_external, external_score)
     print(
         f"[oof-base] run={run_dir.name} train_auc={phase1_train_auc:.6f} "
         f"val_auc={phase1_val_auc:.6f} external_auc={phase2_external_auc:.6f} "
@@ -721,12 +762,13 @@ def _build_multiclass_bg_prediction_set(
     args: argparse.Namespace,
 ) -> BasePredictionSet:
     split = load_experiment_split()
+    train_phase, external_phase = _split_phase_names(split)
     val_ids = np.asarray(split.val_ids, dtype=np.int32)
     external_ids = np.asarray(split.external_ids, dtype=np.int32)
     historical_ids = _historical_ids_from_summary(summary, feature_dir=feature_dir)
     feature_groups = resolve_feature_groups(str(summary["feature_model"]), list(summary.get("extra_groups", [])))
-    phase1_store = FeatureStore("phase1", feature_groups, outdir=feature_dir)
-    phase2_store = FeatureStore("phase2", feature_groups, outdir=feature_dir)
+    phase1_store = FeatureStore(train_phase, feature_groups, outdir=feature_dir)
+    phase2_store = FeatureStore(external_phase, feature_groups, outdir=feature_dir)
     x_hist = phase1_store.take_rows(historical_ids).astype(np.float32, copy=False)
     x_val = phase1_store.take_rows(val_ids).astype(np.float32, copy=False)
     x_external = phase2_store.take_rows(external_ids).astype(np.float32, copy=False)
@@ -892,12 +934,13 @@ def _build_multiclass_bg_relgroup_prediction_set(
     args: argparse.Namespace,
 ) -> BasePredictionSet:
     split = load_experiment_split()
+    train_phase, external_phase = _split_phase_names(split)
     val_ids = np.asarray(split.val_ids, dtype=np.int32)
     external_ids = np.asarray(split.external_ids, dtype=np.int32)
     historical_ids = _historical_ids_from_summary(summary, feature_dir=feature_dir)
     feature_groups = resolve_feature_groups(str(summary["feature_model"]), list(summary.get("extra_groups", [])))
-    phase1_store = FeatureStore("phase1", feature_groups, outdir=feature_dir)
-    phase2_store = FeatureStore("phase2", feature_groups, outdir=feature_dir)
+    phase1_store = FeatureStore(train_phase, feature_groups, outdir=feature_dir)
+    phase2_store = FeatureStore(external_phase, feature_groups, outdir=feature_dir)
     cache_dir = Path(str(summary["cache_dir"]))
     rel_hist = np.asarray(np.load(cache_dir / "phase1_train.npy", mmap_mode="r"), dtype=np.float32)
     rel_val = np.asarray(np.load(cache_dir / "phase1_val.npy", mmap_mode="r"), dtype=np.float32)
@@ -939,12 +982,13 @@ def _build_multiclass_bg_groupagg_prediction_set(
     args: argparse.Namespace,
 ) -> BasePredictionSet:
     split = load_experiment_split()
+    train_phase, external_phase = _split_phase_names(split)
     val_ids = np.asarray(split.val_ids, dtype=np.int32)
     external_ids = np.asarray(split.external_ids, dtype=np.int32)
     historical_ids = _historical_ids_from_summary(summary, feature_dir=feature_dir)
     feature_groups = resolve_feature_groups(str(summary["feature_model"]), list(summary.get("extra_groups", [])))
-    phase1_store = FeatureStore("phase1", feature_groups, outdir=feature_dir)
-    phase2_store = FeatureStore("phase2", feature_groups, outdir=feature_dir)
+    phase1_store = FeatureStore(train_phase, feature_groups, outdir=feature_dir)
+    phase2_store = FeatureStore(external_phase, feature_groups, outdir=feature_dir)
     cache_dir = Path(str(summary["cache_dir"]))
     group_hist = np.asarray(np.load(cache_dir / "phase1_train_groupagg.npy", mmap_mode="r"), dtype=np.float32)
     group_val = np.asarray(np.load(cache_dir / "phase1_val_groupagg.npy", mmap_mode="r"), dtype=np.float32)
@@ -997,15 +1041,19 @@ def _build_scoreprop_stage1_prediction_set(
     phase2_full_prob = np.asarray(np.load(cache_dir / "phase2_full_softprob.npy", mmap_mode="r"))
     train_score = _binary_score_from_softprob(np.asarray(phase1_train_oof_prob[train_pos], dtype=np.float32))
     val_score = _binary_score_from_softprob(np.asarray(phase1_full_prob[val_ids], dtype=np.float32))
-    external_score = _binary_score_from_softprob(np.asarray(phase2_full_prob[external_ids], dtype=np.float32))
+    external_score = (
+        _binary_score_from_softprob(np.asarray(phase2_full_prob[external_ids], dtype=np.float32))
+        if external_ids.size
+        else np.empty(0, dtype=np.float32)
+    )
     train_node_ids = np.asarray(train_ids[oof_plan.train_keep_mask], dtype=np.int32, copy=False)
     train_score = np.asarray(train_score[oof_plan.train_keep_mask], dtype=np.float32, copy=False)
     y_train = phase1_y[train_node_ids].astype(np.int8, copy=False)
     y_val = phase1_y[val_ids].astype(np.int8, copy=False)
     y_external = phase2_y[external_ids].astype(np.int8, copy=False)
-    phase1_train_auc = float(roc_auc_score(y_train, train_score))
-    phase1_val_auc = float(roc_auc_score(y_val, val_score))
-    phase2_external_auc = float(roc_auc_score(y_external, external_score))
+    phase1_train_auc = _safe_auc_or_nan(y_train, train_score)
+    phase1_val_auc = _safe_auc_or_nan(y_val, val_score)
+    phase2_external_auc = _safe_auc_or_nan(y_external, external_score)
     print(
         f"[oof-base] run={run_dir.name} train_auc={phase1_train_auc:.6f} "
         f"val_auc={phase1_val_auc:.6f} external_auc={phase2_external_auc:.6f} "
@@ -1049,10 +1097,6 @@ def _build_saved_oof_prediction_set(
         load_prediction_npz(resolve_prediction_path(run_dir, "phase1_val")),
         val_ids,
     )
-    external_bundle = _align_bundle_to_ids(
-        load_prediction_npz(resolve_prediction_path(run_dir, "phase2_external")),
-        external_ids,
-    )
     expected_train_y = phase1_y[train_ids].astype(np.int8, copy=False)
     expected_val_y = phase1_y[val_ids].astype(np.int8, copy=False)
     expected_external_y = phase2_y[external_ids].astype(np.int8, copy=False)
@@ -1060,15 +1104,22 @@ def _build_saved_oof_prediction_set(
         raise AssertionError(f"{run_dir}: phase1_train labels do not match current split ids.")
     if not np.array_equal(np.asarray(val_bundle["y_true"], dtype=np.int8), expected_val_y):
         raise AssertionError(f"{run_dir}: phase1_val labels do not match current split ids.")
-    if not np.array_equal(np.asarray(external_bundle["y_true"], dtype=np.int8), expected_external_y):
-        raise AssertionError(f"{run_dir}: phase2_external labels do not match current split ids.")
 
     train_score = np.asarray(train_bundle["probability"], dtype=np.float32, copy=False)
     val_score = np.asarray(val_bundle["probability"], dtype=np.float32, copy=False)
-    external_score = np.asarray(external_bundle["probability"], dtype=np.float32, copy=False)
-    phase1_train_auc = float(roc_auc_score(expected_train_y, train_score))
-    phase1_val_auc = float(roc_auc_score(expected_val_y, val_score))
-    phase2_external_auc = float(roc_auc_score(expected_external_y, external_score))
+    if external_ids.size:
+        external_bundle = _align_bundle_to_ids(
+            load_prediction_npz(resolve_prediction_path(run_dir, "phase2_external")),
+            external_ids,
+        )
+        if not np.array_equal(np.asarray(external_bundle["y_true"], dtype=np.int8), expected_external_y):
+            raise AssertionError(f"{run_dir}: phase2_external labels do not match current split ids.")
+        external_score = np.asarray(external_bundle["probability"], dtype=np.float32, copy=False)
+    else:
+        external_score = np.empty(0, dtype=np.float32)
+    phase1_train_auc = _safe_auc_or_nan(expected_train_y, train_score)
+    phase1_val_auc = _safe_auc_or_nan(expected_val_y, val_score)
+    phase2_external_auc = _safe_auc_or_nan(expected_external_y, external_score)
     print(
         f"[oof-base-saved] run={run_dir.name} train_auc={phase1_train_auc:.6f} "
         f"val_auc={phase1_val_auc:.6f} external_auc={phase2_external_auc:.6f} "
@@ -1423,13 +1474,15 @@ def _load_meta_context_features(
     feature_dir: Path,
     context_model: str,
     context_extra_groups: list[str],
+    train_phase: str,
+    external_phase: str,
     train_ids: np.ndarray,
     val_ids: np.ndarray,
     external_ids: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
     feature_groups = resolve_feature_groups(context_model, context_extra_groups)
-    phase1_store = FeatureStore("phase1", feature_groups, outdir=feature_dir)
-    phase2_store = FeatureStore("phase2", feature_groups, outdir=feature_dir)
+    phase1_store = FeatureStore(train_phase, feature_groups, outdir=feature_dir)
+    phase2_store = FeatureStore(external_phase, feature_groups, outdir=feature_dir)
     return (
         phase1_store.take_rows(train_ids).astype(np.float32, copy=False),
         phase1_store.take_rows(val_ids).astype(np.float32, copy=False),
@@ -1638,9 +1691,10 @@ def _load_meta_feature_checkpoint(
 def main() -> None:
     args = parse_args()
     split = load_experiment_split()
-    phase1_y = np.asarray(load_phase_arrays("phase1", keys=("y",))["y"], dtype=np.int8)
-    phase2_y = np.asarray(load_phase_arrays("phase2", keys=("y",))["y"], dtype=np.int8)
-    phase1_graph = load_graph_cache("phase1", outdir=args.feature_dir)
+    train_phase, external_phase = _split_phase_names(split)
+    phase1_y = np.asarray(load_phase_arrays(train_phase, keys=("y",))["y"], dtype=np.int8)
+    phase2_y = np.asarray(load_phase_arrays(external_phase, keys=("y",))["y"], dtype=np.int8)
+    phase1_graph = load_graph_cache(train_phase, outdir=args.feature_dir)
     phase2_graph = None
     first_active = np.asarray(phase1_graph.first_active, dtype=np.int32)
     train_ids = np.asarray(split.train_ids, dtype=np.int32)
@@ -1725,7 +1779,7 @@ def main() -> None:
             feature_names.extend(stat_feature_names)
         if args.append_temporal_prototype_features:
             if phase2_graph is None:
-                phase2_graph = load_graph_cache("phase2", outdir=args.feature_dir)
+                phase2_graph = load_graph_cache(external_phase, outdir=args.feature_dir)
             proto_train, proto_val, proto_external, proto_feature_names = _build_temporal_prototype_features(
                 x_train=x_train,
                 x_val=x_val,
@@ -1747,6 +1801,8 @@ def main() -> None:
                 feature_dir=args.feature_dir,
                 context_model=str(args.meta_context_model),
                 context_extra_groups=list(args.meta_context_extra_groups),
+                train_phase=train_phase,
+                external_phase=external_phase,
                 train_ids=meta_train_ids,
                 val_ids=val_ids,
                 external_ids=external_ids,
@@ -1787,15 +1843,20 @@ def main() -> None:
     )
     train_prob = _predict_meta_model(model, x_train)
     val_prob = _predict_meta_model(model, x_val)
-    external_prob = _predict_meta_model(model, x_external)
+    external_prob = _predict_meta_model(model, x_external) if external_ids.size else np.empty(0, dtype=np.float32)
 
     train_metrics = compute_binary_classification_metrics(y_meta_train, train_prob)
     val_metrics = compute_binary_classification_metrics(y_val, val_prob)
-    external_metrics = compute_binary_classification_metrics(y_external, external_prob)
+    external_metrics = (
+        compute_binary_classification_metrics(y_external, external_prob)
+        if external_ids.size
+        else None
+    )
 
     save_prediction_npz(output_run_dir / "phase1_train_predictions.npz", meta_train_ids, y_meta_train, train_prob)
     save_prediction_npz(output_run_dir / "phase1_val_predictions.npz", val_ids, y_val, val_prob)
-    save_prediction_npz(output_run_dir / "phase2_external_predictions.npz", external_ids, y_external, external_prob)
+    if external_ids.size:
+        save_prediction_npz(output_run_dir / "phase2_external_predictions.npz", external_ids, y_external, external_prob)
     if args.meta_model == "xgboost":
         model.save_model(output_run_dir / "model.json")
     else:
@@ -1843,9 +1904,9 @@ def main() -> None:
         "phase1_val_auc": val_metrics["auc"],
         "phase1_val_pr_auc": val_metrics["pr_auc"],
         "phase1_val_ap": val_metrics["ap"],
-        "phase2_external_auc": external_metrics["auc"],
-        "phase2_external_pr_auc": external_metrics["pr_auc"],
-        "phase2_external_ap": external_metrics["ap"],
+        "phase2_external_auc": None if external_metrics is None else external_metrics["auc"],
+        "phase2_external_pr_auc": None if external_metrics is None else external_metrics["pr_auc"],
+        "phase2_external_ap": None if external_metrics is None else external_metrics["ap"],
         "params": {
             "meta_model": str(args.meta_model),
             "device": str(args.device),
@@ -1875,11 +1936,12 @@ def main() -> None:
         },
     }
     write_json(output_run_dir / "summary.json", summary)
+    external_auc_text = "n/a" if external_metrics is None else f"{external_metrics['auc']:.6f}"
     print(
         f"[xgb_oof_stack] run={args.run_name} "
         f"train_auc={train_metrics['auc']:.6f} "
         f"val_auc={val_metrics['auc']:.6f} "
-        f"external_auc={external_metrics['auc']:.6f}"
+        f"external_auc={external_auc_text}"
     )
 
 

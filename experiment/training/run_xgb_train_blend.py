@@ -114,12 +114,33 @@ def _binary_score_from_softprob(prob: np.ndarray) -> np.ndarray:
 
 def _historical_ids_from_summary(summary: dict[str, object], feature_dir: Path) -> np.ndarray:
     split = load_experiment_split()
+    historical_selection_mode = str(summary.get("historical_selection_mode", ""))
+    expected_size = int(summary["historical_train_size"])
     phase1_y = np.asarray(load_phase_arrays("phase1", keys=("y",))["y"], dtype=np.int8)
     phase1_graph = load_graph_cache("phase1", outdir=feature_dir)
     first_active = np.asarray(phase1_graph.first_active, dtype=np.int32)
     threshold_day = int(summary["threshold_day"])
     min_train_day = int(summary.get("min_train_first_active_day", 0))
     include_future_background = bool(summary.get("include_future_background", False))
+    if historical_selection_mode in {
+        "split_train_ids",
+        "split_train_ids_recent_start",
+    }:
+        split_train_ids = np.asarray(split.train_ids, dtype=np.int32)
+        if min_train_day > 0:
+            split_train_ids = split_train_ids[first_active[split_train_ids] >= min_train_day].astype(
+                np.int32,
+                copy=False,
+            )
+        historical_ids = split_train_ids
+        if historical_ids.size != expected_size:
+            raise AssertionError(
+                f"historical train size mismatch: rebuilt={historical_ids.size} summary={expected_size}"
+            )
+        overlap = np.intersect1d(historical_ids, np.asarray(split.val_ids, dtype=np.int32))
+        if overlap.size:
+            raise AssertionError(f"historical train ids overlap validation ids: overlap={overlap.size}")
+        return historical_ids
     if include_future_background:
         train_mask = (
             ((first_active <= threshold_day) & (first_active >= min_train_day) & np.isin(phase1_y, (0, 1)))
@@ -132,11 +153,13 @@ def _historical_ids_from_summary(summary: dict[str, object], feature_dir: Path) 
             & np.isin(phase1_y, (0, 1, 2, 3))
         )
     historical_ids = np.flatnonzero(train_mask).astype(np.int32, copy=False)
-    expected_size = int(summary["historical_train_size"])
     if historical_ids.size != expected_size:
         raise AssertionError(
             f"historical train size mismatch: rebuilt={historical_ids.size} summary={expected_size}"
         )
+    overlap = np.intersect1d(historical_ids, np.asarray(split.val_ids, dtype=np.int32))
+    if overlap.size:
+        raise AssertionError(f"historical train ids overlap validation ids: overlap={overlap.size}")
     if not np.all(np.isin(split.train_ids, historical_ids)):
         raise AssertionError("phase1 split train ids are not contained in rebuilt historical ids.")
     return historical_ids

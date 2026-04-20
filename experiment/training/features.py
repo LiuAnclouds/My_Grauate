@@ -6,12 +6,19 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from sklearn.decomposition import TruncatedSVD
 from tqdm.auto import tqdm
 
 from experiment.datasets.registry import get_active_dataset_spec
 from experiment.eda.analysis import compute_degree_arrays, compute_temporal_core
 from experiment.eda.data_loader import PhaseData, load_phase
-from experiment.training.common import FEATURE_OUTPUT_ROOT, REPO_ROOT, ensure_dir, write_json
+from experiment.training.common import (
+    EDA_OUTPUT_ROOT,
+    FEATURE_OUTPUT_ROOT,
+    REPO_ROOT,
+    ensure_dir,
+    write_json,
+)
 
 # Default schema for the original XinYe dataset. These values are updated at runtime
 # when a different dataset is converted into the shared phase contract.
@@ -28,10 +35,23 @@ GRAPH_RECENT_WINDOWS = (3, 7, 14, 30)
 TEMPORAL_BUCKET_DAYS = 30
 TEMPORAL_MOTIF_RECENT_DAYS = 14
 TEMPORAL_MOTIF_BURST_DAYS = 7
+TEMPORAL_DUAL_SCALE_PAIRS = ((3, 14), (7, 30), (14, 60))
+TEMPORAL_CONCENTRATION_WINDOWS = (7, 30, 90)
+TEMPORAL_CONCENTRATION_RECENT_WINDOWS = (7, 30)
+TEMPORAL_CONCENTRATION_FOCUS_WINDOWS = (7, 30)
 TEMPORAL_ADAPTIVE_WINDOWS = (3, 7, 14, 30, 60, 90)
 TEMPORAL_ADAPTIVE_CONTRAST_WINDOWS = (7, 60)
 ACTIVE_FEATURE_STRONG_PAIRS = tuple(get_active_dataset_spec().strong_pairs)
 BACKGROUND_LABELS = tuple(get_active_dataset_spec().background_labels)
+
+UTPM_ATTR_PROJ_DIM = 32
+UTPM_ATTR_STATS_DIM = 16
+UTPM_GRAPH_CORE_DIM = 16
+UTPM_RELATION_CORE_DIM = 16
+UTPM_TEMPORAL_CORE_DIM = 24
+UTPM_TEMPORAL_RISK_DIM = 16
+UTPM_AUX_LABEL_DIM = 8
+UTPM_TEMPORAL_SHIFT_DIM = 16
 
 
 def _set_feature_schema(
@@ -73,6 +93,27 @@ def _feature_schema_payload() -> dict[str, Any]:
         "background_labels": [int(label) for label in _active_background_labels()],
         "strong_pairs": [[int(left), int(right)] for left, right in ACTIVE_FEATURE_STRONG_PAIRS],
         "num_time_windows": int(NUM_TIME_WINDOWS),
+        "utpm_unified_groups": utpm_unified_feature_groups(),
+        "utpm_unified_dim": int(
+            UTPM_ATTR_PROJ_DIM
+            + UTPM_ATTR_STATS_DIM
+            + UTPM_GRAPH_CORE_DIM
+            + UTPM_RELATION_CORE_DIM
+            + UTPM_TEMPORAL_CORE_DIM
+            + UTPM_TEMPORAL_RISK_DIM
+            + UTPM_AUX_LABEL_DIM
+        ),
+        "utpm_shift_compact_groups": utpm_shift_compact_feature_groups(),
+        "utpm_shift_compact_dim": int(
+            UTPM_ATTR_PROJ_DIM
+            + UTPM_ATTR_STATS_DIM
+            + UTPM_GRAPH_CORE_DIM
+            + UTPM_RELATION_CORE_DIM
+            + UTPM_TEMPORAL_CORE_DIM
+            + UTPM_TEMPORAL_RISK_DIM
+            + UTPM_AUX_LABEL_DIM
+            + UTPM_TEMPORAL_SHIFT_DIM
+        ),
     }
 
 
@@ -82,6 +123,399 @@ def _active_strong_pairs(raw_feature_count: int) -> list[tuple[int, int]]:
         for left, right in ACTIVE_FEATURE_STRONG_PAIRS
         if left < int(raw_feature_count) and right < int(raw_feature_count)
     ]
+
+
+def utpm_unified_feature_groups() -> list[str]:
+    return [
+        "utpm_attr_proj",
+        "utpm_attr_stats",
+        "utpm_graph_core",
+        "utpm_relation_core",
+        "utpm_temporal_core",
+        "utpm_temporal_risk",
+        "utpm_aux_label",
+    ]
+
+
+def utpm_temporal_shift_feature_names() -> list[str]:
+    return [
+        "tdd_out_density_delta_7_30",
+        "tdd_in_density_delta_7_30",
+        "tdd_total_density_delta_7_30",
+        "tdd_out_burst_contrast_7_30",
+        "tdd_in_burst_contrast_7_30",
+        "tdd_total_burst_contrast_7_30",
+        "tdd_total_density_delta_14_60",
+        "tdd_total_ratio_14_60",
+        "tdd_total_burst_contrast_14_60",
+        "tccr_total_top_share_7",
+        "tccr_total_top_share_30",
+        "tccr_total_entropy_7",
+        "tccr_total_entropy_30",
+        "tcsf_total_top_share_7",
+        "tcsf_total_top_share_30",
+        "taw_total_density_7_over_60_z",
+    ]
+
+
+def utpm_shift_compact_feature_groups() -> list[str]:
+    return [
+        *utpm_unified_feature_groups(),
+        "utpm_temporal_shift",
+    ]
+
+
+def utpm_shift_enhanced_feature_groups() -> list[str]:
+    return [
+        *utpm_shift_compact_feature_groups(),
+        "graph_time_detrend",
+        "temporal_motif_lite",
+        "temporal_counterparty_concentration",
+        "temporal_adaptive_window",
+        "neighbor_similarity",
+        "temporal_bucket_norm",
+        "activation_early",
+    ]
+
+
+def _clip_nonfinite(values: np.ndarray, fill_value: float = 0.0) -> np.ndarray:
+    arr = np.asarray(values, dtype=np.float32)
+    if np.all(np.isfinite(arr)):
+        return arr
+    fixed = arr.copy()
+    fixed[~np.isfinite(fixed)] = np.float32(fill_value)
+    return fixed
+
+
+def _pad_feature_block(block: np.ndarray, width: int) -> np.ndarray:
+    block = np.asarray(block, dtype=np.float32)
+    if block.ndim != 2:
+        raise AssertionError(f"Feature block must be 2D, got {block.shape}")
+    if block.shape[1] == width:
+        return block.astype(np.float32, copy=False)
+    if block.shape[1] > width:
+        return block[:, :width].astype(np.float32, copy=False)
+    padded = np.zeros((block.shape[0], width), dtype=np.float32)
+    padded[:, : block.shape[1]] = block
+    return padded
+
+
+def _stable_row_divide(numerator: np.ndarray, denominator: np.ndarray) -> np.ndarray:
+    den = np.maximum(np.asarray(denominator, dtype=np.float32), 1.0)
+    return np.asarray(numerator, dtype=np.float32) / den
+
+
+def _load_projection_train_ids(phase: str, num_nodes: int) -> np.ndarray:
+    split_path = EDA_OUTPUT_ROOT / "recommended_split.json"
+    if not split_path.exists():
+        return np.arange(min(num_nodes, 250000), dtype=np.int32)
+    split_summary = json.loads(split_path.read_text(encoding="utf-8"))
+    train_phase = str(split_summary.get("train_phase", "graph"))
+    train_path = None
+    train_split = split_summary.get("train_split")
+    if isinstance(train_split, dict):
+        train_path = train_split.get("id_path")
+    if train_phase != phase or not train_path:
+        return np.arange(min(num_nodes, 250000), dtype=np.int32)
+    full_path = EDA_OUTPUT_ROOT / str(train_path)
+    if not full_path.exists():
+        return np.arange(min(num_nodes, 250000), dtype=np.int32)
+    train_ids = np.asarray(np.load(full_path), dtype=np.int32)
+    if train_ids.size == 0:
+        return np.arange(min(num_nodes, 250000), dtype=np.int32)
+    return train_ids
+
+
+def _fit_utpm_attr_projection(
+    x: np.ndarray,
+    missing_mask: np.ndarray,
+    train_ids: np.ndarray,
+    output_dim: int = UTPM_ATTR_PROJ_DIM,
+) -> np.ndarray:
+    raw = np.asarray(x, dtype=np.float32)
+    missing = np.asarray(missing_mask, dtype=np.float32) > 0.5
+    train_rows = np.asarray(train_ids, dtype=np.int32)
+    if train_rows.size == 0:
+        train_rows = np.arange(min(raw.shape[0], 250000), dtype=np.int32)
+
+    medians = np.zeros(raw.shape[1], dtype=np.float32)
+    for feature_idx in range(raw.shape[1]):
+        observed = raw[train_rows, feature_idx][~missing[train_rows, feature_idx]]
+        medians[feature_idx] = float(np.median(observed)) if observed.size else 0.0
+    filled = np.where(missing, medians.reshape(1, -1), raw).astype(np.float32, copy=False)
+    train_filled = filled[train_rows]
+    mean = np.mean(train_filled, axis=0, dtype=np.float64).astype(np.float32, copy=False)
+    std = np.std(train_filled, axis=0, dtype=np.float64).astype(np.float32, copy=False)
+    std = np.where(std < 1e-6, 1.0, std).astype(np.float32, copy=False)
+    standardized = (filled - mean.reshape(1, -1)) / std.reshape(1, -1)
+
+    n_components = min(int(output_dim), int(standardized.shape[1]), max(int(train_rows.size) - 1, 1))
+    if n_components <= 0:
+        return np.zeros((raw.shape[0], output_dim), dtype=np.float32)
+    projector = TruncatedSVD(n_components=n_components, random_state=42)
+    projector.fit(standardized[train_rows])
+    projected = projector.transform(standardized).astype(np.float32, copy=False)
+    return _pad_feature_block(projected, output_dim)
+
+
+def _build_utpm_attr_stats_block(
+    x: np.ndarray,
+    missing_mask: np.ndarray,
+) -> np.ndarray:
+    raw = np.asarray(x, dtype=np.float32)
+    missing = np.asarray(missing_mask, dtype=np.float32)
+    observed = 1.0 - missing
+    valid_count = np.maximum(np.sum(observed, axis=1, dtype=np.float32), 1.0)
+    observed_raw = raw * observed
+    missing_count = np.sum(missing, axis=1, dtype=np.float32)
+    valid_mean = np.sum(observed_raw, axis=1, dtype=np.float32) / valid_count
+    valid_sq_mean = np.sum(observed_raw * observed_raw, axis=1, dtype=np.float32) / valid_count
+    valid_std = np.sqrt(np.maximum(valid_sq_mean - valid_mean * valid_mean, 0.0), dtype=np.float32)
+
+    valid_min = np.min(np.where(observed > 0.5, raw, np.inf), axis=1)
+    valid_min = np.where(np.isfinite(valid_min), valid_min, 0.0).astype(np.float32, copy=False)
+    valid_max = np.max(np.where(observed > 0.5, raw, -np.inf), axis=1)
+    valid_max = np.where(np.isfinite(valid_max), valid_max, 0.0).astype(np.float32, copy=False)
+
+    zero_ratio = np.sum((raw == 0.0) & (observed > 0.5), axis=1, dtype=np.float32) / valid_count
+    pos_ratio = np.sum((raw > 0.0) & (observed > 0.5), axis=1, dtype=np.float32) / valid_count
+    neg_ratio = np.sum((raw < 0.0) & (observed > 0.5), axis=1, dtype=np.float32) / valid_count
+    abs_raw = np.abs(observed_raw, dtype=np.float32)
+    l1_norm = np.sum(abs_raw, axis=1, dtype=np.float32)
+    l2_norm = np.sqrt(
+        np.sum(observed_raw * observed_raw, axis=1, dtype=np.float32)
+    ).astype(np.float32, copy=False)
+    mean_abs = l1_norm / valid_count
+    max_abs = np.max(abs_raw, axis=1)
+
+    attr_stats = np.column_stack(
+        [
+            missing_count,
+            missing_count / float(raw.shape[1]),
+            valid_count,
+            valid_mean,
+            valid_std,
+            valid_min,
+            valid_max,
+            zero_ratio,
+            pos_ratio,
+            neg_ratio,
+            l1_norm,
+            l2_norm,
+            mean_abs,
+            max_abs.astype(np.float32, copy=False),
+            raw[:, 0].astype(np.float32, copy=False),
+            raw[:, min(1, raw.shape[1] - 1)].astype(np.float32, copy=False),
+        ]
+    )
+    return _pad_feature_block(_clip_nonfinite(attr_stats), UTPM_ATTR_STATS_DIM)
+
+
+def _core_name_to_index_map(core_spans: dict[str, dict[str, Any]]) -> dict[str, int]:
+    mapping: dict[str, int] = {}
+    for spec in core_spans.values():
+        start = int(spec["start"])
+        for offset, name in enumerate(spec["names"]):
+            mapping[str(name)] = start + offset
+    return mapping
+
+
+def _take_named_core_features(
+    core: np.ndarray,
+    name_to_index: dict[str, int],
+    names: list[str],
+) -> np.ndarray:
+    blocks: list[np.ndarray] = []
+    num_nodes = int(core.shape[0])
+    for name in names:
+        col_idx = name_to_index.get(str(name))
+        if col_idx is None:
+            blocks.append(np.zeros((num_nodes, 1), dtype=np.float32))
+            continue
+        blocks.append(np.asarray(core[:, col_idx : col_idx + 1], dtype=np.float32))
+    if not blocks:
+        return np.zeros((num_nodes, 0), dtype=np.float32)
+    return np.concatenate(blocks, axis=1).astype(np.float32, copy=False)
+
+
+def _normalized_entropy(counts: np.ndarray) -> np.ndarray:
+    count_arr = np.asarray(counts, dtype=np.float32)
+    total = np.sum(count_arr, axis=1, keepdims=True, dtype=np.float32)
+    prob = np.divide(count_arr, np.maximum(total, 1.0), out=np.zeros_like(count_arr), where=total > 0)
+    entropy = -np.sum(prob * np.log(np.clip(prob, 1e-6, None)), axis=1, dtype=np.float32)
+    denom = float(np.log(max(count_arr.shape[1], 2)))
+    return (entropy / max(denom, 1e-6)).astype(np.float32, copy=False)
+
+
+def _topk_share(counts: np.ndarray, k: int) -> np.ndarray:
+    count_arr = np.asarray(counts, dtype=np.float32)
+    if count_arr.shape[1] == 0:
+        return np.zeros(count_arr.shape[0], dtype=np.float32)
+    k = max(1, min(int(k), count_arr.shape[1]))
+    part = np.partition(count_arr, count_arr.shape[1] - k, axis=1)[:, -k:]
+    numerator = np.sum(part, axis=1, dtype=np.float32)
+    denominator = np.sum(count_arr, axis=1, dtype=np.float32)
+    return _stable_row_divide(numerator, denominator)
+
+
+def _build_utpm_relation_core_block(
+    core: np.ndarray,
+    core_spans: dict[str, dict[str, Any]],
+) -> np.ndarray:
+    edge_type_spec = core_spans.get("edge_type")
+    if edge_type_spec is None:
+        return np.zeros((core.shape[0], UTPM_RELATION_CORE_DIM), dtype=np.float32)
+    edge_type_block = np.asarray(
+        core[:, int(edge_type_spec["start"]) : int(edge_type_spec["end"])],
+        dtype=np.float32,
+    )
+    in_counts = edge_type_block[:, 0::2]
+    out_counts = edge_type_block[:, 1::2]
+    total_counts = in_counts + out_counts
+
+    relation_recent_spec = core_spans.get("temporal_relation_recent")
+    if relation_recent_spec is not None:
+        recent_block = np.asarray(
+            core[:, int(relation_recent_spec["start"]) : int(relation_recent_spec["end"])],
+            dtype=np.float32,
+        )
+        recent_in = recent_block[:, 0::2]
+        recent_out = recent_block[:, 1::2]
+    else:
+        recent_in = np.zeros_like(in_counts)
+        recent_out = np.zeros_like(out_counts)
+
+    features = np.column_stack(
+        [
+            _normalized_entropy(in_counts),
+            _normalized_entropy(out_counts),
+            _normalized_entropy(total_counts),
+            _topk_share(in_counts, 1),
+            _topk_share(out_counts, 1),
+            _topk_share(total_counts, 1),
+            _topk_share(in_counts, 2),
+            _topk_share(out_counts, 2),
+            _topk_share(total_counts, 2),
+            np.mean(in_counts > 0.0, axis=1, dtype=np.float32),
+            np.mean(out_counts > 0.0, axis=1, dtype=np.float32),
+            np.mean(total_counts > 0.0, axis=1, dtype=np.float32),
+            _normalized_entropy(recent_in),
+            _normalized_entropy(recent_out),
+            _topk_share(recent_in, 1),
+            _topk_share(recent_out, 1),
+        ]
+    )
+    return _pad_feature_block(_clip_nonfinite(features), UTPM_RELATION_CORE_DIM)
+
+
+def _build_utpm_aux_label_block(
+    core: np.ndarray,
+    core_spans: dict[str, dict[str, Any]],
+) -> np.ndarray:
+    name_to_index = _core_name_to_index_map(core_spans)
+    aux_names = [
+        name
+        for name in sorted(name_to_index)
+        if name.startswith("aux_label_")
+    ][:UTPM_AUX_LABEL_DIM]
+    if not aux_names:
+        return np.zeros((core.shape[0], UTPM_AUX_LABEL_DIM), dtype=np.float32)
+    return _pad_feature_block(_take_named_core_features(core, name_to_index, aux_names), UTPM_AUX_LABEL_DIM)
+
+
+def _build_utpm_blocks(
+    *,
+    core: np.ndarray,
+    core_spans: dict[str, dict[str, Any]],
+    x: np.ndarray,
+    missing_mask: np.ndarray,
+    train_ids: np.ndarray,
+) -> dict[str, np.ndarray]:
+    name_to_index = _core_name_to_index_map(core_spans)
+    graph_feature_names = [
+        "indegree",
+        "outdegree",
+        "total_degree",
+        "out_over_in_plus1",
+        "in_over_out_plus1",
+        "unique_out",
+        "unique_in",
+        "multi_out",
+        "multi_in",
+        "unique_out_ratio_v2",
+        "unique_in_ratio_v2",
+        "days_since_out_mean",
+        "days_since_in_mean",
+        "days_since_out_last",
+        "days_since_in_last",
+        "out_last30_ratio_v2",
+    ]
+    temporal_core_names = [
+        "first_active",
+        "last_active",
+        "active_span",
+        "early_late_total_ratio",
+        "snapshot_day",
+        "snapshot_age",
+        "snap_in_count",
+        "snap_out_count",
+        "snap_total_count",
+        "snap_bg_total_ratio",
+        "window_1_total_count",
+        "window_2_total_count",
+        "window_3_total_count",
+        "window_4_total_count",
+        "recent_14_in_count",
+        "recent_14_out_count",
+        "recent_14_total_count",
+        "recent_60_in_count",
+        "recent_60_out_count",
+        "recent_60_total_count",
+        "recent_14_total_over_snapshot",
+        "recent_60_total_over_snapshot",
+        "recent_14_bg_total_over_snapshot",
+        "recent_60_bg_total_over_snapshot",
+    ]
+    temporal_risk_names = [
+        "bg_in_count",
+        "bg_out_count",
+        "bg_total_count",
+        "bg_in_ratio",
+        "bg_out_ratio",
+        "bg_total_ratio",
+        "touch_background",
+        "tcc_out_top_share_7",
+        "tcc_in_top_share_7",
+        "tcc_total_top_share_7",
+        "tcc_out_entropy_30",
+        "tcc_in_entropy_30",
+        "tcc_total_entropy_30",
+        f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_recip_out_ratio",
+        f"tm{TEMPORAL_MOTIF_RECENT_DAYS}_recip_in_ratio",
+        "taw_total_count_peak_z",
+    ]
+    return {
+        "utpm_attr_proj": _fit_utpm_attr_projection(x=x, missing_mask=missing_mask, train_ids=train_ids),
+        "utpm_attr_stats": _build_utpm_attr_stats_block(x=x, missing_mask=missing_mask),
+        "utpm_graph_core": _pad_feature_block(
+            _take_named_core_features(core, name_to_index, graph_feature_names),
+            UTPM_GRAPH_CORE_DIM,
+        ),
+        "utpm_relation_core": _build_utpm_relation_core_block(core=core, core_spans=core_spans),
+        "utpm_temporal_core": _pad_feature_block(
+            _take_named_core_features(core, name_to_index, temporal_core_names),
+            UTPM_TEMPORAL_CORE_DIM,
+        ),
+        "utpm_temporal_risk": _pad_feature_block(
+            _take_named_core_features(core, name_to_index, temporal_risk_names),
+            UTPM_TEMPORAL_RISK_DIM,
+        ),
+        "utpm_aux_label": _build_utpm_aux_label_block(core=core, core_spans=core_spans),
+        "utpm_temporal_shift": _pad_feature_block(
+            _take_named_core_features(core, name_to_index, utpm_temporal_shift_feature_names()),
+            UTPM_TEMPORAL_SHIFT_DIM,
+        ),
+    }
 
 
 @dataclass(frozen=True)
@@ -187,6 +621,7 @@ class FeatureStore:
             if group_name in self.manifest["core_groups"]:
                 spec = dict(self.manifest["core_groups"][group_name])
                 spec["source"] = "core"
+                spec["group_name"] = group_name
                 specs.append(spec)
                 continue
             if group_name in self.manifest["neighbor_groups"]:
@@ -196,6 +631,7 @@ class FeatureStore:
                     )
                 spec = dict(self.manifest["neighbor_groups"][group_name])
                 spec["source"] = "neighbor"
+                spec["group_name"] = group_name
                 specs.append(spec)
                 continue
             raise KeyError(f"{self.phase}: unknown feature group '{group_name}'")
@@ -319,6 +755,10 @@ def _group_definition() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
             f"tm{TEMPORAL_MOTIF_BURST_DAYS}_out_burst_maxday",
             f"tm{TEMPORAL_MOTIF_BURST_DAYS}_in_burst_maxday",
         ],
+        "temporal_counterparty_concentration": [],
+        "temporal_counterparty_concentration_recent": [],
+        "temporal_counterparty_share_focus": [],
+        "temporal_dual_scale_delta": [],
         "temporal_adaptive_window": [
             "taw_out_count_peak_z",
             "taw_in_count_peak_z",
@@ -361,6 +801,31 @@ def _group_definition() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
         "temporal_relation_recent": [],
         "temporal_neighbor": [],
         "activation_early": [],
+        "utpm_attr_proj": [f"utpm_attr_proj_{i}" for i in range(UTPM_ATTR_PROJ_DIM)],
+        "utpm_attr_stats": [
+            "utpm_missing_count",
+            "utpm_missing_ratio",
+            "utpm_valid_count",
+            "utpm_valid_mean",
+            "utpm_valid_std",
+            "utpm_valid_min",
+            "utpm_valid_max",
+            "utpm_zero_ratio",
+            "utpm_pos_ratio",
+            "utpm_neg_ratio",
+            "utpm_l1_norm",
+            "utpm_l2_norm",
+            "utpm_mean_abs",
+            "utpm_max_abs",
+            "utpm_raw_x0",
+            "utpm_raw_x1",
+        ],
+        "utpm_graph_core": [f"utpm_graph_core_{i}" for i in range(UTPM_GRAPH_CORE_DIM)],
+        "utpm_relation_core": [f"utpm_relation_core_{i}" for i in range(UTPM_RELATION_CORE_DIM)],
+        "utpm_temporal_core": [f"utpm_temporal_core_{i}" for i in range(UTPM_TEMPORAL_CORE_DIM)],
+        "utpm_temporal_risk": [f"utpm_temporal_risk_{i}" for i in range(UTPM_TEMPORAL_RISK_DIM)],
+        "utpm_aux_label": [f"utpm_aux_label_{i}" for i in range(UTPM_AUX_LABEL_DIM)],
+        "utpm_temporal_shift": [f"utpm_temporal_shift_{i}" for i in range(UTPM_TEMPORAL_SHIFT_DIM)],
     }
     for left, right in active_pairs:
         core_groups["strong_combo"].extend(
@@ -445,6 +910,45 @@ def _group_definition() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
                 f"recent_{recent_days}_bg_total_over_snapshot",
             ]
         )
+    for recent_days in TEMPORAL_CONCENTRATION_WINDOWS:
+        core_groups["temporal_counterparty_concentration"].extend(
+            [
+                f"tcc_out_top_share_{recent_days}",
+                f"tcc_in_top_share_{recent_days}",
+                f"tcc_total_top_share_{recent_days}",
+                f"tcc_out_entropy_{recent_days}",
+                f"tcc_in_entropy_{recent_days}",
+                f"tcc_total_entropy_{recent_days}",
+            ]
+        )
+    for recent_days in TEMPORAL_CONCENTRATION_RECENT_WINDOWS:
+        core_groups["temporal_counterparty_concentration_recent"].extend(
+            [
+                f"tccr_out_top_share_{recent_days}",
+                f"tccr_in_top_share_{recent_days}",
+                f"tccr_total_top_share_{recent_days}",
+                f"tccr_out_entropy_{recent_days}",
+                f"tccr_in_entropy_{recent_days}",
+                f"tccr_total_entropy_{recent_days}",
+            ]
+        )
+    for recent_days in TEMPORAL_CONCENTRATION_FOCUS_WINDOWS:
+        core_groups["temporal_counterparty_share_focus"].extend(
+            [
+                f"tcsf_out_top_share_{recent_days}",
+                f"tcsf_in_top_share_{recent_days}",
+                f"tcsf_total_top_share_{recent_days}",
+            ]
+        )
+    for short_window, long_window in TEMPORAL_DUAL_SCALE_PAIRS:
+        for prefix in ("out", "in", "total"):
+            core_groups["temporal_dual_scale_delta"].extend(
+                [
+                    f"tdd_{prefix}_density_delta_{short_window}_{long_window}",
+                    f"tdd_{prefix}_ratio_{short_window}_{long_window}",
+                    f"tdd_{prefix}_burst_contrast_{short_window}_{long_window}",
+                ]
+            )
     for edge_type in range(1, NUM_EDGE_TYPES + 1):
         core_groups["temporal_relation_recent"].extend(
             [
@@ -1288,6 +1792,277 @@ def _build_temporal_adaptive_window_feature_block(
     ).astype(np.float32, copy=False)
 
 
+def _build_temporal_dual_scale_delta_feature_block(
+    data: PhaseData,
+    indegree: np.ndarray,
+    outdegree: np.ndarray,
+    first_active: np.ndarray,
+) -> np.ndarray:
+    num_nodes = data.num_nodes
+    src = np.asarray(data.edge_index[:, 0], dtype=np.int32)
+    dst = np.asarray(data.edge_index[:, 1], dtype=np.int32)
+    edge_timestamp = np.asarray(data.edge_timestamp, dtype=np.int32)
+    if edge_timestamp.size == 0:
+        return np.zeros((num_nodes, len(TEMPORAL_DUAL_SCALE_PAIRS) * 9), dtype=np.float32)
+
+    max_day = int(np.max(edge_timestamp))
+    outdegree_f = np.asarray(outdegree, dtype=np.float32)
+    indegree_f = np.asarray(indegree, dtype=np.float32)
+    total_degree_f = (outdegree_f + indegree_f).astype(np.float32, copy=False)
+    out_valid = outdegree_f > 0
+    in_valid = indegree_f > 0
+    total_valid = total_degree_f > 0
+
+    bucket_ids = np.maximum((np.asarray(first_active, dtype=np.int32) - 1) // TEMPORAL_BUCKET_DAYS, 0)
+    num_buckets = int(bucket_ids.max()) + 1 if bucket_ids.size else 1
+    columns: list[np.ndarray] = []
+
+    for short_window, long_window in TEMPORAL_DUAL_SCALE_PAIRS:
+        short_mask = edge_timestamp > (max_day - int(short_window))
+        long_mask = edge_timestamp > (max_day - int(long_window))
+
+        short_out = np.bincount(src[short_mask], minlength=num_nodes).astype(np.float32, copy=False)
+        short_in = np.bincount(dst[short_mask], minlength=num_nodes).astype(np.float32, copy=False)
+        short_total = (short_out + short_in).astype(np.float32, copy=False)
+        long_out = np.bincount(src[long_mask], minlength=num_nodes).astype(np.float32, copy=False)
+        long_in = np.bincount(dst[long_mask], minlength=num_nodes).astype(np.float32, copy=False)
+        long_total = (long_out + long_in).astype(np.float32, copy=False)
+
+        short_out_density = short_out / float(short_window)
+        short_in_density = short_in / float(short_window)
+        short_total_density = short_total / float(short_window)
+        long_out_density = long_out / float(long_window)
+        long_in_density = long_in / float(long_window)
+        long_total_density = long_total / float(long_window)
+
+        short_out_burst = _max_daily_burst_feature(src[short_mask], edge_timestamp[short_mask], num_nodes)
+        short_in_burst = _max_daily_burst_feature(dst[short_mask], edge_timestamp[short_mask], num_nodes)
+        short_total_burst = _max_daily_burst_feature(
+            np.concatenate([src[short_mask], dst[short_mask]]).astype(np.int32, copy=False),
+            np.concatenate([edge_timestamp[short_mask], edge_timestamp[short_mask]]).astype(np.int32, copy=False),
+            num_nodes,
+        )
+
+        columns.extend(
+            [
+                _bucketwise_zscore(
+                    np.log1p(short_out_density) - np.log1p(long_out_density),
+                    bucket_ids=bucket_ids,
+                    num_buckets=num_buckets,
+                    valid_mask=out_valid,
+                ),
+                _bucketwise_zscore(
+                    _safe_ratio(short_out, long_out),
+                    bucket_ids=bucket_ids,
+                    num_buckets=num_buckets,
+                    valid_mask=out_valid,
+                ),
+                _bucketwise_zscore(
+                    np.log1p(short_out_burst) - np.log1p(long_out_density),
+                    bucket_ids=bucket_ids,
+                    num_buckets=num_buckets,
+                    valid_mask=out_valid,
+                ),
+                _bucketwise_zscore(
+                    np.log1p(short_in_density) - np.log1p(long_in_density),
+                    bucket_ids=bucket_ids,
+                    num_buckets=num_buckets,
+                    valid_mask=in_valid,
+                ),
+                _bucketwise_zscore(
+                    _safe_ratio(short_in, long_in),
+                    bucket_ids=bucket_ids,
+                    num_buckets=num_buckets,
+                    valid_mask=in_valid,
+                ),
+                _bucketwise_zscore(
+                    np.log1p(short_in_burst) - np.log1p(long_in_density),
+                    bucket_ids=bucket_ids,
+                    num_buckets=num_buckets,
+                    valid_mask=in_valid,
+                ),
+                _bucketwise_zscore(
+                    np.log1p(short_total_density) - np.log1p(long_total_density),
+                    bucket_ids=bucket_ids,
+                    num_buckets=num_buckets,
+                    valid_mask=total_valid,
+                ),
+                _bucketwise_zscore(
+                    _safe_ratio(short_total, long_total),
+                    bucket_ids=bucket_ids,
+                    num_buckets=num_buckets,
+                    valid_mask=total_valid,
+                ),
+                _bucketwise_zscore(
+                    np.log1p(short_total_burst) - np.log1p(long_total_density),
+                    bucket_ids=bucket_ids,
+                    num_buckets=num_buckets,
+                    valid_mask=total_valid,
+                ),
+            ]
+        )
+
+    return np.column_stack(columns).astype(np.float32, copy=False)
+
+
+def _partner_concentration_stats(
+    centers: np.ndarray,
+    partners: np.ndarray,
+    num_nodes: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    if centers.size == 0:
+        zeros = np.zeros(num_nodes, dtype=np.float32)
+        return zeros, zeros
+
+    pair_code = (
+        centers.astype(np.int64, copy=False) * np.int64(num_nodes)
+        + partners.astype(np.int64, copy=False)
+    )
+    unique_pair_code, pair_counts = np.unique(pair_code, return_counts=True)
+    center_ids = (unique_pair_code // np.int64(num_nodes)).astype(np.int32, copy=False)
+    total_counts = np.bincount(centers, minlength=num_nodes).astype(np.float32, copy=False)
+    pair_counts_f = pair_counts.astype(np.float32, copy=False)
+
+    max_pair_count = np.zeros(num_nodes, dtype=np.float32)
+    np.maximum.at(max_pair_count, center_ids, pair_counts_f)
+    top_share = _safe_ratio(max_pair_count, total_counts)
+
+    probs = pair_counts_f / np.maximum(total_counts[center_ids], 1.0)
+    entropy_terms = -(probs * np.log(np.clip(probs, 1e-8, None))).astype(np.float32, copy=False)
+    entropy = np.bincount(center_ids, weights=entropy_terms, minlength=num_nodes).astype(np.float32, copy=False)
+    unique_partner_count = np.bincount(center_ids, minlength=num_nodes).astype(np.float32, copy=False)
+    entropy_norm = np.zeros(num_nodes, dtype=np.float32)
+    valid = unique_partner_count > 1.0
+    entropy_norm[valid] = (
+        entropy[valid]
+        / np.maximum(np.log(unique_partner_count[valid]), 1e-6)
+    ).astype(np.float32, copy=False)
+    return top_share.astype(np.float32, copy=False), entropy_norm.astype(np.float32, copy=False)
+
+
+def _build_temporal_counterparty_concentration_feature_block(
+    data: PhaseData,
+) -> np.ndarray:
+    num_nodes = data.num_nodes
+    src = np.asarray(data.edge_index[:, 0], dtype=np.int32)
+    dst = np.asarray(data.edge_index[:, 1], dtype=np.int32)
+    edge_timestamp = np.asarray(data.edge_timestamp, dtype=np.int32)
+    if edge_timestamp.size == 0:
+        return np.zeros((num_nodes, len(TEMPORAL_CONCENTRATION_WINDOWS) * 6), dtype=np.float32)
+
+    max_day = int(np.max(edge_timestamp))
+    columns: list[np.ndarray] = []
+    for recent_days in TEMPORAL_CONCENTRATION_WINDOWS:
+        recent_mask = edge_timestamp > (max_day - int(recent_days))
+        recent_src = src[recent_mask]
+        recent_dst = dst[recent_mask]
+        out_top_share, out_entropy = _partner_concentration_stats(
+            centers=recent_src,
+            partners=recent_dst,
+            num_nodes=num_nodes,
+        )
+        in_top_share, in_entropy = _partner_concentration_stats(
+            centers=recent_dst,
+            partners=recent_src,
+            num_nodes=num_nodes,
+        )
+        total_top_share, total_entropy = _partner_concentration_stats(
+            centers=np.concatenate([recent_src, recent_dst]).astype(np.int32, copy=False),
+            partners=np.concatenate([recent_dst, recent_src]).astype(np.int32, copy=False),
+            num_nodes=num_nodes,
+        )
+        columns.extend(
+            [
+                out_top_share,
+                in_top_share,
+                total_top_share,
+                out_entropy,
+                in_entropy,
+                total_entropy,
+            ]
+        )
+    return np.column_stack(columns).astype(np.float32, copy=False)
+
+
+def _build_temporal_counterparty_concentration_recent_feature_block(
+    data: PhaseData,
+) -> np.ndarray:
+    num_nodes = data.num_nodes
+    src = np.asarray(data.edge_index[:, 0], dtype=np.int32)
+    dst = np.asarray(data.edge_index[:, 1], dtype=np.int32)
+    edge_timestamp = np.asarray(data.edge_timestamp, dtype=np.int32)
+    if edge_timestamp.size == 0:
+        return np.zeros((num_nodes, len(TEMPORAL_CONCENTRATION_RECENT_WINDOWS) * 6), dtype=np.float32)
+
+    max_day = int(np.max(edge_timestamp))
+    columns: list[np.ndarray] = []
+    for recent_days in TEMPORAL_CONCENTRATION_RECENT_WINDOWS:
+        recent_mask = edge_timestamp > (max_day - int(recent_days))
+        recent_src = src[recent_mask]
+        recent_dst = dst[recent_mask]
+        out_top_share, out_entropy = _partner_concentration_stats(
+            centers=recent_src,
+            partners=recent_dst,
+            num_nodes=num_nodes,
+        )
+        in_top_share, in_entropy = _partner_concentration_stats(
+            centers=recent_dst,
+            partners=recent_src,
+            num_nodes=num_nodes,
+        )
+        total_top_share, total_entropy = _partner_concentration_stats(
+            centers=np.concatenate([recent_src, recent_dst]).astype(np.int32, copy=False),
+            partners=np.concatenate([recent_dst, recent_src]).astype(np.int32, copy=False),
+            num_nodes=num_nodes,
+        )
+        columns.extend(
+            [
+                out_top_share,
+                in_top_share,
+                total_top_share,
+                out_entropy,
+                in_entropy,
+                total_entropy,
+            ]
+        )
+    return np.column_stack(columns).astype(np.float32, copy=False)
+
+
+def _build_temporal_counterparty_share_focus_feature_block(
+    data: PhaseData,
+) -> np.ndarray:
+    num_nodes = data.num_nodes
+    src = np.asarray(data.edge_index[:, 0], dtype=np.int32)
+    dst = np.asarray(data.edge_index[:, 1], dtype=np.int32)
+    edge_timestamp = np.asarray(data.edge_timestamp, dtype=np.int32)
+    if edge_timestamp.size == 0:
+        return np.zeros((num_nodes, len(TEMPORAL_CONCENTRATION_FOCUS_WINDOWS) * 3), dtype=np.float32)
+
+    max_day = int(np.max(edge_timestamp))
+    columns: list[np.ndarray] = []
+    for recent_days in TEMPORAL_CONCENTRATION_FOCUS_WINDOWS:
+        recent_mask = edge_timestamp > (max_day - int(recent_days))
+        recent_src = src[recent_mask]
+        recent_dst = dst[recent_mask]
+        out_top_share, _ = _partner_concentration_stats(
+            centers=recent_src,
+            partners=recent_dst,
+            num_nodes=num_nodes,
+        )
+        in_top_share, _ = _partner_concentration_stats(
+            centers=recent_dst,
+            partners=recent_src,
+            num_nodes=num_nodes,
+        )
+        total_top_share, _ = _partner_concentration_stats(
+            centers=np.concatenate([recent_src, recent_dst]).astype(np.int32, copy=False),
+            partners=np.concatenate([recent_dst, recent_src]).astype(np.int32, copy=False),
+            num_nodes=num_nodes,
+        )
+        columns.extend([out_top_share, in_top_share, total_top_share])
+    return np.column_stack(columns).astype(np.float32, copy=False)
+
+
 def _max_daily_burst_feature(
     centers: np.ndarray,
     timestamps: np.ndarray,
@@ -1790,6 +2565,41 @@ def build_phase_feature_artifacts(
         core[:, col : col + temporal_motif_lite_block.shape[1]] = temporal_motif_lite_block
         col += temporal_motif_lite_block.shape[1]
 
+        temporal_counterparty_concentration_block = _build_temporal_counterparty_concentration_feature_block(
+            data=data,
+        )
+        core[:, col : col + temporal_counterparty_concentration_block.shape[1]] = (
+            temporal_counterparty_concentration_block
+        )
+        col += temporal_counterparty_concentration_block.shape[1]
+
+        temporal_counterparty_concentration_recent_block = (
+            _build_temporal_counterparty_concentration_recent_feature_block(
+                data=data,
+            )
+        )
+        core[:, col : col + temporal_counterparty_concentration_recent_block.shape[1]] = (
+            temporal_counterparty_concentration_recent_block
+        )
+        col += temporal_counterparty_concentration_recent_block.shape[1]
+
+        temporal_counterparty_share_focus_block = _build_temporal_counterparty_share_focus_feature_block(
+            data=data,
+        )
+        core[:, col : col + temporal_counterparty_share_focus_block.shape[1]] = (
+            temporal_counterparty_share_focus_block
+        )
+        col += temporal_counterparty_share_focus_block.shape[1]
+
+        temporal_dual_scale_delta_block = _build_temporal_dual_scale_delta_feature_block(
+            data=data,
+            indegree=indegree,
+            outdegree=outdegree,
+            first_active=first_active,
+        )
+        core[:, col : col + temporal_dual_scale_delta_block.shape[1]] = temporal_dual_scale_delta_block
+        col += temporal_dual_scale_delta_block.shape[1]
+
         temporal_adaptive_window_block = _build_temporal_adaptive_window_feature_block(
             data=data,
             indegree=indegree,
@@ -1853,6 +2663,25 @@ def build_phase_feature_artifacts(
         )
         core[:, col : col + activation_early_block.shape[1]] = activation_early_block
         col += activation_early_block.shape[1]
+
+        projection_train_ids = _load_projection_train_ids(phase=phase, num_nodes=data.num_nodes)
+        utpm_blocks = _build_utpm_blocks(
+            core=core,
+            core_spans=core_spans,
+            x=x,
+            missing_mask=missing_mask,
+            train_ids=projection_train_ids,
+        )
+        for group_name in (*utpm_unified_feature_groups(), "utpm_temporal_shift"):
+            group_spec = core_spans[group_name]
+            block = utpm_blocks[group_name]
+            width = int(group_spec["end"] - group_spec["start"])
+            if int(block.shape[1]) != width:
+                raise AssertionError(
+                    f"{phase}: {group_name} width mismatch, got {block.shape[1]}, expected {width}"
+                )
+            core[:, col : col + width] = block
+            col += width
 
         expected_col = core_dim
         if col != expected_col:
@@ -1999,6 +2828,8 @@ def default_feature_groups(model_name: str) -> list[str]:
         ]
     if model_name == "m3_neighbor":
         return default_feature_groups("m2_hybrid") + ["neighbor"]
+    if model_name == "m7_utpm":
+        return utpm_unified_feature_groups()
     if model_name in {"m4_graphsage", "m5_temporal_graphsage", "m6_temporal_gat"}:
         return default_feature_groups("m2_hybrid")
     raise KeyError(f"Unsupported model name: {model_name}")
@@ -2007,8 +2838,17 @@ def default_feature_groups(model_name: str) -> list[str]:
 def resolve_feature_groups(
     model_name: str,
     extra_groups: list[str] | None = None,
+    feature_profile: str = "legacy",
 ) -> list[str]:
-    groups = list(default_feature_groups(model_name))
+    profile = str(feature_profile).strip().lower()
+    if profile == "utpm_unified":
+        groups = list(utpm_unified_feature_groups())
+    elif profile == "utpm_shift_compact":
+        groups = list(utpm_shift_compact_feature_groups())
+    elif profile == "utpm_shift_enhanced":
+        groups = list(utpm_shift_enhanced_feature_groups())
+    else:
+        groups = list(default_feature_groups(model_name))
     for group_name in extra_groups or []:
         if group_name not in groups:
             groups.append(group_name)

@@ -37,6 +37,7 @@ from experiment.training.features import (
     FeatureStore,
     build_feature_artifacts,
     build_hybrid_feature_normalizer,
+    load_graph_cache,
     resolve_feature_groups,
 )
 from experiment.training.graph_runtime import (
@@ -97,7 +98,7 @@ def parse_args() -> argparse.Namespace:
 
     train_parser = subparsers.add_parser(
         "train",
-        help="Train one model family and produce validation/external predictions.",
+        help="Train one model family and produce the official train/val/test_pool predictions.",
     )
     train_parser.add_argument(
         "--model",
@@ -109,13 +110,20 @@ def parse_args() -> argparse.Namespace:
             "m4_graphsage",
             "m5_temporal_graphsage",
             "m6_temporal_gat",
+            "m7_utpm",
         ),
-        help="Model family to train.",
+        help="Model family to train. `m7_utpm` is deprecated here and must be run via `run_thesis_mainline.py`.",
     )
     train_parser.add_argument(
         "--run-name",
         default="default",
         help="Subdirectory name for this experiment run.",
+    )
+    train_parser.add_argument(
+        "--feature-profile",
+        choices=("legacy", "utpm_unified"),
+        default="legacy",
+        help="Feature-group contract consumed by the model. `utpm_unified` is the thesis mainline.",
     )
     train_parser.add_argument(
         "--feature-dir",
@@ -128,6 +136,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=MODEL_OUTPUT_ROOT,
         help="Output directory for model checkpoints and predictions.",
+    )
+    train_parser.add_argument(
+        "--dataset-adaptive-profile",
+        choices=("none", "relation_scarcity_auto", "relation_scarcity_bridge_v1"),
+        default="none",
+        help=(
+            "Apply a unified dataset-adaptive recipe. `relation_scarcity_auto` simplifies "
+            "low-relation graphs while keeping the richer semantic recipe on multi-relation graphs. "
+            "`relation_scarcity_bridge_v1` also switches effective feature groups and "
+            "dataset-safe teacher/context inputs before graph contexts are built."
+        ),
     )
     train_parser.add_argument(
         "--extra-groups",
@@ -161,7 +180,13 @@ def parse_args() -> argparse.Namespace:
         "--max-external-nodes",
         type=int,
         default=None,
-        help="Optional phase2 external node cap for smoke tests.",
+        help="Optional legacy phase2 external node cap for smoke tests.",
+    )
+    train_parser.add_argument(
+        "--max-test-pool-nodes",
+        type=int,
+        default=None,
+        help="Optional test_pool node cap for smoke tests.",
     )
     train_parser.add_argument(
         "--device",
@@ -327,6 +352,16 @@ def parse_args() -> argparse.Namespace:
         help="Keep a hard-negative pool this many times larger than the epoch negative budget.",
     )
     train_parser.add_argument(
+        "--hard-negative-teacher-blend",
+        type=float,
+        default=0.0,
+        help=(
+            "Blend teacher fraud scores into hard-negative mining. "
+            "This value controls both the fraction of candidates preselected by teacher risk "
+            "and the final blend between student and teacher scores when ranking hard negatives."
+        ),
+    )
+    train_parser.add_argument(
         "--loss-type",
         choices=("bce", "focal", "bce_ranking", "focal_ranking"),
         default="bce",
@@ -405,6 +440,15 @@ def parse_args() -> argparse.Namespace:
         help="Minimum per-target recency weight when --target-time-weight-half-life-days > 0.",
     )
     train_parser.add_argument(
+        "--message-risk-strength",
+        type=float,
+        default=0.0,
+        help=(
+            "If > 0 and temporal_counterparty_concentration is present, use concentration-derived "
+            "node risk to slightly amplify or dampen message passing."
+        ),
+    )
+    train_parser.add_argument(
         "--known-label-feature",
         action="store_true",
         help=(
@@ -422,7 +466,17 @@ def parse_args() -> argparse.Namespace:
     )
     train_parser.add_argument(
         "--target-context-fusion",
-        choices=("none", "gate", "concat", "logit_residual", "atm_residual", "drift_residual"),
+        choices=(
+            "none",
+            "gate",
+            "concat",
+            "logit_residual",
+            "atm_residual",
+            "drift_residual",
+            "drift_mix",
+            "drift_uncertainty_mix",
+            "risk_drift_residual",
+        ),
         default="none",
         help=(
             "Optional target-node context fusion applied after the base graph classifier. "
@@ -430,7 +484,10 @@ def parse_args() -> argparse.Namespace:
             "`logit_residual` keeps the graph head unchanged and applies a learned context-only logit correction; "
             "`atm_residual` adds an ATM-GAD-style adaptive temporal-window residual branch; "
             "`drift_residual` adds a temporal-drift-calibrated residual branch that suppresses "
-            "unstable context corrections."
+            "unstable context corrections; `drift_mix` blends a learned drift delta into the base "
+            "logit; `drift_uncertainty_mix` additionally down-weights overconfident corrections; "
+            "`risk_drift_residual` adds an extra risk gate that can "
+            "amplify or dampen the drift branch based on target-context anomaly patterns."
         ),
     )
     train_parser.add_argument(
@@ -653,12 +710,30 @@ def parse_args() -> argparse.Namespace:
         help="Number of temporal experts used when --target-time-adapter-type=drift_expert.",
     )
     train_parser.add_argument(
+        "--target-time-expert-entropy-floor",
+        type=float,
+        default=0.0,
+        help=(
+            "Minimum normalized routing entropy encouraged for --target-time-adapter-type=drift_expert. "
+            "Values in [0,1]. Set > 0 to discourage late expert collapse."
+        ),
+    )
+    train_parser.add_argument(
+        "--target-time-expert-entropy-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Loss weight for the drift_expert entropy-floor regularizer. "
+            "Applied only when --target-time-adapter-type=drift_expert."
+        ),
+    )
+    train_parser.add_argument(
         "--atm-gate-strength",
         type=float,
         default=1.0,
         help=(
             "Residual strength for the time-aware context branch when "
-            "--target-context-fusion=atm_residual or drift_residual."
+            "--target-context-fusion=atm_residual, drift_residual, or risk_drift_residual."
         ),
     )
     train_parser.add_argument(
@@ -794,6 +869,42 @@ def parse_args() -> argparse.Namespace:
             "derived from the multiclass head."
         ),
     )
+    train_parser.add_argument(
+        "--pseudo-contrastive-weight",
+        type=float,
+        default=0.0,
+        help="Weight for the pseudo-contrastive auxiliary regularizer on test_pool pseudo labels.",
+    )
+    train_parser.add_argument(
+        "--pseudo-contrastive-temperature",
+        type=float,
+        default=0.2,
+        help="Temperature used by the pseudo-contrastive auxiliary regularizer.",
+    )
+    train_parser.add_argument(
+        "--pseudo-contrastive-sample-size",
+        type=int,
+        default=128,
+        help="Number of test_pool nodes sampled per pseudo-contrastive step.",
+    )
+    train_parser.add_argument(
+        "--pseudo-contrastive-low-quantile",
+        type=float,
+        default=0.1,
+        help="Lower score quantile used to form pseudo-normal anchors from test_pool predictions.",
+    )
+    train_parser.add_argument(
+        "--pseudo-contrastive-high-quantile",
+        type=float,
+        default=0.9,
+        help="Upper score quantile used to form pseudo-anomaly anchors from test_pool predictions.",
+    )
+    train_parser.add_argument(
+        "--pseudo-contrastive-interval",
+        type=int,
+        default=4,
+        help="Run one pseudo-contrastive step every N train batches.",
+    )
 
     blend_parser = subparsers.add_parser(
         "blend",
@@ -856,6 +967,58 @@ def _metric_std(metrics: list[dict[str, Any]], key: str) -> float | None:
 
 def _format_metric(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.6f}"
+
+
+def _resolve_effective_feature_profile(args: argparse.Namespace) -> str:
+    return str(getattr(args, "feature_profile", "legacy") or "legacy").strip().lower()
+
+
+def _maybe_compute_binary_metrics(
+    labels: np.ndarray,
+    probability: np.ndarray,
+) -> dict[str, float] | None:
+    label_arr = np.asarray(labels, dtype=np.int32)
+    score_arr = np.asarray(probability, dtype=np.float32)
+    valid_mask = np.isin(label_arr, (0, 1))
+    if not np.any(valid_mask):
+        return None
+    label_arr = label_arr[valid_mask]
+    score_arr = score_arr[valid_mask]
+    if np.unique(label_arr).size < 2:
+        return None
+    return compute_binary_classification_metrics(label_arr, score_arr)
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        key = str(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(key)
+    return deduped
+
+
+def _drop_groups(values: list[str], dropped: set[str]) -> list[str]:
+    return [value for value in values if str(value) not in dropped]
+
+
+def _coerce_optional_path(value: Path | str | None) -> Path | None:
+    if value is None:
+        return None
+    path = Path(value)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    return path
+
+
+def _existing_optional_path(value: Path | str | None) -> Path | None:
+    path = _coerce_optional_path(value)
+    if path is None or not path.exists():
+        return None
+    return path
 
 
 def _transform_target_context_prediction_features(
@@ -1004,8 +1167,12 @@ def _prepare_split_ids(args: argparse.Namespace):
     split = load_experiment_split()
     train_ids = slice_node_ids(split.train_ids, args.max_train_nodes, seed=11)
     val_ids = slice_node_ids(split.val_ids, args.max_val_nodes, seed=17)
+    test_pool_limit = args.max_test_pool_nodes
+    if test_pool_limit is None:
+        test_pool_limit = args.max_external_nodes
+    test_pool_ids = slice_node_ids(split.test_pool_ids, test_pool_limit, seed=23)
     external_ids = slice_node_ids(split.external_ids, args.max_external_nodes, seed=29)
-    return split, train_ids, val_ids, external_ids
+    return split, train_ids, val_ids, test_pool_ids, external_ids
 
 
 def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
@@ -1036,6 +1203,7 @@ def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
         hard_negative_candidate_cap=int(args.hard_negative_candidate_cap),
         hard_negative_candidate_multiplier=float(args.hard_negative_candidate_multiplier),
         hard_negative_pool_multiplier=float(args.hard_negative_pool_multiplier),
+        hard_negative_teacher_blend=float(args.hard_negative_teacher_blend),
         loss_type=str(args.loss_type),
         focal_gamma=float(args.focal_gamma),
         focal_alpha=float(args.focal_alpha),
@@ -1048,6 +1216,7 @@ def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
         time_decay_strength=float(args.time_decay_strength),
         target_time_weight_half_life_days=float(args.target_time_weight_half_life_days),
         target_time_weight_floor=float(args.target_time_weight_floor),
+        message_risk_strength=float(args.message_risk_strength),
         known_label_feature=bool(args.known_label_feature),
         known_label_feature_dim=int(args.known_label_feature_dim),
         target_context_fusion=str(args.target_context_fusion),
@@ -1072,6 +1241,8 @@ def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
         target_time_adapter_strength=float(args.target_time_adapter_strength),
         target_time_adapter_type=str(args.target_time_adapter_type),
         target_time_adapter_num_experts=int(args.target_time_adapter_num_experts),
+        target_time_expert_entropy_floor=float(args.target_time_expert_entropy_floor),
+        target_time_expert_entropy_weight=float(args.target_time_expert_entropy_weight),
         teacher_distill_weight=float(args.teacher_distill_weight),
         teacher_distill_loss=str(args.teacher_distill_loss),
         teacher_distill_start_epoch=int(args.teacher_distill_start_epoch),
@@ -1095,6 +1266,164 @@ def _build_graph_model_config(args: argparse.Namespace) -> GraphModelConfig:
         aux_multiclass_num_classes=int(args.aux_multiclass_num_classes),
         aux_multiclass_loss_weight=float(args.aux_multiclass_loss_weight),
         aux_inference_blend=float(args.aux_inference_blend),
+        pseudo_contrastive_weight=float(args.pseudo_contrastive_weight),
+        pseudo_contrastive_temperature=float(args.pseudo_contrastive_temperature),
+        pseudo_contrastive_sample_size=int(args.pseudo_contrastive_sample_size),
+        pseudo_contrastive_low_quantile=float(args.pseudo_contrastive_low_quantile),
+        pseudo_contrastive_high_quantile=float(args.pseudo_contrastive_high_quantile),
+        pseudo_contrastive_interval=int(args.pseudo_contrastive_interval),
+    )
+
+
+def _apply_dataset_adaptive_profile(
+    *,
+    args: argparse.Namespace,
+    feature_groups: list[str],
+    target_context_groups: list[str],
+    graph_config: GraphModelConfig,
+    num_relations: int,
+) -> tuple[list[str], list[str], Path | None, str, Path | None, GraphModelConfig, dict[str, Any]]:
+    profile = str(getattr(args, "dataset_adaptive_profile", "none") or "none").strip().lower()
+    dataset_name = str(ACTIVE_DATASET_SPEC.name).strip().lower()
+    feature_groups = _dedupe_preserve_order(list(feature_groups))
+    target_context_groups = _dedupe_preserve_order(list(target_context_groups))
+    target_context_prediction_dir = _coerce_optional_path(getattr(args, "target_context_prediction_dir", None))
+    target_context_prediction_transform = str(getattr(args, "target_context_prediction_transform", "raw"))
+    teacher_distill_prediction_dir = _coerce_optional_path(getattr(args, "teacher_distill_prediction_dir", None))
+    diagnostics: dict[str, Any] = {
+        "dataset_adaptive_profile": profile,
+        "dataset_adaptive_num_relations": int(num_relations),
+        "dataset_adaptive_branch": "none",
+    }
+    if profile not in {"relation_scarcity_auto", "relation_scarcity_bridge_v1"}:
+        return (
+            feature_groups,
+            target_context_groups,
+            target_context_prediction_dir,
+            target_context_prediction_transform,
+            teacher_distill_prediction_dir,
+            graph_config,
+            diagnostics,
+        )
+
+    if profile == "relation_scarcity_auto":
+        if int(num_relations) <= 2:
+            diagnostics["dataset_adaptive_branch"] = "low_relation_simplified"
+            return (
+                feature_groups,
+                target_context_groups,
+                target_context_prediction_dir,
+                target_context_prediction_transform,
+                teacher_distill_prediction_dir,
+                replace(
+                    graph_config,
+                    neighbor_sampler="hybrid",
+                    recent_window=min(int(graph_config.recent_window), 15),
+                    target_context_fusion="none",
+                    teacher_distill_weight=0.0,
+                    target_time_adapter_strength=0.0,
+                    target_time_expert_entropy_floor=0.0,
+                    target_time_expert_entropy_weight=0.0,
+                    prototype_multiclass_num_classes=0,
+                    prototype_loss_weight=0.0,
+                    prototype_loss_min_weight=0.0,
+                    prototype_consistency_weight=0.0,
+                    prototype_separation_weight=0.0,
+                    normal_bucket_align_weight=0.0,
+                    normal_bucket_adv_weight=0.0,
+                ),
+                diagnostics,
+            )
+        return (
+            feature_groups,
+            target_context_groups,
+            target_context_prediction_dir,
+            target_context_prediction_transform,
+            teacher_distill_prediction_dir,
+            replace(
+                graph_config,
+                target_time_adapter_type="affine",
+                target_time_expert_entropy_floor=0.0,
+                target_time_expert_entropy_weight=0.0,
+            ),
+            diagnostics,
+        )
+
+    xinye_teacher_dir = _existing_optional_path(
+        "experiment/outputs/training/blends/plan53_hier2_oof_ctxadaptwin_logit_v1"
+    )
+    ellipticpp_teacher_dir = _existing_optional_path(
+        "experiment/outputs/ellipticpp_transactions/training/blends/teacher_epplus_oof_calib_v3_clean"
+    )
+    if int(num_relations) <= 2:
+        diagnostics["dataset_adaptive_branch"] = "low_relation_proto_bridge"
+        feature_groups = _drop_groups(
+            feature_groups,
+            {"temporal_counterparty_concentration", "temporal_counterparty_concentration_recent"},
+        )
+        target_context_prediction_dir = None
+        teacher_distill_prediction_dir = None
+        teacher_distill_weight = 0.0
+        if "ellipticpp" in dataset_name and ellipticpp_teacher_dir is not None:
+            diagnostics["dataset_adaptive_branch"] = "low_relation_proto_teacher"
+            target_context_prediction_dir = ellipticpp_teacher_dir
+            target_context_prediction_transform = "logit"
+            teacher_distill_prediction_dir = ellipticpp_teacher_dir
+            teacher_distill_weight = max(float(graph_config.teacher_distill_weight), 0.05)
+        return (
+            feature_groups,
+            target_context_groups,
+            target_context_prediction_dir,
+            target_context_prediction_transform,
+            teacher_distill_prediction_dir,
+            replace(
+                graph_config,
+                neighbor_sampler="consistency_recent",
+                recent_window=max(int(graph_config.recent_window), 50),
+                target_context_fusion="logit_residual",
+                target_time_adapter_strength=0.0,
+                target_time_expert_entropy_floor=0.0,
+                target_time_expert_entropy_weight=0.0,
+                prototype_multiclass_num_classes=max(int(graph_config.prototype_multiclass_num_classes), 2),
+                prototype_loss_weight=max(float(graph_config.prototype_loss_weight), 0.05),
+                prototype_loss_min_weight=max(float(graph_config.prototype_loss_min_weight), 0.01),
+                prototype_consistency_weight=max(float(graph_config.prototype_consistency_weight), 0.05),
+                prototype_separation_weight=max(float(graph_config.prototype_separation_weight), 0.05),
+                normal_bucket_align_weight=max(float(graph_config.normal_bucket_align_weight), 0.05),
+                normal_bucket_adv_weight=max(float(graph_config.normal_bucket_adv_weight), 0.05),
+                teacher_distill_weight=float(teacher_distill_weight),
+                teacher_distill_loss="rank" if teacher_distill_weight > 0.0 else str(graph_config.teacher_distill_loss),
+                teacher_distill_start_epoch=2 if teacher_distill_weight > 0.0 else int(graph_config.teacher_distill_start_epoch),
+                teacher_distill_ramp_epochs=6 if teacher_distill_weight > 0.0 else int(graph_config.teacher_distill_ramp_epochs),
+                teacher_distill_agreement_floor=(
+                    max(float(graph_config.teacher_distill_agreement_floor), 0.65)
+                    if teacher_distill_weight > 0.0
+                    else float(graph_config.teacher_distill_agreement_floor)
+                ),
+                teacher_distill_rank_gap=(
+                    max(float(graph_config.teacher_distill_rank_gap), 0.2)
+                    if teacher_distill_weight > 0.0
+                    else float(graph_config.teacher_distill_rank_gap)
+                ),
+            ),
+            diagnostics,
+        )
+
+    diagnostics["dataset_adaptive_branch"] = "rich_relation_teacher_bridge"
+    if xinye_teacher_dir is not None:
+        if target_context_prediction_dir is None:
+            target_context_prediction_dir = xinye_teacher_dir
+        if teacher_distill_prediction_dir is None:
+            teacher_distill_prediction_dir = xinye_teacher_dir
+        target_context_prediction_transform = "logit"
+    return (
+        feature_groups,
+        target_context_groups,
+        target_context_prediction_dir,
+        target_context_prediction_transform,
+        teacher_distill_prediction_dir,
+        graph_config,
+        diagnostics,
     )
 
 
@@ -1139,9 +1468,6 @@ def _build_promotion_decision(
     current_val = summary_payload.get("val_auc_mean", summary_payload.get("phase1_val_auc_mean"))
     benchmark_val = benchmark.get("val_auc_mean", benchmark.get("phase1_val_auc_mean"))
     val_delta = float(current_val - benchmark_val)
-    current_external = summary_payload.get("external_auc_mean", summary_payload.get("phase2_external_auc_mean"))
-    benchmark_external = benchmark.get("external_auc_mean", benchmark.get("phase2_external_auc_mean"))
-    external_delta = None
     promoted = val_delta >= PROMOTION_DELTA_MIN
     decision: dict[str, Any] = {
         "benchmark_reference": _path_repr(benchmark_path),
@@ -1149,11 +1475,10 @@ def _build_promotion_decision(
         "promoted": promoted,
         "rule": {"min_val_delta": PROMOTION_DELTA_MIN},
     }
-    if current_external is not None and benchmark_external is not None:
-        external_delta = float(current_external - benchmark_external)
-        promoted = promoted and external_delta >= -PROMOTION_EXTERNAL_DROP_MAX
-        decision["external_delta_vs_m2"] = external_delta
-        decision["rule"]["max_external_drop"] = PROMOTION_EXTERNAL_DROP_MAX
+    current_test = summary_payload.get("test_auc_mean")
+    benchmark_test = benchmark.get("test_auc_mean")
+    if current_test is not None and benchmark_test is not None:
+        decision["test_delta_vs_m2"] = float(current_test - benchmark_test)
     decision["promoted"] = promoted
     return decision
 
@@ -1176,12 +1501,16 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
         unit="step",
         dynamic_ncols=True,
     ) as prep_pbar:
-        split, train_ids, val_ids, external_ids = _prepare_split_ids(args)
+        split, train_ids, val_ids, _test_pool_ids, external_ids = _prepare_split_ids(args)
         prep_pbar.update(1)
         if split.train_phase != split.val_phase:
             raise NotImplementedError("LightGBM training currently requires train/val to come from the same graph.")
         labels_by_phase = _load_labels_for_splits(split)
-        feature_groups = resolve_feature_groups(args.model, list(args.extra_groups))
+        feature_groups = resolve_feature_groups(
+            args.model,
+            list(args.extra_groups),
+            feature_profile=_resolve_effective_feature_profile(args),
+        )
         prep_pbar.update(1)
         phase1_store = FeatureStore(split.train_phase, feature_groups, outdir=args.feature_dir)
         phase2_store = (
@@ -1347,18 +1676,42 @@ def run_train_lightgbm(args: argparse.Namespace) -> None:
 
 
 def run_train_graph(args: argparse.Namespace) -> None:
+    effective_feature_profile = _resolve_effective_feature_profile(args)
     with tqdm(
         total=3,
         desc=f"prepare:{args.model}",
         unit="step",
         dynamic_ncols=True,
     ) as prep_pbar:
-        split, split_train_ids, val_ids, external_ids = _prepare_split_ids(args)
+        split, split_train_ids, val_ids, test_pool_ids, external_ids = _prepare_split_ids(args)
         if split.train_phase != split.val_phase:
             raise NotImplementedError("Graph training currently requires train/val to come from the same graph.")
-        feature_groups = resolve_feature_groups(args.model, list(args.extra_groups))
-        target_context_groups = list(args.target_context_extra_groups)
         graph_config = _build_graph_model_config(args)
+        phase1_graph_meta = load_graph_cache(split.train_phase, outdir=args.feature_dir)
+        feature_groups = resolve_feature_groups(
+            args.model,
+            list(args.extra_groups),
+            feature_profile=effective_feature_profile,
+        )
+        target_context_groups = list(args.target_context_extra_groups)
+        target_context_prediction_dir = _coerce_optional_path(args.target_context_prediction_dir)
+        target_context_prediction_transform = str(args.target_context_prediction_transform)
+        teacher_distill_prediction_dir = _coerce_optional_path(args.teacher_distill_prediction_dir)
+        (
+            feature_groups,
+            target_context_groups,
+            target_context_prediction_dir,
+            target_context_prediction_transform,
+            teacher_distill_prediction_dir,
+            graph_config,
+            dataset_adaptive_diagnostics,
+        ) = _apply_dataset_adaptive_profile(
+            args=args,
+            feature_groups=feature_groups,
+            target_context_groups=target_context_groups,
+            graph_config=graph_config,
+            num_relations=int(phase1_graph_meta.num_relations),
+        )
         train_ids = np.asarray(split_train_ids, dtype=np.int32)
         eval_phase = str(split.external_phase or split.val_phase)
         label_artifacts = build_graph_label_artifacts(
@@ -1397,7 +1750,7 @@ def run_train_graph(args: argparse.Namespace) -> None:
             model_name=args.model,
             train_phase=split.train_phase,
             eval_phase=eval_phase,
-            extra_groups=list(args.extra_groups),
+            selected_groups=feature_groups,
             feature_normalizer_state=feature_normalizer_state,
             target_context_groups=target_context_groups,
             target_context_normalizer_state=target_context_normalizer_state,
@@ -1408,14 +1761,14 @@ def run_train_graph(args: argparse.Namespace) -> None:
             phase1_historical_background_ids=historical_background_ids,
             build_sampling_profile=graph_config.neighbor_sampler in {"consistency_recent", "risk_consistency_recent"},
         )
-        if args.target_context_prediction_dir is not None:
+        if target_context_prediction_dir is not None:
             (
                 phase1_prediction_features,
                 phase2_prediction_features,
                 target_context_prediction_feature_names,
             ) = _load_target_context_prediction_features(
-                prediction_dir=args.target_context_prediction_dir,
-                prediction_transform=args.target_context_prediction_transform,
+                prediction_dir=target_context_prediction_dir,
+                prediction_transform=target_context_prediction_transform,
                 train_ids=train_ids,
                 val_ids=val_ids,
                 external_ids=external_ids,
@@ -1432,9 +1785,9 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 target_aux_features=phase2_prediction_features,
                 target_aux_feature_names=tuple(target_context_prediction_feature_names),
             )
-        if args.teacher_distill_prediction_dir is not None and float(args.teacher_distill_weight) > 0.0:
+        if teacher_distill_prediction_dir is not None and float(graph_config.teacher_distill_weight) > 0.0:
             phase1_distill_targets, phase1_distill_mask = _load_teacher_distill_targets(
-                prediction_dir=args.teacher_distill_prediction_dir,
+                prediction_dir=teacher_distill_prediction_dir,
                 train_ids=train_ids,
                 phase1_num_nodes=phase1_context.labels.shape[0],
             )
@@ -1444,6 +1797,15 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 distill_target_mask=phase1_distill_mask,
             )
         prep_pbar.update(1)
+    print(
+        "[train_graph] "
+        f"dataset={ACTIVE_DATASET_SPEC.name} "
+        f"feature_profile={effective_feature_profile} "
+        "thesis_mainline=False "
+        f"adaptive_profile={dataset_adaptive_diagnostics['dataset_adaptive_profile']} "
+        f"adaptive_branch={dataset_adaptive_diagnostics['dataset_adaptive_branch']} "
+        f"num_relations={dataset_adaptive_diagnostics['dataset_adaptive_num_relations']}"
+    )
     run_dir = _model_run_dir(args.outdir, args.model, args.run_name)
     label_feature_dim = graph_config.known_label_feature_dim if graph_config.known_label_feature else 0
     input_dim = phase1_context.feature_store.input_dim + int(label_feature_dim)
@@ -1461,7 +1823,17 @@ def run_train_graph(args: argparse.Namespace) -> None:
     graph_config = replace(graph_config, target_context_input_dim=int(target_context_input_dim))
     num_relations = phase1_context.graph_cache.num_relations
     global_max_day = max(phase1_context.graph_cache.max_day, phase2_context.graph_cache.max_day)
+    train_labels = np.asarray(phase1_context.labels[train_ids], dtype=np.int8)
+    val_labels = np.asarray(phase1_context.labels[val_ids], dtype=np.int8)
+    test_pool_labels = np.asarray(phase1_context.labels[test_pool_ids], dtype=np.int8)
+    external_labels = (
+        np.asarray(phase2_context.labels[external_ids], dtype=np.int8)
+        if external_ids.size
+        else np.empty(0, dtype=np.int8)
+    )
+    train_predictions: list[np.ndarray] = []
     val_predictions: list[np.ndarray] = []
+    test_pool_predictions: list[np.ndarray] = []
     external_predictions: list[np.ndarray] = []
     metrics: list[dict[str, Any]] = []
 
@@ -1500,7 +1872,14 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 context=phase1_context,
                 train_ids=train_ids,
                 val_ids=val_ids,
+                test_pool_ids=test_pool_ids,
                 artifact_dir=seed_dir,
+            )
+            train_prob = experiment.predict_proba(
+                phase1_context,
+                train_ids,
+                batch_seed=seed + 500,
+                progress_desc=f"{args.model}:seed{seed}:phase1_train",
             )
             val_prob = experiment.predict_proba(
                 phase1_context,
@@ -1508,7 +1887,18 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 batch_seed=seed + 1000,
                 progress_desc=f"{args.model}:seed{seed}:phase1_val",
             )
-            val_metrics = compute_binary_classification_metrics(phase1_context.labels[val_ids], val_prob)
+            train_metrics = compute_binary_classification_metrics(train_labels, train_prob)
+            val_metrics = compute_binary_classification_metrics(val_labels, val_prob)
+            test_pool_prob = None
+            test_metrics = None
+            if test_pool_ids.size:
+                test_pool_prob = experiment.predict_proba(
+                    phase1_context,
+                    test_pool_ids,
+                    batch_seed=seed + 1500,
+                    progress_desc=f"{args.model}:seed{seed}:test_pool",
+                )
+                test_metrics = _maybe_compute_binary_metrics(test_pool_labels, test_pool_prob)
             external_prob = None
             external_metrics = None
             if external_ids.size:
@@ -1518,33 +1908,52 @@ def run_train_graph(args: argparse.Namespace) -> None:
                     batch_seed=seed + 2000,
                     progress_desc=f"{args.model}:seed{seed}:phase2_external",
                 )
-                external_metrics = compute_binary_classification_metrics(
-                    phase2_context.labels[external_ids],
-                    external_prob,
-                )
+                external_metrics = _maybe_compute_binary_metrics(external_labels, external_prob)
             experiment.save(seed_dir)
+            save_prediction_npz(
+                seed_dir / "phase1_train_predictions.npz",
+                train_ids,
+                train_labels,
+                train_prob,
+            )
             save_prediction_npz(
                 seed_dir / "phase1_val_predictions.npz",
                 val_ids,
-                phase1_context.labels[val_ids],
+                val_labels,
                 val_prob,
             )
+            if test_pool_prob is not None:
+                save_prediction_npz(
+                    seed_dir / "test_pool_predictions.npz",
+                    test_pool_ids,
+                    test_pool_labels,
+                    test_pool_prob,
+                )
             if external_prob is not None and external_metrics is not None:
                 save_prediction_npz(
                     seed_dir / "phase2_external_predictions.npz",
                     external_ids,
-                    phase2_context.labels[external_ids],
+                    external_labels,
                     external_prob,
                 )
+            train_predictions.append(train_prob)
             val_predictions.append(val_prob)
+            if test_pool_prob is not None:
+                test_pool_predictions.append(test_pool_prob)
             if external_prob is not None:
                 external_predictions.append(external_prob)
             metrics.append(
                 {
                     "seed": seed,
+                    "train_auc": train_metrics["auc"],
+                    "train_pr_auc": train_metrics["pr_auc"],
+                    "train_ap": train_metrics["ap"],
                     "val_auc": val_metrics["auc"],
                     "val_pr_auc": val_metrics["pr_auc"],
                     "val_ap": val_metrics["ap"],
+                    "test_auc": None if test_metrics is None else test_metrics["auc"],
+                    "test_pr_auc": None if test_metrics is None else test_metrics["pr_auc"],
+                    "test_ap": None if test_metrics is None else test_metrics["ap"],
                     "external_auc": None if external_metrics is None else external_metrics["auc"],
                     "external_pr_auc": None if external_metrics is None else external_metrics["pr_auc"],
                     "external_ap": None if external_metrics is None else external_metrics["ap"],
@@ -1556,34 +1965,56 @@ def run_train_graph(args: argparse.Namespace) -> None:
                 }
             )
             seed_pbar.set_postfix(
+                train_auc=f"{train_metrics['auc']:.4f}",
                 val_auc=f"{val_metrics['auc']:.4f}",
-                val_ap=f"{val_metrics['ap']:.4f}",
-                external_auc=_format_metric(None if external_metrics is None else external_metrics["auc"]),
+                test_auc=_format_metric(None if test_metrics is None else test_metrics["auc"]),
                 refresh=False,
             )
             tqdm.write(
                 f"[{args.model}] seed={seed} "
-                f"phase1_val_auc={val_metrics['auc']:.6f} "
-                f"phase1_val_pr_auc={val_metrics['pr_auc']:.6f} "
-                f"phase1_val_ap={val_metrics['ap']:.6f} "
-                f"phase2_external_auc={_format_metric(None if external_metrics is None else external_metrics['auc'])} "
-                f"phase2_external_pr_auc={_format_metric(None if external_metrics is None else external_metrics['pr_auc'])} "
-                f"phase2_external_ap={_format_metric(None if external_metrics is None else external_metrics['ap'])}"
+                f"train_auc={train_metrics['auc']:.6f} "
+                f"train_pr_auc={train_metrics['pr_auc']:.6f} "
+                f"train_ap={train_metrics['ap']:.6f} "
+                f"val_auc={val_metrics['auc']:.6f} "
+                f"val_pr_auc={val_metrics['pr_auc']:.6f} "
+                f"val_ap={val_metrics['ap']:.6f} "
+                f"test_auc={_format_metric(None if test_metrics is None else test_metrics['auc'])} "
+                f"test_pr_auc={_format_metric(None if test_metrics is None else test_metrics['pr_auc'])} "
+                f"test_ap={_format_metric(None if test_metrics is None else test_metrics['ap'])} "
+                f"legacy_external_auc={_format_metric(None if external_metrics is None else external_metrics['auc'])}"
             )
 
+    train_avg_path = _save_average_predictions(
+        run_dir=run_dir,
+        split_name="phase1_train",
+        node_ids=train_ids,
+        labels=train_labels,
+        predictions=train_predictions,
+    )
     val_avg_path = _save_average_predictions(
         run_dir=run_dir,
         split_name="phase1_val",
         node_ids=val_ids,
-        labels=phase1_context.labels[val_ids],
+        labels=val_labels,
         predictions=val_predictions,
+    )
+    test_avg_path = (
+        _save_average_predictions(
+            run_dir=run_dir,
+            split_name="test_pool",
+            node_ids=test_pool_ids,
+            labels=test_pool_labels,
+            predictions=test_pool_predictions,
+        )
+        if test_pool_predictions
+        else None
     )
     external_avg_path = (
         _save_average_predictions(
             run_dir=run_dir,
             split_name="phase2_external",
             node_ids=external_ids,
-            labels=phase2_context.labels[external_ids],
+            labels=external_labels,
             predictions=external_predictions,
         )
         if external_predictions
@@ -1592,6 +2023,14 @@ def run_train_graph(args: argparse.Namespace) -> None:
     summary = {
         "model_name": args.model,
         "run_name": args.run_name,
+        "feature_profile": effective_feature_profile,
+        "official_eval_contract": ["train", "val", "test_pool"],
+        "thesis_mainline_enabled": thesis_metadata["thesis_mainline_enabled"],
+        "main_innovation": thesis_metadata["main_innovation"],
+        "aux_regularizer": thesis_metadata["aux_regularizer"],
+        "dataset_adaptive_profile": dataset_adaptive_diagnostics["dataset_adaptive_profile"],
+        "dataset_adaptive_branch": dataset_adaptive_diagnostics["dataset_adaptive_branch"],
+        "dataset_adaptive_num_relations": dataset_adaptive_diagnostics["dataset_adaptive_num_relations"],
         "feature_groups": phase1_context.feature_store.selected_groups,
         "target_context_feature_groups": (
             []
@@ -1600,46 +2039,70 @@ def run_train_graph(args: argparse.Namespace) -> None:
         ),
         "target_context_prediction_dir": (
             None
-            if args.target_context_prediction_dir is None
-            else _path_repr(Path(args.target_context_prediction_dir))
+            if target_context_prediction_dir is None
+            else _path_repr(target_context_prediction_dir)
         ),
-        "target_context_prediction_transform": str(args.target_context_prediction_transform),
+        "target_context_prediction_transform": str(target_context_prediction_transform),
         "target_context_prediction_feature_names": list(phase1_context.target_aux_feature_names or ()),
         "teacher_distill_prediction_dir": (
             None
-            if args.teacher_distill_prediction_dir is None
-            else _path_repr(Path(args.teacher_distill_prediction_dir))
+            if teacher_distill_prediction_dir is None
+            else _path_repr(teacher_distill_prediction_dir)
         ),
-        "teacher_distill_weight": float(args.teacher_distill_weight),
-        "teacher_distill_loss": str(args.teacher_distill_loss),
-        "teacher_distill_start_epoch": int(args.teacher_distill_start_epoch),
-        "teacher_distill_ramp_epochs": int(args.teacher_distill_ramp_epochs),
-        "teacher_distill_agreement_floor": float(args.teacher_distill_agreement_floor),
-        "teacher_distill_rank_gap": float(args.teacher_distill_rank_gap),
+        "teacher_distill_weight": float(graph_config.teacher_distill_weight),
+        "teacher_distill_loss": str(graph_config.teacher_distill_loss),
+        "teacher_distill_start_epoch": int(graph_config.teacher_distill_start_epoch),
+        "teacher_distill_ramp_epochs": int(graph_config.teacher_distill_ramp_epochs),
+        "teacher_distill_agreement_floor": float(graph_config.teacher_distill_agreement_floor),
+        "teacher_distill_rank_gap": float(graph_config.teacher_distill_rank_gap),
         "seeds": list(args.seeds),
         "split_style": split.split_style,
         "train_phase": split.train_phase,
         "val_phase": split.val_phase,
         "external_phase": split.external_phase,
+        "test_pool_phase": split.train_phase,
         "train_size": int(np.asarray(split_train_ids, dtype=np.int32).size),
         "val_size": int(val_ids.size),
+        "test_pool_size": int(test_pool_ids.size),
         "external_size": int(external_ids.size),
+        "train_auc_mean": _metric_mean(metrics, "train_auc"),
+        "train_auc_std": _metric_std(metrics, "train_auc"),
+        "train_pr_auc_mean": _metric_mean(metrics, "train_pr_auc"),
+        "train_pr_auc_std": _metric_std(metrics, "train_pr_auc"),
+        "train_ap_mean": _metric_mean(metrics, "train_ap"),
+        "train_ap_std": _metric_std(metrics, "train_ap"),
         "val_auc_mean": _metric_mean(metrics, "val_auc"),
         "val_auc_std": _metric_std(metrics, "val_auc"),
         "val_pr_auc_mean": _metric_mean(metrics, "val_pr_auc"),
         "val_pr_auc_std": _metric_std(metrics, "val_pr_auc"),
         "val_ap_mean": _metric_mean(metrics, "val_ap"),
         "val_ap_std": _metric_std(metrics, "val_ap"),
+        "test_auc_mean": _metric_mean(metrics, "test_auc"),
+        "test_auc_std": _metric_std(metrics, "test_auc"),
+        "test_pr_auc_mean": _metric_mean(metrics, "test_pr_auc"),
+        "test_pr_auc_std": _metric_std(metrics, "test_pr_auc"),
+        "test_ap_mean": _metric_mean(metrics, "test_ap"),
+        "test_ap_std": _metric_std(metrics, "test_ap"),
         "external_auc_mean": _metric_mean(metrics, "external_auc"),
         "external_auc_std": _metric_std(metrics, "external_auc"),
         "external_pr_auc_mean": _metric_mean(metrics, "external_pr_auc"),
         "external_pr_auc_std": _metric_std(metrics, "external_pr_auc"),
         "external_ap_mean": _metric_mean(metrics, "external_ap"),
         "external_ap_std": _metric_std(metrics, "external_ap"),
+        "train_prediction_path": _path_repr(train_avg_path),
+        "val_prediction_path": _path_repr(val_avg_path),
+        "test_prediction_path": None if test_avg_path is None else _path_repr(test_avg_path),
+        "legacy_external_prediction_path": None if external_avg_path is None else _path_repr(external_avg_path),
         "phase1_train_size": int(np.asarray(split_train_ids, dtype=np.int32).size),
         "phase1_split_train_size": int(np.asarray(split_train_ids, dtype=np.int32).size),
         "phase1_historical_background_train_size": int(historical_background_ids.size),
         "phase1_val_size": int(val_ids.size),
+        "phase1_train_auc_mean": _metric_mean(metrics, "train_auc"),
+        "phase1_train_auc_std": _metric_std(metrics, "train_auc"),
+        "phase1_train_pr_auc_mean": _metric_mean(metrics, "train_pr_auc"),
+        "phase1_train_pr_auc_std": _metric_std(metrics, "train_pr_auc"),
+        "phase1_train_ap_mean": _metric_mean(metrics, "train_ap"),
+        "phase1_train_ap_std": _metric_std(metrics, "train_ap"),
         "phase2_external_size": int(external_ids.size),
         "phase1_val_auc_mean": _metric_mean(metrics, "val_auc"),
         "phase1_val_auc_std": _metric_std(metrics, "val_auc"),
@@ -1647,6 +2110,12 @@ def run_train_graph(args: argparse.Namespace) -> None:
         "phase1_val_pr_auc_std": _metric_std(metrics, "val_pr_auc"),
         "phase1_val_ap_mean": _metric_mean(metrics, "val_ap"),
         "phase1_val_ap_std": _metric_std(metrics, "val_ap"),
+        "test_pool_auc_mean": _metric_mean(metrics, "test_auc"),
+        "test_pool_auc_std": _metric_std(metrics, "test_auc"),
+        "test_pool_pr_auc_mean": _metric_mean(metrics, "test_pr_auc"),
+        "test_pool_pr_auc_std": _metric_std(metrics, "test_pr_auc"),
+        "test_pool_ap_mean": _metric_mean(metrics, "test_ap"),
+        "test_pool_ap_std": _metric_std(metrics, "test_ap"),
         "phase2_external_auc_mean": _metric_mean(metrics, "external_auc"),
         "phase2_external_auc_std": _metric_std(metrics, "external_auc"),
         "phase2_external_pr_auc_mean": _metric_mean(metrics, "external_pr_auc"),
@@ -1654,9 +2123,13 @@ def run_train_graph(args: argparse.Namespace) -> None:
         "phase2_external_ap_mean": _metric_mean(metrics, "external_ap"),
         "phase2_external_ap_std": _metric_std(metrics, "external_ap"),
         "seed_metrics": metrics,
+        "phase1_train_avg_predictions": _path_repr(train_avg_path),
         "phase1_val_avg_predictions": _path_repr(val_avg_path),
+        "test_pool_avg_predictions": None if test_avg_path is None else _path_repr(test_avg_path),
         "phase2_external_avg_predictions": None if external_avg_path is None else _path_repr(external_avg_path),
+        "train_avg_predictions": _path_repr(train_avg_path),
         "val_avg_predictions": _path_repr(val_avg_path),
+        "test_avg_predictions": None if test_avg_path is None else _path_repr(test_avg_path),
         "external_avg_predictions": None if external_avg_path is None else _path_repr(external_avg_path),
         "graph_config": {
             "input_dim": input_dim,
@@ -1782,6 +2255,12 @@ def main() -> None:
         run_build_features(args)
         return
     if args.command == "train":
+        if args.model == "m7_utpm":
+            raise ValueError(
+                "`run_training.py` no longer accepts `m7_utpm`. "
+                "Use `experiment/training/run_thesis_mainline.py` for the official unified backbone "
+                "or `experiment/training/run_thesis_hybrid_suite.py` for the official final thesis suite."
+            )
         if args.model in {"m1_tabular", "m2_hybrid", "m3_neighbor"}:
             run_train_lightgbm(args)
             return

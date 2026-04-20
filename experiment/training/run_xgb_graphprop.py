@@ -435,6 +435,9 @@ def _load_or_build_cached_features(
     phase1_ids: dict[str, np.ndarray],
     phase2_ids: dict[str, np.ndarray],
     half_lives: list[float | None],
+    *,
+    primary_phase: str = "phase1",
+    external_phase: str = "phase2",
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], list[str]]:
     feature_names_path = cache_dir / "feature_names.json"
     phase1_train_path = cache_dir / "phase1_train.npy"
@@ -456,7 +459,7 @@ def _load_or_build_cached_features(
 
     ensure_dir(cache_dir)
     phase1, feature_names = _build_phase_feature_blocks(
-        phase="phase1",
+        phase=str(primary_phase),
         feature_dir=args.feature_dir,
         base_model=args.base_model,
         prop_model=args.prop_model,
@@ -467,7 +470,7 @@ def _load_or_build_cached_features(
         split_ids=phase1_ids,
     )
     phase2, phase2_feature_names = _build_phase_feature_blocks(
-        phase="phase2",
+        phase=str(external_phase),
         feature_dir=args.feature_dir,
         base_model=args.base_model,
         prop_model=args.prop_model,

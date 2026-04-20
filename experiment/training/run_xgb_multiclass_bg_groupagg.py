@@ -486,6 +486,9 @@ def _load_or_build_groupagg_features(
     phase1_ids: dict[str, np.ndarray],
     phase2_ids: dict[str, np.ndarray],
     agg_half_lives: list[float | None],
+    *,
+    primary_phase: str = "phase1",
+    external_phase: str = "phase2",
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], list[str]]:
     feature_names_path = cache_dir / "groupagg_feature_names.json"
     phase1_train_path = cache_dir / "phase1_train_groupagg.npy"
@@ -510,7 +513,7 @@ def _load_or_build_groupagg_features(
 
     ensure_dir(cache_dir)
     phase1, feature_names = _build_groupagg_phase_blocks(
-        phase="phase1",
+        phase=str(primary_phase),
         feature_dir=args.feature_dir,
         split=split,
         labels=phase1_y,
@@ -523,21 +526,29 @@ def _load_or_build_groupagg_features(
             "val": phase1_val_path,
         },
     )
-    phase2, phase2_feature_names = _build_groupagg_phase_blocks(
-        phase="phase2",
-        feature_dir=args.feature_dir,
-        split=split,
-        labels=phase2_y,
-        split_ids=phase2_ids,
-        agg_blocks=list(args.agg_blocks),
-        agg_half_lives=agg_half_lives,
-        append_count_features=bool(args.append_count_features),
-        target_paths={
-            "external": phase2_external_path,
-        },
-    )
-    if phase2_feature_names != feature_names:
-        raise AssertionError("Phase1/phase2 group aggregation feature names are not aligned.")
+    phase2_has_rows = any(np.asarray(node_ids, dtype=np.int32).size for node_ids in phase2_ids.values())
+    if phase2_has_rows:
+        phase2, phase2_feature_names = _build_groupagg_phase_blocks(
+            phase=str(external_phase),
+            feature_dir=args.feature_dir,
+            split=split,
+            labels=phase2_y,
+            split_ids=phase2_ids,
+            agg_blocks=list(args.agg_blocks),
+            agg_half_lives=agg_half_lives,
+            append_count_features=bool(args.append_count_features),
+            target_paths={
+                "external": phase2_external_path,
+            },
+        )
+        if phase2_feature_names != feature_names:
+            raise AssertionError("Phase1/phase2 group aggregation feature names are not aligned.")
+    else:
+        phase2 = {
+            split_name: np.zeros((np.asarray(node_ids, dtype=np.int32).size, len(feature_names)), dtype=np.float32)
+            for split_name, node_ids in phase2_ids.items()
+        }
+        np.save(phase2_external_path, np.asarray(phase2["external"], dtype=np.float32))
     feature_names_path.write_text(
         json.dumps(feature_names, ensure_ascii=False, indent=2),
         encoding="utf-8",

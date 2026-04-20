@@ -282,6 +282,9 @@ def _load_or_build_relgroup(
     phase2_y: np.ndarray,
     phase1_ids: dict[str, np.ndarray],
     phase2_ids: dict[str, np.ndarray],
+    *,
+    primary_phase: str = "phase1",
+    external_phase: str = "phase2",
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], list[str]]:
     feature_names_path = cache_dir / "feature_names.json"
     phase1_train_path = cache_dir / "phase1_train.npy"
@@ -301,7 +304,7 @@ def _load_or_build_relgroup(
 
     ensure_dir(cache_dir)
     feature_names = _build_phase_relgroup(
-        phase="phase1",
+        phase=str(primary_phase),
         feature_dir=args.feature_dir,
         labels=phase1_y,
         split=split,
@@ -314,22 +317,29 @@ def _load_or_build_relgroup(
         append_count_features=bool(args.append_count_features),
         target_paths={"train": phase1_train_path, "val": phase1_val_path},
     )
-    feature_names_2 = _build_phase_relgroup(
-        phase="phase2",
-        feature_dir=args.feature_dir,
-        labels=phase2_y,
-        split=split,
-        split_ids=phase2_ids,
-        directions=list(args.directions),
-        edge_types=list(args.edge_types),
-        agg_half_lives=_resolve_half_lives(list(args.agg_half_life_days)),
-        raw_idx=list(args.selected_raw_indices),
-        miss_idx=list(args.selected_missing_indices),
-        append_count_features=bool(args.append_count_features),
-        target_paths={"external": phase2_external_path},
-    )
-    if feature_names_2 != feature_names:
-        raise AssertionError("Phase1/phase2 relgroup feature names mismatch.")
+    phase2_has_rows = any(np.asarray(node_ids, dtype=np.int32).size for node_ids in phase2_ids.values())
+    if phase2_has_rows:
+        feature_names_2 = _build_phase_relgroup(
+            phase=str(external_phase),
+            feature_dir=args.feature_dir,
+            labels=phase2_y,
+            split=split,
+            split_ids=phase2_ids,
+            directions=list(args.directions),
+            edge_types=list(args.edge_types),
+            agg_half_lives=_resolve_half_lives(list(args.agg_half_life_days)),
+            raw_idx=list(args.selected_raw_indices),
+            miss_idx=list(args.selected_missing_indices),
+            append_count_features=bool(args.append_count_features),
+            target_paths={"external": phase2_external_path},
+        )
+        if feature_names_2 != feature_names:
+            raise AssertionError("Phase1/phase2 relgroup feature names mismatch.")
+    else:
+        np.save(
+            phase2_external_path,
+            np.zeros((np.asarray(phase2_ids["external"], dtype=np.int32).size, len(feature_names)), dtype=np.float32),
+        )
     feature_names_path.write_text(json.dumps(feature_names, ensure_ascii=False, indent=2), encoding="utf-8")
     return (
         {"train": np.load(phase1_train_path, mmap_mode="r"), "val": np.load(phase1_val_path, mmap_mode="r")},

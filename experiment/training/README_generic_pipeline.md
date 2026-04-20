@@ -1,5 +1,24 @@
 # Generic Dynamic-Graph Pipeline
 
+For the graduation-thesis official path, prefer:
+
+- `experiment/training/README_thesis_mainline.md`
+- `experiment/training/thesis_contract.py`
+- `experiment/training/run_thesis_mainline.py`
+- `experiment/training/run_thesis_recipe.py`
+- `experiment/training/run_thesis_suite.py`
+- `experiment/training/thesis_presets.py`
+
+`run_training.py` remains a compatibility hub for older experiments and should not be treated as the thesis mainline.
+The official multi-dataset suite intentionally excludes teacher-bound presets so the thesis conclusion stays on one pure shared model path.
+
+`run_training.py` no longer accepts `m7_utpm`.
+The thesis path must be entered directly through:
+
+- `run_thesis_mainline.py`
+- `run_thesis_suite.py`
+- `run_thesis_hybrid_suite.py`
+
 ## 1. Shared Input Contract
 
 Every dataset adapter should emit the same two-phase contract:
@@ -103,6 +122,12 @@ The generic GNN path should stay in:
 - `features.py`
 - `gnn_models.py`
 
+The thesis mainline-specific preset surface should stay in:
+
+- `thesis_contract.py`
+- `run_thesis_mainline.py`
+- `thesis_presets.py`
+
 XinYe-specific multiclass background probe scripts can remain as separate experimental branches, but they should not define the repository-wide data contract.
 
 ## 7. Reusable Recipe Entry
@@ -121,8 +146,14 @@ Current shared recipes live in:
 - `experiment/training/recipes.py`
 - `experiment/training/run_recipe.py`
 
+Official thesis recipes have been split out of the legacy wrapper surface:
+
+- `experiment/training/run_thesis_recipe.py`
+
 Current recipe families:
 
+- `baseline_m5_unified`
+- `thesis_m7_utpm`
 - `mainline_temporal_m5`
 - `context_motifadapt_m5`
 - `prototype_temporal_bucket_m5`

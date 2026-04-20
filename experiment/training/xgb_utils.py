@@ -18,16 +18,29 @@ def rank_norm(values: np.ndarray) -> np.ndarray:
 
 
 def binary_score_from_softprob(prob: np.ndarray) -> np.ndarray:
-    prob_arr = np.asarray(prob, dtype=np.float32).reshape(-1, 4)
+    prob_arr = np.asarray(prob, dtype=np.float32)
+    if prob_arr.ndim == 1:
+        return prob_arr.astype(np.float32, copy=False)
+    if prob_arr.ndim == 2 and prob_arr.shape[1] == 1:
+        return prob_arr.reshape(-1).astype(np.float32, copy=False)
+    if prob_arr.ndim != 2 or prob_arr.shape[1] < 2:
+        raise ValueError(f"Unsupported probability shape for binary scoring: {prob_arr.shape}")
     foreground = np.clip(prob_arr[:, 0] + prob_arr[:, 1], 1e-6, None)
     return (prob_arr[:, 1] / foreground).astype(np.float32, copy=False)
 
 
 def multiclass_binary_auc(predt: np.ndarray, dmatrix: Any) -> tuple[str, float]:
     labels = np.asarray(dmatrix.get_label(), dtype=np.int8)
-    prob = np.asarray(predt, dtype=np.float32).reshape(labels.shape[0], 4)
+    prob = np.asarray(predt, dtype=np.float32).reshape(labels.shape[0], -1)
     score = binary_score_from_softprob(prob)
-    return "binary_auc", float(roc_auc_score(labels, score))
+    valid_mask = np.isin(labels, (0, 1))
+    if not np.any(valid_mask):
+        return "binary_auc", float("nan")
+    binary_labels = labels[valid_mask]
+    binary_score = score[valid_mask]
+    if np.unique(binary_labels).size < 2:
+        return "binary_auc", float("nan")
+    return "binary_auc", float(roc_auc_score(binary_labels, binary_score))
 
 
 def build_multiclass_bg_sample_weight(

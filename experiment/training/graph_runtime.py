@@ -26,6 +26,7 @@ GRAPH_EXPERIMENTS = {
     "m4_graphsage": RelationGraphSAGEExperiment,
     "m5_temporal_graphsage": TemporalRelationGraphSAGEExperiment,
     "m6_temporal_gat": TemporalRelationGATExperiment,
+    "m7_utpm": TemporalRelationGraphSAGEExperiment,
 }
 
 
@@ -88,6 +89,7 @@ def make_graph_contexts(
     eval_phase: str = "phase2",
     selected_groups: list[str] | None = None,
     extra_groups: list[str] | None = None,
+    feature_profile: str = "legacy",
     feature_normalizer_state=None,
     target_context_groups: list[str] | None = None,
     target_context_normalizer_state=None,
@@ -104,7 +106,11 @@ def make_graph_contexts(
         target_context_normalizer_state = HybridFeatureNormalizerState.from_dict(
             target_context_normalizer_state
         )
-    feature_groups = list(selected_groups) if selected_groups is not None else resolve_feature_groups(model_name, extra_groups)
+    feature_groups = (
+        list(selected_groups)
+        if selected_groups is not None
+        else resolve_feature_groups(model_name, extra_groups, feature_profile=feature_profile)
+    )
     target_context_groups = list(target_context_groups or [])
     phase1_store = FeatureStore(
         train_phase,

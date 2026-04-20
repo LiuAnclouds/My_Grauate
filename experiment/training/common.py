@@ -24,6 +24,7 @@ BLEND_OUTPUT_ROOT = TRAINING_OUTPUT_ROOT / "blends"
 class ExperimentSplit:
     train_ids: np.ndarray
     val_ids: np.ndarray
+    test_pool_ids: np.ndarray
     external_ids: np.ndarray
     threshold_day: int
     train_phase: str = "phase1"
@@ -103,7 +104,13 @@ def load_experiment_split(eda_root: Path = EDA_OUTPUT_ROOT) -> ExperimentSplit:
     if "train_split" in summary and "val_split" in summary:
         train = summary["train_split"]
         val = summary["val_split"]
+        test_pool = summary.get("test_pool") or summary.get("unlabeled_pool")
         external = summary.get("external_eval")
+        test_pool_ids = (
+            np.load(eda_root / test_pool["id_path"])
+            if test_pool is not None and test_pool.get("id_path")
+            else np.empty(0, dtype=np.int32)
+        )
         external_ids = (
             np.load(eda_root / external["id_path"])
             if external is not None and external.get("id_path")
@@ -112,6 +119,7 @@ def load_experiment_split(eda_root: Path = EDA_OUTPUT_ROOT) -> ExperimentSplit:
         return ExperimentSplit(
             train_ids=np.load(eda_root / train["id_path"]),
             val_ids=np.load(eda_root / val["id_path"]),
+            test_pool_ids=np.asarray(test_pool_ids, dtype=np.int32),
             external_ids=np.asarray(external_ids, dtype=np.int32),
             threshold_day=int(summary.get("threshold_day", train["threshold_day"])),
             train_phase=str(summary.get("train_phase", "graph")),
@@ -132,6 +140,7 @@ def load_experiment_split(eda_root: Path = EDA_OUTPUT_ROOT) -> ExperimentSplit:
         return ExperimentSplit(
             train_ids=np.load(eda_root / phase1["train_id_path"]),
             val_ids=np.load(eda_root / phase1["val_id_path"]),
+            test_pool_ids=np.empty(0, dtype=np.int32),
             external_ids=np.asarray(external_ids, dtype=np.int32),
             threshold_day=int(phase1["threshold_day"]),
             train_phase="phase1",
