@@ -25,7 +25,7 @@
 
 1. 各数据集构建自己的 `graph_gdata/phase_gdata` 与统一特征缓存
 2. 根据各自 `recommended_split.json` 读取 `phase1_train / phase1_val / test_pool`
-3. 用 `m7_utpm` 训练动态图 GNN 主干
+3. 用统一动态图 GNN 主干训练，当前 official 为 `m7_utpm`，现代化候选为 `m8_utgt`
 4. 仅在当前数据集的 `phase1_train` 上训练 `graphprop residual` tree 分支
 5. 用固定 logit 融合形成最终预测
 
@@ -39,7 +39,7 @@
 
 ## 3. Main GNN Backbone
 
-主模型为 `m7_utpm`。
+当前 official 主模型为 `m7_utpm`，统一现代化候选为 `m8_utgt`。
 
 主干固定项：
 
@@ -55,6 +55,26 @@
   - epochs = `8`
 
 这个主干负责学习动态图中的时间漂移、邻域关系与行为上下文，是论文的主模型，而不是附属模型。
+
+### 3.1 Backbone Modernization
+
+为回应“不能只是旧 GraphSAGE 外挂一些模块”的问题，当前代码里新增了真正统一的候选主干 `m8_utgt`。
+
+它和 `m7_utpm` 的关系不是“另一套实验分支”，而是：
+
+- 同一个输入契约：`utpm_unified`
+- 同一个训练协议：`phase1_train -> phase1_val -> test_pool`
+- 同一组 thesis 模块：`prototype memory`、`pseudo-contrastive temporal mining`、`drift residual target context`
+- 只替换主干内部的局部聚合算子
+
+具体来说：
+
+| Backbone | Local Aggregation | Role |
+| --- | --- | --- |
+| `m7_utpm` | GraphSAGE-style relation aggregation | 当前 official 主干 |
+| `m8_utgt` | multi-head temporal relation attention | 现代化候选主干 |
+
+因此这次重构的创新点不是“给不同数据集换不同 trick”，而是在统一合同下，把主干升级成更接近时序图 Transformer 的关系注意力结构。
 
 ## 4. Innovation Modules
 
@@ -145,6 +165,18 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_su
   --suite-name thesis_m7_v4_unified_e8 \
   --model m7_utpm \
   --preset utpm_temporal_shift_v4 \
+  --feature-profile utpm_unified \
+  --epochs 8 \
+  --seeds 42
+```
+
+训练 transformer-style 候选主干：
+
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py \
+  --suite-name thesis_m8_utgt_e8 \
+  --model m8_utgt \
+  --preset utgt_temporal_shift_v1 \
   --feature-profile utpm_unified \
   --epochs 8 \
   --seeds 42

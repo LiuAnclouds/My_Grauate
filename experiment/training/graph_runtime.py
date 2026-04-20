@@ -18,6 +18,7 @@ from experiment.training.gnn_models import (
     RelationGraphSAGEExperiment,
     TemporalRelationGATExperiment,
     TemporalRelationGraphSAGEExperiment,
+    TemporalRelationGraphTransformerExperiment,
 )
 from experiment.training.sampling_profiles import load_or_build_raw_consistency_profile
 
@@ -27,6 +28,7 @@ GRAPH_EXPERIMENTS = {
     "m5_temporal_graphsage": TemporalRelationGraphSAGEExperiment,
     "m6_temporal_gat": TemporalRelationGATExperiment,
     "m7_utpm": TemporalRelationGraphSAGEExperiment,
+    "m8_utgt": TemporalRelationGraphTransformerExperiment,
 }
 
 

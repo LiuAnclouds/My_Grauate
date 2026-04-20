@@ -24,6 +24,8 @@ from experiment.training.thesis_contract import (
     OFFICIAL_MAINLINE_HIDDEN_DIM,
     OFFICIAL_MAINLINE_REL_DIM,
     OFFICIAL_SUITE_EPOCHS,
+    TRANSFORMER_BACKBONE_MODEL,
+    TRANSFORMER_BACKBONE_PRESET,
 )
 
 
@@ -90,12 +92,27 @@ def _thesis_recipe(name: str) -> ThesisRecipe:
                 epochs=OFFICIAL_SUITE_EPOCHS,
             ),
         )
+    if name == "thesis_m8_utgt":
+        return ThesisRecipe(
+            name=name,
+            description=(
+                "Transformer-style thesis backbone candidate: unified UTPM feature schema, "
+                "multi-head temporal relation attention, prototype memory, drift-residual adaptation, "
+                "and pseudo-contrastive regularization under the same thesis contract."
+            ),
+            build_args=("--phase", "both"),
+            train_args=_shared_train_args(
+                model_name=TRANSFORMER_BACKBONE_MODEL,
+                preset_name=TRANSFORMER_BACKBONE_PRESET,
+                epochs=OFFICIAL_SUITE_EPOCHS,
+            ),
+        )
     supported = ", ".join(_thesis_recipe_names())
     raise KeyError(f"Unsupported thesis recipe `{name}`. Supported: {supported}")
 
 
 def _thesis_recipe_names() -> tuple[str, ...]:
-    return ("baseline_m5_unified", "thesis_m7_utpm")
+    return ("baseline_m5_unified", "thesis_m7_utpm", "thesis_m8_utgt")
 
 
 def parse_args() -> argparse.Namespace:

@@ -42,7 +42,26 @@
 如果只想冲当前 `val_auc`，第二列更优。
 如果要同时满足“统一架构 + GNN 为主”的论文定义，第三列才是 official result。
 
-## 3. Comparison Models
+## 3. Backbone Modernization Track
+
+当前 official 表格还没有把 `m8_utgt` 写进去，原因不是没做，而是这次重构先完成了统一入口与主干替换能力，tri-dataset 全量验证还在后续里程碑。
+
+这条候选线的定位必须写清楚：
+
+- `m8_utgt` 不是“另一个数据集特供模型”
+- `m8_utgt` 不是 secondary-only 分支
+- `m8_utgt` 仍然是主 GNN，只是把局部关系聚合升级为多头时序关系注意力
+- `m8_utgt` 和 `m7_utpm` 共享同一 `utpm_unified` 输入契约、同一训练协议、同一 thesis 模块
+
+当前完成的重构面：
+
+- `run_thesis_mainline.py`
+- `run_thesis_suite.py`
+- `run_thesis_recipe.py`
+
+也就是说，后续对比 `m7_utpm` 与 `m8_utgt` 时，比较的是同一实验合同下的“主干替换”，不是两套方法学。
+
+## 4. Comparison Models
 
 这里不再只放 1 条弱对比线，而是固定展示 3 个 baseline 加 1 个 official main result。
 
@@ -66,9 +85,9 @@
 - Weak hybrid:
   - [thesis_m7_v4_xgbblend035](../experiment/outputs/thesis_suite/thesis_m7_v4_xgbblend035/summary.json)
 
-## 4. Ablation
+## 5. Ablation
 
-### 4.1 Completed Decision-Layer Ablation
+### 5.1 Completed Decision-Layer Ablation
 
 | Setting | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Meaning |
 | --- | ---: | ---: | ---: | ---: | --- |
@@ -83,7 +102,7 @@
 - Elliptic / Elliptic++ 上，`secondary-only` 更强，说明 graphprop 分支在这两个数据集上接近上界。
 - `alpha=0.35` 明显不足，说明如果保留 GNN-primary 叙事，残差分支必须占更高权重。
 
-### 4.2 Completed Backbone-Module Ablation
+### 5.2 Completed Backbone-Module Ablation
 
 官方主干三模块消融已经完成，聚合产物位于：
 
@@ -105,7 +124,7 @@
 - `drift residual target context` 在当前单种子验证上也没有带来直接 AUC 提升，去掉后宏平均反而上升 `+0.002003`；它更适合被表述为上下文校准/稳健性设计，而不是主增益模块。
 - 论文级主结果的主要跃升仍然来自决策层两项创新：`graphprop residual head` 和 `fixed logit fusion`。
 
-### 4.3 Innovation Module Count
+### 5.3 Innovation Module Count
 
 当前 thesis mainline 需要单独交代的创新模块一共 5 个：
 
@@ -123,7 +142,7 @@
 - 现在仓库里已经同时有完整的“决策层消融”和“主干内部模块消融”。
 - 三个主干模块都不能省，因为它们决定了你对创新性陈述能否做到逐项举证。
 
-## 5. Hard-Leakage Audit Summary
+## 6. Hard-Leakage Audit Summary
 
 审计文件：
 

@@ -106,6 +106,8 @@ class GraphModelConfig:
     target_time_weight_half_life_days: float = 0.0
     target_time_weight_floor: float = 0.25
     message_risk_strength: float = 0.0
+    attention_num_heads: int = 1
+    attention_logit_scale: float = 1.0
     known_label_feature: bool = False
     known_label_feature_dim: int = 5
     target_context_fusion: str = "none"
@@ -202,6 +204,8 @@ class GraphModelConfig:
             "target_time_weight_half_life_days": float(self.target_time_weight_half_life_days),
             "target_time_weight_floor": float(self.target_time_weight_floor),
             "message_risk_strength": float(self.message_risk_strength),
+            "attention_num_heads": int(self.attention_num_heads),
+            "attention_logit_scale": float(self.attention_logit_scale),
             "known_label_feature": bool(self.known_label_feature),
             "known_label_feature_dim": int(self.known_label_feature_dim),
             "target_context_fusion": self.target_context_fusion,
@@ -308,6 +312,8 @@ class GraphModelConfig:
             target_time_weight_half_life_days=float(payload.get("target_time_weight_half_life_days", 0.0)),
             target_time_weight_floor=float(payload.get("target_time_weight_floor", 0.25)),
             message_risk_strength=float(payload.get("message_risk_strength", 0.0)),
+            attention_num_heads=int(payload.get("attention_num_heads", 1)),
+            attention_logit_scale=float(payload.get("attention_logit_scale", 1.0)),
             known_label_feature=bool(payload.get("known_label_feature", False)),
             known_label_feature_dim=int(payload.get("known_label_feature_dim", 5)),
             target_context_fusion=str(payload.get("target_context_fusion", "none")),
@@ -1497,11 +1503,20 @@ class ModernRelationAttentionBlock(nn.Module):
         residual: bool,
         ffn: bool,
         edge_encoder: str,
+        num_heads: int = 1,
+        attention_logit_scale: float = 1.0,
     ) -> None:
         super().__init__()
         self.hidden_dim = hidden_dim
         self.residual = residual
         self.gated = edge_encoder == "gated"
+        self.num_heads = max(int(num_heads), 1)
+        if hidden_dim % self.num_heads != 0:
+            raise ValueError(
+                f"hidden_dim={hidden_dim} must be divisible by attention heads={self.num_heads}."
+            )
+        self.head_dim = hidden_dim // self.num_heads
+        self.attention_logit_scale = max(float(attention_logit_scale), 1e-6)
         self.norm1 = _make_norm(norm, hidden_dim)
         self.norm2 = _make_norm(norm, hidden_dim) if ffn else nn.Identity()
         self.self_linear = nn.Linear(hidden_dim, hidden_dim)
@@ -1513,13 +1528,13 @@ class ModernRelationAttentionBlock(nn.Module):
         self.attn_mlp = nn.Sequential(
             nn.Linear(hidden_dim * 2 + edge_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(hidden_dim, 1),
+            nn.Linear(hidden_dim, self.num_heads),
         )
         self.gate_mlp = (
             nn.Sequential(
                 nn.Linear(hidden_dim * 2 + edge_dim, hidden_dim),
                 nn.GELU(),
-                nn.Linear(hidden_dim, 1),
+                nn.Linear(hidden_dim, self.num_heads),
             )
             if self.gated
             else None
@@ -1553,19 +1568,30 @@ class ModernRelationAttentionBlock(nn.Module):
             agg = h.new_zeros((h.shape[0], self.hidden_dim))
         else:
             edge_context = torch.cat([h[edge_dst], h[edge_src], edge_emb], dim=-1)
-            msg = self.msg_mlp(torch.cat([h[edge_src], edge_emb], dim=-1))
+            msg = self.msg_mlp(torch.cat([h[edge_src], edge_emb], dim=-1)).view(
+                -1, self.num_heads, self.head_dim
+            )
             if self.gate_mlp is not None:
-                msg = msg * torch.sigmoid(self.gate_mlp(edge_context))
+                msg = msg * torch.sigmoid(self.gate_mlp(edge_context)).unsqueeze(-1)
             if time_weight is not None:
-                msg = msg * time_weight
+                msg = msg * time_weight.unsqueeze(-1)
             if message_node_scale is not None:
                 edge_scale = 0.5 * (message_node_scale[edge_src] + message_node_scale[edge_dst])
-                msg = msg * edge_scale
-            attn_score = self.attn_mlp(edge_context).squeeze(-1)
-            attn_weight = _segment_softmax(attn_score, edge_dst, h.shape[0]).unsqueeze(-1)
+                msg = msg * edge_scale.unsqueeze(-1)
+            attn_score = self.attn_mlp(edge_context) * (
+                self.attention_logit_scale / math.sqrt(float(self.head_dim))
+            )
+            head_offsets = torch.arange(self.num_heads, device=h.device, dtype=edge_dst.dtype).unsqueeze(0)
+            attn_group_ids = edge_dst.unsqueeze(1) * self.num_heads + head_offsets
+            attn_weight = _segment_softmax(
+                attn_score.reshape(-1),
+                attn_group_ids.reshape(-1),
+                h.shape[0] * self.num_heads,
+            ).view(-1, self.num_heads, 1)
             edge_repr = self.attn_dropout(attn_weight) * msg
             agg = h.new_zeros((h.shape[0], self.hidden_dim))
-            agg.index_add_(0, edge_dst, edge_repr)
+            agg.index_add_(0, edge_dst, edge_repr.reshape(-1, self.hidden_dim))
+            edge_repr = edge_repr.reshape(-1, self.hidden_dim)
 
         update = self.self_linear(h) + self.agg_proj(agg)
         update = self.dropout(update)
@@ -1701,20 +1727,19 @@ class RelationGraphSAGENetwork(nn.Module):
         self.rel_embedding = nn.Embedding(num_relations, rel_dim)
         edge_dim = rel_dim + (rel_dim if temporal else 0)
         block_cls = ModernRelationBlock if aggregator_type == "sage" else ModernRelationAttentionBlock
-        self.layers = nn.ModuleList(
-            [
-                block_cls(
-                    hidden_dim=hidden_dim,
-                    edge_dim=edge_dim,
-                    dropout=dropout,
-                    norm=model_config.norm,
-                    residual=model_config.residual,
-                    ffn=model_config.ffn,
-                    edge_encoder=model_config.edge_encoder,
-                )
-                for _ in range(num_layers)
-            ]
+        block_kwargs = dict(
+            hidden_dim=hidden_dim,
+            edge_dim=edge_dim,
+            dropout=dropout,
+            norm=model_config.norm,
+            residual=model_config.residual,
+            ffn=model_config.ffn,
+            edge_encoder=model_config.edge_encoder,
         )
+        if aggregator_type != "sage":
+            block_kwargs["num_heads"] = int(model_config.attention_num_heads)
+            block_kwargs["attention_logit_scale"] = float(model_config.attention_logit_scale)
+        self.layers = nn.ModuleList([block_cls(**block_kwargs) for _ in range(num_layers)])
         self.classifier = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
@@ -5270,6 +5295,13 @@ class TemporalRelationGraphSAGEExperiment(BaseGraphSAGEExperiment):
 
 
 class TemporalRelationGATExperiment(BaseGraphSAGEExperiment):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs["temporal"] = True
+        kwargs.setdefault("aggregator_type", "attention")
+        super().__init__(*args, **kwargs)
+
+
+class TemporalRelationGraphTransformerExperiment(BaseGraphSAGEExperiment):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs["temporal"] = True
         kwargs.setdefault("aggregator_type", "attention")

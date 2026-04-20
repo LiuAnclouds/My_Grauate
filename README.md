@@ -5,7 +5,8 @@
 当前仓库只保留一条统一主线：
 
 - 三个数据集分别预处理，但全部映射到同一输入契约 `utpm_unified`
-- 主模型统一为动态图 GNN `m7_utpm`
+- 官方主模型统一为动态图 GNN `m7_utpm`
+- 主干现代化候选统一为动态图 GNN `m8_utgt`，但仍复用同一输入契约与训练协议
 - 统一训练协议为 `phase1_train -> phase1_val -> test_pool`
 - 二级分支只允许作为 GNN 主干的残差校正，不允许变成“每个数据集一套策略”
 
@@ -23,10 +24,20 @@
 ## Official Thesis Contract
 
 - 同一输入特征契约：`utpm_unified`
-- 同一主模型族：`m7_utpm`
+- 同一主模型族：官方 `m7_utpm`，候选 `m8_utgt`
 - 同一训练验证协议：`phase1_train -> phase1_val -> test_pool`
 - 同一二级决策原则：`GNN-primary + graphprop residual correction`
 - 数据集彼此隔离，不做跨数据集联合训练
+
+## Backbone Modernization Track
+
+为回应“主模型必须是更新的动态图 GNN，而不是只在旧 GraphSAGE 外面叠模块”的要求，仓库现已加入统一候选主干：
+
+- `m8_utgt`: unified temporal graph transformer candidate
+- 核心变化：把局部关系聚合升级为多头时序关系注意力
+- 保持不变：`utpm_unified` 输入契约、训练验证协议、数据集隔离、GNN 主导约束
+
+当前 official 结果仍然使用 `m7_utpm`。`m8_utgt` 只有在完成 tri-dataset 验证后才会提升为新的正式主干。
 
 ## Result Snapshot
 
@@ -93,5 +104,6 @@
 
 - 主训练入口：[run_thesis_mainline.py](experiment/training/run_thesis_mainline.py)
 - 纯 GNN 套件：[run_thesis_suite.py](experiment/training/run_thesis_suite.py)
+- 统一 recipe 入口：[run_thesis_recipe.py](experiment/training/run_thesis_recipe.py)
 - 官方 hybrid 套件：[run_thesis_hybrid_suite.py](experiment/training/run_thesis_hybrid_suite.py)
 - 泄露审计脚本：[audit_thesis_leakage.py](experiment/training/audit_thesis_leakage.py)

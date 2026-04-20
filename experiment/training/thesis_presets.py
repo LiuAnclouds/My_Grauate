@@ -4,7 +4,7 @@ from dataclasses import replace
 from typing import Any
 
 from experiment.training.gnn_models import GraphModelConfig
-from experiment.training.thesis_contract import OFFICIAL_BACKBONE_PRESET
+from experiment.training.thesis_contract import OFFICIAL_BACKBONE_PRESET, TRANSFORMER_BACKBONE_PRESET
 
 
 _BASE_GRAPH_CONFIG = GraphModelConfig(
@@ -87,12 +87,61 @@ _PRESET_UPDATES: dict[str, dict[str, dict[str, Any]]] = {
             "context_residual_budget_release_delay_epochs": 3,
         },
     },
+    "m8_utgt": {
+        "utgt_temporal_shift_v1": {
+            "early_stop_patience": 10,
+            "loss_type": "bce",
+            "ranking_weight": 0.0,
+            "ranking_margin": 0.2,
+            "recent_window": 50,
+            "dropout": 0.15,
+            "attention_num_heads": 4,
+            "attention_logit_scale": 1.0,
+            "prototype_multiclass_num_classes": 2,
+            "prototype_loss_weight": 0.04,
+            "prototype_loss_weight_schedule": "adaptive_quality",
+            "prototype_loss_min_weight": 0.01,
+            "prototype_temperature": 0.2,
+            "prototype_momentum": 0.9,
+            "prototype_start_epoch": 2,
+            "prototype_loss_ramp_epochs": 4,
+            "prototype_bucket_mode": "time_bucket",
+            "prototype_neighbor_blend": 0.10,
+            "prototype_global_blend": 0.20,
+            "prototype_consistency_weight": 0.05,
+            "prototype_separation_weight": 0.05,
+            "prototype_separation_margin": 0.15,
+            "pseudo_contrastive_weight": 0.02,
+            "pseudo_contrastive_temperature": 0.20,
+            "pseudo_contrastive_sample_size": 192,
+            "pseudo_contrastive_low_quantile": 0.12,
+            "pseudo_contrastive_high_quantile": 0.88,
+            "pseudo_contrastive_interval": 6,
+            "pseudo_contrastive_start_epoch": 3,
+            "pseudo_contrastive_time_balanced": True,
+            "pseudo_contrastive_min_confidence_gap": 0.08,
+            "target_context_fusion": "drift_residual",
+            "target_time_adapter_strength": 0.15,
+            "target_time_adapter_type": "drift_expert",
+            "target_time_expert_entropy_floor": 0.9,
+            "target_time_expert_entropy_weight": 0.05,
+            "normal_bucket_align_weight": 0.05,
+            "context_residual_clip": 0.18,
+            "context_residual_budget": 0.08,
+            "context_residual_budget_weight": 0.10,
+            "context_residual_budget_schedule": "prototype_adaptive",
+            "context_residual_budget_min_weight": 0.03,
+            "context_residual_budget_release_epochs": 10,
+            "context_residual_budget_release_delay_epochs": 3,
+        },
+    },
 }
 
 
 _DEFAULT_PRESET_BY_MODEL = {
     "m5_temporal_graphsage": "unified_baseline",
     "m7_utpm": OFFICIAL_BACKBONE_PRESET,
+    "m8_utgt": TRANSFORMER_BACKBONE_PRESET,
 }
 
 

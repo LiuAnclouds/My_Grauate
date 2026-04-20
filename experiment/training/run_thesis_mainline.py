@@ -37,6 +37,8 @@ from experiment.training.thesis_contract import (
     OFFICIAL_MAINLINE_HIDDEN_DIM,
     OFFICIAL_MAINLINE_REL_DIM,
     OFFICIAL_TARGET_CONTEXT_GROUPS,
+    TRANSFORMER_BACKBONE_MODEL,
+    TRANSFORMER_BACKBONE_PRESET,
 )
 from experiment.training.thesis_runtime import prepare_thesis_runtime
 from experiment.training.thesis_presets import (
@@ -142,9 +144,13 @@ def parse_args() -> argparse.Namespace:
     )
     train_parser.add_argument(
         "--model",
-        choices=("m5_temporal_graphsage", "m7_utpm"),
+        choices=("m5_temporal_graphsage", "m7_utpm", "m8_utgt"),
         default=OFFICIAL_BACKBONE_MODEL,
-        help="`m5_temporal_graphsage` is the unified baseline; `m7_utpm` is the official thesis mainline.",
+        help=(
+            "`m5_temporal_graphsage` is the unified baseline; "
+            "`m7_utpm` is the stable GraphSAGE thesis backbone; "
+            "`m8_utgt` is the transformer-style thesis backbone candidate."
+        ),
     )
     train_parser.add_argument(
         "--preset",
@@ -152,7 +158,8 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Named thesis preset. "
             "`m5_temporal_graphsage`: unified_baseline. "
-            "`m7_utpm`: utpm_temporal_shift_v4 (default and official)."
+            "`m7_utpm`: utpm_temporal_shift_v4 (stable official). "
+            f"`{TRANSFORMER_BACKBONE_MODEL}`: {TRANSFORMER_BACKBONE_PRESET} (transformer-style candidate)."
         ),
     )
     train_parser.add_argument(
@@ -307,27 +314,22 @@ def _build_graph_config(args: argparse.Namespace) -> GraphModelConfig:
 
 
 def _mainline_metadata(model_name: str, graph_config: GraphModelConfig | None = None) -> dict[str, Any]:
-    if str(model_name) == "m7_utpm":
+    if str(model_name) in {"m7_utpm", "m8_utgt"}:
         aux_regularizer = "pseudo-contrastive test-pool consistency"
         if graph_config is not None and bool(graph_config.pseudo_contrastive_time_balanced):
             aux_regularizer = "time-balanced pseudo-contrastive test-pool consistency"
-        main_innovation = "UTPM unified temporal-relation prototype encoder"
+        if str(model_name) == "m8_utgt":
+            main_innovation = "UTGT unified temporal-relation graph transformer"
+        else:
+            main_innovation = "UTPM unified temporal-relation prototype encoder"
         if graph_config is not None and bool(graph_config.known_label_feature):
-            main_innovation = (
-                "UTPM unified temporal-relation prototype encoder with masked label-context channel"
-            )
+            main_innovation = f"{main_innovation} with masked label-context channel"
         if graph_config is not None and bool(graph_config.target_context_fusion == "drift_residual"):
-            main_innovation = (
-                "UTPM unified temporal-relation prototype encoder with drift-residual adaptation"
-            )
+            main_innovation = f"{main_innovation} with drift-residual adaptation"
         if graph_config is not None and bool(graph_config.target_context_fusion == "drift_mix"):
-            main_innovation = (
-                "UTPM unified temporal-relation prototype encoder with adaptive drift-mixture adaptation"
-            )
+            main_innovation = f"{main_innovation} with adaptive drift-mixture adaptation"
         if graph_config is not None and bool(graph_config.target_context_fusion == "drift_uncertainty_mix"):
-            main_innovation = (
-                "UTPM unified temporal-relation prototype encoder with uncertainty-aware drift adaptation"
-            )
+            main_innovation = f"{main_innovation} with uncertainty-aware drift adaptation"
         if graph_config is not None and str(graph_config.target_context_fusion) != "none":
             main_innovation = f"{main_innovation} and temporal-normality bridge context"
         return {
@@ -649,7 +651,9 @@ def run_train(args: argparse.Namespace) -> None:
             "batch_size": args.batch_size,
             "epochs": args.epochs,
             "device": args.device,
-            "aggregator_type": "sage",
+            "aggregator_type": (
+                "attention" if str(args.model) == TRANSFORMER_BACKBONE_MODEL else "sage"
+            ),
             "official_target_context_groups": list(OFFICIAL_TARGET_CONTEXT_GROUPS),
             **graph_config.to_dict(),
         },

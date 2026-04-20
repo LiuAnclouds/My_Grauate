@@ -30,6 +30,8 @@
   - `m5_temporal_graphsage` + `unified_baseline`
 - thesis backbone:
   - `m7_utpm` + `utpm_temporal_shift_v4`
+- transformer-style candidate backbone:
+  - `m8_utgt` + `utgt_temporal_shift_v1`
 - official final decision layer:
   - fixed logit blend with `alpha=0.82`
   - secondary model: leakage-safe `phase1_train` graphprop XGBoost
@@ -47,7 +49,8 @@
 - 同一输入契约:
   - `utpm_unified`
 - 同一主模型族:
-  - `m7_utpm`
+  - official: `m7_utpm`
+  - candidate: `m8_utgt`
 - 同一训练协议:
   - `train -> val -> test_pool`
 - 同一混合决策规则:
@@ -61,6 +64,21 @@
 - 数据集彼此隔离
 
 不是把三个数据集混在一起做联合训练。
+
+## Backbone Modernization Track
+
+这次重构新增了一条真正统一的候选主干，而不是“每个数据集一套 teacher / stacking / hack”：
+
+- 候选模型：`m8_utgt`
+- 设计目标：在不改数据合同、不改 split、不改主干创新模块的前提下，把旧的 GraphSAGE 式局部聚合升级为多头时序关系注意力
+- 共享模块：`prototype memory`、`pseudo-contrastive temporal mining`、`drift residual target context`
+- 不允许的事情：单独给某个数据集换特征契约、换标签流、换训练协议
+
+当前状态：
+
+- `m7_utpm` 仍然是 official 主干
+- `m8_utgt` 已接入主训练入口、suite 入口和 thesis recipe 入口
+- `m8_utgt` 需要先完成 tri-dataset 验证，才会进入 official 表格
 
 ## Leakage Guardrails
 
@@ -79,12 +97,18 @@
   - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_mainline.py build_features --phase both`
 - run unified GNN backbone:
   - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_mainline.py train --model m7_utpm --preset utpm_temporal_shift_v4 --run-name thesis_xy_m7_v4_unified_s42_e8 --device cuda --epochs 8 --seeds 42`
+- run transformer-style backbone candidate:
+  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_mainline.py train --model m8_utgt --preset utgt_temporal_shift_v1 --run-name thesis_xy_m8_utgt_s42_e8 --device cuda --epochs 8 --seeds 42`
 - run pure-GNN tri-dataset suite:
   - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_unified_e8 --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --epochs 8 --seeds 42`
+- run transformer-style tri-dataset candidate suite:
+  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m8_utgt_e8 --model m8_utgt --preset utgt_temporal_shift_v1 --feature-profile utpm_unified --epochs 8 --seeds 42`
 - run official tri-dataset hybrid suite:
   - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py --suite-name thesis_m7_v4_graphpropblend082 --blend-alpha 0.82`
 - inspect official thesis recipe:
   - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_recipe.py show --dataset xinye_dgraph --recipe thesis_m7_utpm`
+- inspect transformer-style thesis recipe:
+  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_recipe.py show --dataset xinye_dgraph --recipe thesis_m8_utgt`
 
 ## Ablation Recipes
 

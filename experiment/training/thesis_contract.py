@@ -6,6 +6,8 @@ OFFICIAL_BASELINE_PRESET = "unified_baseline"
 OFFICIAL_BACKBONE_MODEL = "m7_utpm"
 OFFICIAL_BACKBONE_PRESET = "utpm_temporal_shift_v4"
 OFFICIAL_BACKBONE_FEATURE_PROFILE = "utpm_unified"
+TRANSFORMER_BACKBONE_MODEL = "m8_utgt"
+TRANSFORMER_BACKBONE_PRESET = "utgt_temporal_shift_v1"
 OFFICIAL_TARGET_CONTEXT_GROUPS = (
     "graph_time_detrend",
     "neighbor_similarity",

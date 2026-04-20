@@ -26,6 +26,8 @@ from experiment.training.thesis_contract import (
     OFFICIAL_MAINLINE_REL_DIM,
     OFFICIAL_SUITE_EPOCHS,
     OFFICIAL_SUITE_SEEDS,
+    TRANSFORMER_BACKBONE_MODEL,
+    TRANSFORMER_BACKBONE_PRESET,
 )
 
 DEFAULT_DATASETS = OFFICIAL_DATASETS
@@ -55,14 +57,23 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        choices=("m5_temporal_graphsage", "m7_utpm"),
+        choices=("m5_temporal_graphsage", "m7_utpm", "m8_utgt"),
         default=OFFICIAL_BACKBONE_MODEL,
-        help="Unified thesis-mainline model family.",
+        help=(
+            "Unified thesis-mainline model family. "
+            "`m7_utpm` is the stable official backbone; "
+            "`m8_utgt` is the transformer-style backbone candidate."
+        ),
     )
     parser.add_argument(
         "--preset",
-        default=OFFICIAL_BACKBONE_PRESET,
-        help="Preset passed through to run_thesis_mainline.py.",
+        default=None,
+        help=(
+            "Preset passed through to run_thesis_mainline.py. "
+            "Defaults: `m5_temporal_graphsage` -> `unified_baseline`, "
+            f"`{OFFICIAL_BACKBONE_MODEL}` -> `{OFFICIAL_BACKBONE_PRESET}`, "
+            f"`{TRANSFORMER_BACKBONE_MODEL}` -> `{TRANSFORMER_BACKBONE_PRESET}`."
+        ),
     )
     parser.add_argument(
         "--feature-profile",
@@ -272,6 +283,16 @@ def _format_metric(value: Any) -> str:
 
 def main() -> None:
     args = parse_args()
+    if args.preset is None:
+        if str(args.model) == "m5_temporal_graphsage":
+            args.preset = "unified_baseline"
+        elif str(args.model) == OFFICIAL_BACKBONE_MODEL:
+            args.preset = OFFICIAL_BACKBONE_PRESET
+        elif str(args.model) == TRANSFORMER_BACKBONE_MODEL:
+            args.preset = TRANSFORMER_BACKBONE_PRESET
+        else:
+            raise ValueError(f"Unsupported thesis suite model: {args.model}")
+
     if str(args.model) == OFFICIAL_BACKBONE_MODEL and str(args.preset) != OFFICIAL_BACKBONE_PRESET:
         raise ValueError(
             "The official thesis suite is locked to the unified m7 v4 backbone. "
@@ -280,6 +301,11 @@ def main() -> None:
     if str(args.model) == "m5_temporal_graphsage" and str(args.preset) != "unified_baseline":
         raise ValueError(
             "The official thesis suite is locked to the unified m5 baseline preset `unified_baseline`."
+        )
+    if str(args.model) == TRANSFORMER_BACKBONE_MODEL and str(args.preset) != TRANSFORMER_BACKBONE_PRESET:
+        raise ValueError(
+            "The transformer-style thesis suite is locked to the unified m8 preset "
+            f"`{TRANSFORMER_BACKBONE_PRESET}` for controlled comparisons."
         )
 
     results: list[dict[str, Any]] = []
