@@ -6,6 +6,7 @@
 - [Method Overview](../../docs/thesis_method.md)
 - [Experiment Table](../../docs/thesis_experiments.md)
 - [Official Result JSON](../outputs/thesis_suite/thesis_m7_v4_graphpropblend082/summary.json)
+- [Backbone Ablation Report](../outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md)
 
 ## Official Surface
 
@@ -89,6 +90,18 @@
 
 主干内部 3 个核心创新模块都支持通过 `--graph-config-override` 做 official tri-dataset ablation。
 
+一键编排并导出可画图汇总：
+
+- `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_backbone_ablation.py --skip-existing`
+
+聚合输出目录：
+
+- `experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/`
+  - `report.md`
+  - `results_long.csv`
+  - `results_macro.csv`
+  - `results.json`
+
 - remove prototype memory:
   - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_ablate_noprototype --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --epochs 8 --seeds 42 --graph-config-override prototype_loss_weight=0.0 --graph-config-override prototype_neighbor_blend=0.0 --graph-config-override prototype_global_blend=0.0 --graph-config-override prototype_consistency_weight=0.0 --graph-config-override prototype_separation_weight=0.0`
 - remove pseudo-contrastive temporal mining:
@@ -123,11 +136,23 @@
 - Elliptic++:
   - `0.9465836685331215`
 
+当前主干三模块 official tri-dataset ablation：
+
+- official backbone:
+  - macro `0.788895`
+- no prototype memory:
+  - macro `0.789344`
+- no pseudo-contrastive mining:
+  - macro `0.782712`
+- no drift residual context:
+  - macro `0.790898`
+
 结论必须写清楚：
 
 - `secondary-only` 数值更强，不应该被隐藏。
 - 但它不是论文主模型，因为它不是 GNN。
 - official thesis mainline 仍然以 `m7_utpm` 为主，只把 graphprop 当作 residual correction。
+- 当前单种子 `phase1_val` 下，主干内部最明确有效的是 `pseudo-contrastive temporal mining`。
 
 ## Legacy Boundary
 

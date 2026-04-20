@@ -1,0 +1,490 @@
+{
+  "manifest": {
+    "started_at": "2026-04-20T05:51:25+00:00",
+    "finished_at": "2026-04-20T06:16:28+00:00",
+    "output_dir": "experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation",
+    "device": "cuda",
+    "epochs": 8,
+    "seeds": [
+      42
+    ],
+    "commands": [
+      {
+        "setting_id": "official_backbone",
+        "suite_name": "thesis_m7_v4_unified_e8",
+        "preview": "/home/moonxkj/miniconda3/envs/Graph/bin/python3 /home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_unified_e8 --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --device cuda --epochs 8 --seeds 42 --skip-existing",
+        "graph_config_overrides": []
+      },
+      {
+        "setting_id": "ablate_no_prototype",
+        "suite_name": "thesis_m7_v4_ablate_noprototype",
+        "preview": "/home/moonxkj/miniconda3/envs/Graph/bin/python3 /home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_ablate_noprototype --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --device cuda --epochs 8 --seeds 42 --skip-existing --graph-config-override prototype_multiclass_num_classes=0 --graph-config-override prototype_loss_weight=0.0 --graph-config-override prototype_loss_weight_schedule=none --graph-config-override prototype_loss_min_weight=0.0 --graph-config-override prototype_neighbor_blend=0.0 --graph-config-override prototype_global_blend=0.0 --graph-config-override prototype_consistency_weight=0.0 --graph-config-override prototype_separation_weight=0.0",
+        "graph_config_overrides": [
+          "prototype_multiclass_num_classes=0",
+          "prototype_loss_weight=0.0",
+          "prototype_loss_weight_schedule=none",
+          "prototype_loss_min_weight=0.0",
+          "prototype_neighbor_blend=0.0",
+          "prototype_global_blend=0.0",
+          "prototype_consistency_weight=0.0",
+          "prototype_separation_weight=0.0"
+        ]
+      },
+      {
+        "setting_id": "ablate_no_pseudocontrast",
+        "suite_name": "thesis_m7_v4_ablate_nopseudocontrast",
+        "preview": "/home/moonxkj/miniconda3/envs/Graph/bin/python3 /home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_ablate_nopseudocontrast --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --device cuda --epochs 8 --seeds 42 --skip-existing --graph-config-override pseudo_contrastive_weight=0.0",
+        "graph_config_overrides": [
+          "pseudo_contrastive_weight=0.0"
+        ]
+      },
+      {
+        "setting_id": "ablate_no_drift_residual",
+        "suite_name": "thesis_m7_v4_ablate_nodriftresidual",
+        "preview": "/home/moonxkj/miniconda3/envs/Graph/bin/python3 /home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_ablate_nodriftresidual --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --device cuda --epochs 8 --seeds 42 --skip-existing --graph-config-override target_context_fusion=none --graph-config-override target_time_adapter_strength=0.0 --graph-config-override target_time_expert_entropy_weight=0.0 --graph-config-override normal_bucket_align_weight=0.0 --graph-config-override normal_bucket_adv_weight=0.0 --graph-config-override context_residual_scale=0.0 --graph-config-override context_residual_clip=0.0 --graph-config-override context_residual_budget=0.0 --graph-config-override context_residual_budget_weight=0.0 --graph-config-override context_residual_budget_schedule=none --graph-config-override context_residual_budget_min_weight=0.0 --graph-config-override context_residual_budget_release_epochs=0 --graph-config-override context_residual_budget_release_delay_epochs=0",
+        "graph_config_overrides": [
+          "target_context_fusion=none",
+          "target_time_adapter_strength=0.0",
+          "target_time_expert_entropy_weight=0.0",
+          "normal_bucket_align_weight=0.0",
+          "normal_bucket_adv_weight=0.0",
+          "context_residual_scale=0.0",
+          "context_residual_clip=0.0",
+          "context_residual_budget=0.0",
+          "context_residual_budget_weight=0.0",
+          "context_residual_budget_schedule=none",
+          "context_residual_budget_min_weight=0.0",
+          "context_residual_budget_release_epochs=0",
+          "context_residual_budget_release_delay_epochs=0"
+        ]
+      }
+    ],
+    "official_hybrid_reference_suite": "thesis_m7_v4_graphpropblend082"
+  },
+  "backbone_ablations": [
+    {
+      "setting_id": "official_backbone",
+      "suite_name": "thesis_m7_v4_unified_e8",
+      "label": "Official Backbone",
+      "description": "Unified pure m7_utpm backbone without decision-layer correction.",
+      "graph_config_overrides": [],
+      "suite_summary_path": "experiment/outputs/thesis_suite/thesis_m7_v4_unified_e8/summary.json",
+      "macro_val_auc": 0.7888948858613869,
+      "results": [
+        {
+          "dataset": "xinye_dgraph",
+          "val_auc_mean": 0.7764386280758079,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/training/models/m7_utpm/thesis_m7_v4_unified_e8_xy/summary.json"
+        },
+        {
+          "dataset": "elliptic_transactions",
+          "val_auc_mean": 0.8126351671771074,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/elliptic_transactions/training/models/m7_utpm/thesis_m7_v4_unified_e8_et/summary.json"
+        },
+        {
+          "dataset": "ellipticpp_transactions",
+          "val_auc_mean": 0.7776108623312455,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m7_utpm/thesis_m7_v4_unified_e8_epp/summary.json"
+        }
+      ]
+    },
+    {
+      "setting_id": "ablate_no_prototype",
+      "suite_name": "thesis_m7_v4_ablate_noprototype",
+      "label": "No Prototype Memory",
+      "description": "Disable prototype loss and prototype memory blending inside the GNN backbone.",
+      "graph_config_overrides": [
+        "prototype_multiclass_num_classes=0",
+        "prototype_loss_weight=0.0",
+        "prototype_loss_weight_schedule=none",
+        "prototype_loss_min_weight=0.0",
+        "prototype_neighbor_blend=0.0",
+        "prototype_global_blend=0.0",
+        "prototype_consistency_weight=0.0",
+        "prototype_separation_weight=0.0"
+      ],
+      "suite_summary_path": "experiment/outputs/thesis_suite/thesis_m7_v4_ablate_noprototype/summary.json",
+      "macro_val_auc": 0.7893436598460376,
+      "results": [
+        {
+          "dataset": "xinye_dgraph",
+          "val_auc_mean": 0.7773908092062629,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/training/models/m7_utpm/thesis_m7_v4_ablate_noprototype_xy/summary.json"
+        },
+        {
+          "dataset": "elliptic_transactions",
+          "val_auc_mean": 0.8122749570009832,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/elliptic_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_noprototype_et/summary.json"
+        },
+        {
+          "dataset": "ellipticpp_transactions",
+          "val_auc_mean": 0.7783652133308666,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_noprototype_epp/summary.json"
+        }
+      ]
+    },
+    {
+      "setting_id": "ablate_no_pseudocontrast",
+      "suite_name": "thesis_m7_v4_ablate_nopseudocontrast",
+      "label": "No Pseudo-Contrastive Mining",
+      "description": "Disable temporal pseudo-contrastive mining inside the GNN backbone.",
+      "graph_config_overrides": [
+        "pseudo_contrastive_weight=0.0"
+      ],
+      "suite_summary_path": "experiment/outputs/thesis_suite/thesis_m7_v4_ablate_nopseudocontrast/summary.json",
+      "macro_val_auc": 0.7827124409895808,
+      "results": [
+        {
+          "dataset": "xinye_dgraph",
+          "val_auc_mean": 0.7758603987980839,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/training/models/m7_utpm/thesis_m7_v4_ablate_nopseudocontrast_xy/summary.json"
+        },
+        {
+          "dataset": "elliptic_transactions",
+          "val_auc_mean": 0.7949266007388803,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/elliptic_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_nopseudocontrast_et/summary.json"
+        },
+        {
+          "dataset": "ellipticpp_transactions",
+          "val_auc_mean": 0.777350323431778,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_nopseudocontrast_epp/summary.json"
+        }
+      ]
+    },
+    {
+      "setting_id": "ablate_no_drift_residual",
+      "suite_name": "thesis_m7_v4_ablate_nodriftresidual",
+      "label": "No Drift Residual Context",
+      "description": "Disable target-context residual fusion and time-adapter drift correction.",
+      "graph_config_overrides": [
+        "target_context_fusion=none",
+        "target_time_adapter_strength=0.0",
+        "target_time_expert_entropy_weight=0.0",
+        "normal_bucket_align_weight=0.0",
+        "normal_bucket_adv_weight=0.0",
+        "context_residual_scale=0.0",
+        "context_residual_clip=0.0",
+        "context_residual_budget=0.0",
+        "context_residual_budget_weight=0.0",
+        "context_residual_budget_schedule=none",
+        "context_residual_budget_min_weight=0.0",
+        "context_residual_budget_release_epochs=0",
+        "context_residual_budget_release_delay_epochs=0"
+      ],
+      "suite_summary_path": "experiment/outputs/thesis_suite/thesis_m7_v4_ablate_nodriftresidual/summary.json",
+      "macro_val_auc": 0.7908977489689212,
+      "results": [
+        {
+          "dataset": "xinye_dgraph",
+          "val_auc_mean": 0.7772436092779985,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/training/models/m7_utpm/thesis_m7_v4_ablate_nodriftresidual_xy/summary.json"
+        },
+        {
+          "dataset": "elliptic_transactions",
+          "val_auc_mean": 0.8163543094749718,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/elliptic_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_nodriftresidual_et/summary.json"
+        },
+        {
+          "dataset": "ellipticpp_transactions",
+          "val_auc_mean": 0.7790953281537931,
+          "test_auc_mean": null,
+          "external_auc_mean": null,
+          "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_nodriftresidual_epp/summary.json"
+        }
+      ]
+    }
+  ],
+  "decision_reference": {
+    "suite_name": "thesis_m7_v4_graphpropblend082",
+    "setting_id": "official_gnn_primary_blend",
+    "label": "Official GNN-primary Blend",
+    "macro_val_auc": 0.8971041731288864,
+    "results": [
+      {
+        "dataset": "xinye_dgraph",
+        "setting_id": "official_gnn_primary_blend",
+        "setting_label": "Official GNN-primary Blend",
+        "group": "decision_reference",
+        "val_auc_mean": 0.7952929882597335,
+        "gnn_val_auc": 0.77774082190298,
+        "secondary_val_auc": 0.7948876922381168,
+        "suite_name": "thesis_m7_v4_graphpropblend082",
+        "summary_path": "experiment/outputs/training/blends/thesis_m7_v4_graphpropblend082_xy/summary.json",
+        "description": "Current official thesis result with GNN-primary fixed logit fusion (alpha=0.82).",
+        "graph_config_overrides": []
+      },
+      {
+        "dataset": "elliptic_transactions",
+        "setting_id": "official_gnn_primary_blend",
+        "setting_label": "Official GNN-primary Blend",
+        "group": "decision_reference",
+        "val_auc_mean": 0.949435862593804,
+        "gnn_val_auc": 0.8019135875277404,
+        "secondary_val_auc": 0.9683194796654438,
+        "suite_name": "thesis_m7_v4_graphpropblend082",
+        "summary_path": "experiment/outputs/elliptic_transactions/training/blends/thesis_m7_v4_graphpropblend082_et/summary.json",
+        "description": "Current official thesis result with GNN-primary fixed logit fusion (alpha=0.82).",
+        "graph_config_overrides": []
+      },
+      {
+        "dataset": "ellipticpp_transactions",
+        "setting_id": "official_gnn_primary_blend",
+        "setting_label": "Official GNN-primary Blend",
+        "group": "decision_reference",
+        "val_auc_mean": 0.9465836685331215,
+        "gnn_val_auc": 0.7782761453815138,
+        "secondary_val_auc": 0.9637358127480674,
+        "suite_name": "thesis_m7_v4_graphpropblend082",
+        "summary_path": "experiment/outputs/ellipticpp_transactions/training/blends/thesis_m7_v4_graphpropblend082_epp/summary.json",
+        "description": "Current official thesis result with GNN-primary fixed logit fusion (alpha=0.82).",
+        "graph_config_overrides": []
+      }
+    ]
+  },
+  "long_rows": [
+    {
+      "group": "backbone_ablation",
+      "setting_id": "official_backbone",
+      "setting_label": "Official Backbone",
+      "dataset": "xinye_dgraph",
+      "suite_name": "thesis_m7_v4_unified_e8",
+      "val_auc_mean": 0.7764386280758079,
+      "delta_vs_official_backbone": 0.0,
+      "summary_path": "experiment/outputs/training/models/m7_utpm/thesis_m7_v4_unified_e8_xy/summary.json",
+      "graph_config_overrides": "[]",
+      "description": "Unified pure m7_utpm backbone without decision-layer correction."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "official_backbone",
+      "setting_label": "Official Backbone",
+      "dataset": "elliptic_transactions",
+      "suite_name": "thesis_m7_v4_unified_e8",
+      "val_auc_mean": 0.8126351671771074,
+      "delta_vs_official_backbone": 0.0,
+      "summary_path": "experiment/outputs/elliptic_transactions/training/models/m7_utpm/thesis_m7_v4_unified_e8_et/summary.json",
+      "graph_config_overrides": "[]",
+      "description": "Unified pure m7_utpm backbone without decision-layer correction."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "official_backbone",
+      "setting_label": "Official Backbone",
+      "dataset": "ellipticpp_transactions",
+      "suite_name": "thesis_m7_v4_unified_e8",
+      "val_auc_mean": 0.7776108623312455,
+      "delta_vs_official_backbone": 0.0,
+      "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m7_utpm/thesis_m7_v4_unified_e8_epp/summary.json",
+      "graph_config_overrides": "[]",
+      "description": "Unified pure m7_utpm backbone without decision-layer correction."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_prototype",
+      "setting_label": "No Prototype Memory",
+      "dataset": "xinye_dgraph",
+      "suite_name": "thesis_m7_v4_ablate_noprototype",
+      "val_auc_mean": 0.7773908092062629,
+      "delta_vs_official_backbone": 0.0009521811304550321,
+      "summary_path": "experiment/outputs/training/models/m7_utpm/thesis_m7_v4_ablate_noprototype_xy/summary.json",
+      "graph_config_overrides": "[\"prototype_multiclass_num_classes=0\", \"prototype_loss_weight=0.0\", \"prototype_loss_weight_schedule=none\", \"prototype_loss_min_weight=0.0\", \"prototype_neighbor_blend=0.0\", \"prototype_global_blend=0.0\", \"prototype_consistency_weight=0.0\", \"prototype_separation_weight=0.0\"]",
+      "description": "Disable prototype loss and prototype memory blending inside the GNN backbone."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_prototype",
+      "setting_label": "No Prototype Memory",
+      "dataset": "elliptic_transactions",
+      "suite_name": "thesis_m7_v4_ablate_noprototype",
+      "val_auc_mean": 0.8122749570009832,
+      "delta_vs_official_backbone": -0.00036021017612419826,
+      "summary_path": "experiment/outputs/elliptic_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_noprototype_et/summary.json",
+      "graph_config_overrides": "[\"prototype_multiclass_num_classes=0\", \"prototype_loss_weight=0.0\", \"prototype_loss_weight_schedule=none\", \"prototype_loss_min_weight=0.0\", \"prototype_neighbor_blend=0.0\", \"prototype_global_blend=0.0\", \"prototype_consistency_weight=0.0\", \"prototype_separation_weight=0.0\"]",
+      "description": "Disable prototype loss and prototype memory blending inside the GNN backbone."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_prototype",
+      "setting_label": "No Prototype Memory",
+      "dataset": "ellipticpp_transactions",
+      "suite_name": "thesis_m7_v4_ablate_noprototype",
+      "val_auc_mean": 0.7783652133308666,
+      "delta_vs_official_backbone": 0.0007543509996210673,
+      "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_noprototype_epp/summary.json",
+      "graph_config_overrides": "[\"prototype_multiclass_num_classes=0\", \"prototype_loss_weight=0.0\", \"prototype_loss_weight_schedule=none\", \"prototype_loss_min_weight=0.0\", \"prototype_neighbor_blend=0.0\", \"prototype_global_blend=0.0\", \"prototype_consistency_weight=0.0\", \"prototype_separation_weight=0.0\"]",
+      "description": "Disable prototype loss and prototype memory blending inside the GNN backbone."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_pseudocontrast",
+      "setting_label": "No Pseudo-Contrastive Mining",
+      "dataset": "xinye_dgraph",
+      "suite_name": "thesis_m7_v4_ablate_nopseudocontrast",
+      "val_auc_mean": 0.7758603987980839,
+      "delta_vs_official_backbone": -0.0005782292777239961,
+      "summary_path": "experiment/outputs/training/models/m7_utpm/thesis_m7_v4_ablate_nopseudocontrast_xy/summary.json",
+      "graph_config_overrides": "[\"pseudo_contrastive_weight=0.0\"]",
+      "description": "Disable temporal pseudo-contrastive mining inside the GNN backbone."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_pseudocontrast",
+      "setting_label": "No Pseudo-Contrastive Mining",
+      "dataset": "elliptic_transactions",
+      "suite_name": "thesis_m7_v4_ablate_nopseudocontrast",
+      "val_auc_mean": 0.7949266007388803,
+      "delta_vs_official_backbone": -0.017708566438227047,
+      "summary_path": "experiment/outputs/elliptic_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_nopseudocontrast_et/summary.json",
+      "graph_config_overrides": "[\"pseudo_contrastive_weight=0.0\"]",
+      "description": "Disable temporal pseudo-contrastive mining inside the GNN backbone."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_pseudocontrast",
+      "setting_label": "No Pseudo-Contrastive Mining",
+      "dataset": "ellipticpp_transactions",
+      "suite_name": "thesis_m7_v4_ablate_nopseudocontrast",
+      "val_auc_mean": 0.777350323431778,
+      "delta_vs_official_backbone": -0.00026053889946753284,
+      "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_nopseudocontrast_epp/summary.json",
+      "graph_config_overrides": "[\"pseudo_contrastive_weight=0.0\"]",
+      "description": "Disable temporal pseudo-contrastive mining inside the GNN backbone."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_drift_residual",
+      "setting_label": "No Drift Residual Context",
+      "dataset": "xinye_dgraph",
+      "suite_name": "thesis_m7_v4_ablate_nodriftresidual",
+      "val_auc_mean": 0.7772436092779985,
+      "delta_vs_official_backbone": 0.0008049812021906355,
+      "summary_path": "experiment/outputs/training/models/m7_utpm/thesis_m7_v4_ablate_nodriftresidual_xy/summary.json",
+      "graph_config_overrides": "[\"target_context_fusion=none\", \"target_time_adapter_strength=0.0\", \"target_time_expert_entropy_weight=0.0\", \"normal_bucket_align_weight=0.0\", \"normal_bucket_adv_weight=0.0\", \"context_residual_scale=0.0\", \"context_residual_clip=0.0\", \"context_residual_budget=0.0\", \"context_residual_budget_weight=0.0\", \"context_residual_budget_schedule=none\", \"context_residual_budget_min_weight=0.0\", \"context_residual_budget_release_epochs=0\", \"context_residual_budget_release_delay_epochs=0\"]",
+      "description": "Disable target-context residual fusion and time-adapter drift correction."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_drift_residual",
+      "setting_label": "No Drift Residual Context",
+      "dataset": "elliptic_transactions",
+      "suite_name": "thesis_m7_v4_ablate_nodriftresidual",
+      "val_auc_mean": 0.8163543094749718,
+      "delta_vs_official_backbone": 0.0037191422978644084,
+      "summary_path": "experiment/outputs/elliptic_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_nodriftresidual_et/summary.json",
+      "graph_config_overrides": "[\"target_context_fusion=none\", \"target_time_adapter_strength=0.0\", \"target_time_expert_entropy_weight=0.0\", \"normal_bucket_align_weight=0.0\", \"normal_bucket_adv_weight=0.0\", \"context_residual_scale=0.0\", \"context_residual_clip=0.0\", \"context_residual_budget=0.0\", \"context_residual_budget_weight=0.0\", \"context_residual_budget_schedule=none\", \"context_residual_budget_min_weight=0.0\", \"context_residual_budget_release_epochs=0\", \"context_residual_budget_release_delay_epochs=0\"]",
+      "description": "Disable target-context residual fusion and time-adapter drift correction."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_drift_residual",
+      "setting_label": "No Drift Residual Context",
+      "dataset": "ellipticpp_transactions",
+      "suite_name": "thesis_m7_v4_ablate_nodriftresidual",
+      "val_auc_mean": 0.7790953281537931,
+      "delta_vs_official_backbone": 0.001484465822547576,
+      "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m7_utpm/thesis_m7_v4_ablate_nodriftresidual_epp/summary.json",
+      "graph_config_overrides": "[\"target_context_fusion=none\", \"target_time_adapter_strength=0.0\", \"target_time_expert_entropy_weight=0.0\", \"normal_bucket_align_weight=0.0\", \"normal_bucket_adv_weight=0.0\", \"context_residual_scale=0.0\", \"context_residual_clip=0.0\", \"context_residual_budget=0.0\", \"context_residual_budget_weight=0.0\", \"context_residual_budget_schedule=none\", \"context_residual_budget_min_weight=0.0\", \"context_residual_budget_release_epochs=0\", \"context_residual_budget_release_delay_epochs=0\"]",
+      "description": "Disable target-context residual fusion and time-adapter drift correction."
+    },
+    {
+      "group": "decision_reference",
+      "setting_id": "official_gnn_primary_blend",
+      "setting_label": "Official GNN-primary Blend",
+      "dataset": "xinye_dgraph",
+      "suite_name": "thesis_m7_v4_graphpropblend082",
+      "val_auc_mean": 0.7952929882597335,
+      "delta_vs_official_backbone": 0.01885436018392561,
+      "summary_path": "experiment/outputs/training/blends/thesis_m7_v4_graphpropblend082_xy/summary.json",
+      "graph_config_overrides": "[]",
+      "description": "Current official thesis result with GNN-primary fixed logit fusion (alpha=0.82)."
+    },
+    {
+      "group": "decision_reference",
+      "setting_id": "official_gnn_primary_blend",
+      "setting_label": "Official GNN-primary Blend",
+      "dataset": "elliptic_transactions",
+      "suite_name": "thesis_m7_v4_graphpropblend082",
+      "val_auc_mean": 0.949435862593804,
+      "delta_vs_official_backbone": 0.1368006954166966,
+      "summary_path": "experiment/outputs/elliptic_transactions/training/blends/thesis_m7_v4_graphpropblend082_et/summary.json",
+      "graph_config_overrides": "[]",
+      "description": "Current official thesis result with GNN-primary fixed logit fusion (alpha=0.82)."
+    },
+    {
+      "group": "decision_reference",
+      "setting_id": "official_gnn_primary_blend",
+      "setting_label": "Official GNN-primary Blend",
+      "dataset": "ellipticpp_transactions",
+      "suite_name": "thesis_m7_v4_graphpropblend082",
+      "val_auc_mean": 0.9465836685331215,
+      "delta_vs_official_backbone": 0.16897280620187594,
+      "summary_path": "experiment/outputs/ellipticpp_transactions/training/blends/thesis_m7_v4_graphpropblend082_epp/summary.json",
+      "graph_config_overrides": "[]",
+      "description": "Current official thesis result with GNN-primary fixed logit fusion (alpha=0.82)."
+    }
+  ],
+  "macro_rows": [
+    {
+      "group": "backbone_ablation",
+      "setting_id": "official_backbone",
+      "setting_label": "Official Backbone",
+      "suite_name": "thesis_m7_v4_unified_e8",
+      "macro_val_auc": 0.7888948858613869,
+      "description": "Unified pure m7_utpm backbone without decision-layer correction."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_prototype",
+      "setting_label": "No Prototype Memory",
+      "suite_name": "thesis_m7_v4_ablate_noprototype",
+      "macro_val_auc": 0.7893436598460376,
+      "description": "Disable prototype loss and prototype memory blending inside the GNN backbone."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_pseudocontrast",
+      "setting_label": "No Pseudo-Contrastive Mining",
+      "suite_name": "thesis_m7_v4_ablate_nopseudocontrast",
+      "macro_val_auc": 0.7827124409895808,
+      "description": "Disable temporal pseudo-contrastive mining inside the GNN backbone."
+    },
+    {
+      "group": "backbone_ablation",
+      "setting_id": "ablate_no_drift_residual",
+      "setting_label": "No Drift Residual Context",
+      "suite_name": "thesis_m7_v4_ablate_nodriftresidual",
+      "macro_val_auc": 0.7908977489689212,
+      "description": "Disable target-context residual fusion and time-adapter drift correction."
+    },
+    {
+      "group": "decision_reference",
+      "setting_id": "official_gnn_primary_blend",
+      "setting_label": "Official GNN-primary Blend",
+      "suite_name": "thesis_m7_v4_graphpropblend082",
+      "macro_val_auc": 0.8971041731288864,
+      "description": "Reference official hybrid result for comparison with pure-backbone ablations."
+    }
+  ]
+}

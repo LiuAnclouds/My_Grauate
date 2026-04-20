@@ -17,6 +17,7 @@
 | [Experiment Results](docs/thesis_experiments.md) | 主结果、3 个 baseline、消融矩阵、设计取舍 |
 | [Mainline Guide](experiment/training/README_thesis_mainline.md) | 训练命令、复现实验、模块级 ablation 命令 |
 | [Official Result JSON](experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/summary.json) | 官方三数据集结果文件 |
+| [Backbone Ablation Report](experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md) | 主干三模块 tri-dataset 官方消融汇总 |
 | [Leakage Audit](experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/leakage_audit.md) | 硬泄露审计与 split 隔离证据 |
 
 ## Official Thesis Contract
@@ -37,9 +38,9 @@
 
 | Dataset | Official GNN Backbone | Secondary-only (non-GNN graphprop) | Official GNN-primary Blend |
 | --- | ---: | ---: | ---: |
-| XinYe DGraph | 0.777741 | 0.794888 | 0.795293 |
-| Elliptic | 0.801914 | 0.968319 | 0.949436 |
-| Elliptic++ | 0.778276 | 0.963736 | 0.946584 |
+| XinYe DGraph | 0.776439 | 0.794888 | 0.795293 |
+| Elliptic | 0.812635 | 0.968319 | 0.949436 |
+| Elliptic++ | 0.777611 | 0.963736 | 0.946584 |
 
 结果解释必须说明白：
 
@@ -52,7 +53,7 @@
 | Model | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Role |
 | --- | ---: | ---: | ---: | ---: | --- |
 | Historical strong GNN `m5_temporal_graphsage` | 0.794628 | 0.793990 | 0.782830 | 0.790483 | 历史强基线 |
-| Official pure `m7_utpm` | 0.777741 | 0.801914 | 0.778276 | 0.785977 | 去掉残差分支后的纯主干 |
+| Official pure `m7_utpm` | 0.776439 | 0.812635 | 0.777611 | 0.788895 | 去掉残差分支后的纯主干 |
 | Weak hybrid `alpha=0.35` | 0.784396 | 0.841749 | 0.838915 | 0.821687 | 说明融合策略太弱时收益不稳定 |
 | Official GNN-primary blend `alpha=0.82` | 0.795293 | 0.949436 | 0.946584 | 0.897104 | 当前 official thesis result |
 
@@ -71,6 +72,8 @@
 - `utpm_unified` 是统一输入契约，不计入 ablation 模块数。
 - 前 3 项属于 GNN 主干内部创新。
 - 后 2 项属于 GNN 主导的决策层创新。
+- 主干三模块的官方 tri-dataset 消融已经落盘在 [Backbone Ablation Report](experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md)。
+- 当前单种子 `phase1_val` 下，`pseudo-contrastive temporal mining` 是最明显有效的主干模块；`prototype memory` 和 `drift residual target context` 更接近弱正则/上下文校准，而不是主要 AUC 驱动项。
 
 ## Hard-Leakage Audit
 

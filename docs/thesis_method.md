@@ -5,6 +5,7 @@
 - [Back to README](../README.md)
 - [Experiment Table](thesis_experiments.md)
 - [Official Result JSON](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/summary.json)
+- [Backbone Ablation Report](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md)
 - [Leakage Audit](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/leakage_audit.md)
 
 ## 1. Problem Setting
@@ -74,6 +75,12 @@
 - 但也不应该夸成“提出了一个全新的基础图神经网络家族”。
 - 更准确的表述是：这是一个 thesis-level 的统一动态图反欺诈架构，把现代时序 GNN 主干、原型记忆、伪对比约束和 graphprop 残差校正整合到了同一 leakage-safe 合同里。
 
+当前官方 tri-dataset 主干消融的直接证据是：
+
+- `pseudo-contrastive temporal mining` 去掉后宏平均从 `0.788895` 降到 `0.782712`，是最明确有效的主干模块。
+- `prototype memory` 与 `drift residual target context` 在当前单种子 `phase1_val` 上更接近弱正则/上下文校准，数值变化都在 `0.002` 量级内。
+- 决策层两项创新 `graphprop residual head + fixed logit fusion` 仍然是 official result 大幅跃升的主要来源。
+
 ## 5. Why The Second Column Is Stronger But Not The Official Main Result
 
 这个问题必须说清楚，因为现在 GitHub 上最容易被误读的地方就在这里。
@@ -103,9 +110,9 @@
 
 | Dataset | Pure `m7_utpm` | Official GNN-primary Blend | Gain |
 | --- | ---: | ---: | ---: |
-| XinYe DGraph | 0.777741 | 0.795293 | +0.017552 |
-| Elliptic | 0.801914 | 0.949436 | +0.147522 |
-| Elliptic++ | 0.778276 | 0.946584 | +0.168308 |
+| XinYe DGraph | 0.776439 | 0.795293 | +0.018854 |
+| Elliptic | 0.812635 | 0.949436 | +0.136801 |
+| Elliptic++ | 0.777611 | 0.946584 | +0.168973 |
 
 因此，graphprop 分支不是替代 GNN，而是官方主架构中的残差校正层。
 
@@ -149,6 +156,13 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_su
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py \
   --suite-name thesis_m7_v4_graphpropblend082 \
   --blend-alpha 0.82
+```
+
+训练官方主干三模块消融并导出可画图汇总：
+
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_backbone_ablation.py \
+  --skip-existing
 ```
 
 生成硬泄露审计：

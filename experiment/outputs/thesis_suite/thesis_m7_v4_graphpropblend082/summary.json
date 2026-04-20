@@ -1,0 +1,64 @@
+{
+  "suite_name": "thesis_m7_v4_graphpropblend082",
+  "family": "thesis_gnn_primary_hybrid",
+  "blend_alpha": 0.82,
+  "base_run_name_template": "thesis_{dataset_short}_m7_v4_unified_s42_e8",
+  "dataset_isolation": true,
+  "cross_dataset_training": false,
+  "same_architecture_across_datasets": true,
+  "same_secondary_hyperparameters_across_datasets": true,
+  "split_guardrails": [
+    "Every dataset loads only its own saved v4 backbone run.",
+    "Every dataset fits its own graphprop residual branch on phase1_train only.",
+    "No cross-dataset prediction bundle or feature cache is reused."
+  ],
+  "secondary_model": {
+    "family": "xgboost_gpu_multiclass_bg_graphprop",
+    "n_estimators": 3000,
+    "learning_rate": 0.03,
+    "max_depth": 6,
+    "min_child_weight": 3.0,
+    "subsample": 0.95,
+    "colsample_bytree": 0.95,
+    "gamma": 0.0,
+    "background_weight": 0.15,
+    "prop_half_life_days": [
+      20.0
+    ]
+  },
+  "results": [
+    {
+      "dataset": "xinye_dgraph",
+      "dataset_short": "xy",
+      "base_run_dir": "experiment/outputs/training/models/m7_utpm/thesis_xy_m7_v4_unified_s42_e8",
+      "secondary_run_dir": "experiment/outputs/training/models/xgboost_gpu/thesis_graphprop_rr0215_hpe_xy",
+      "run_name": "thesis_m7_v4_graphpropblend082_xy",
+      "summary_path": "experiment/outputs/training/blends/thesis_m7_v4_graphpropblend082_xy/summary.json",
+      "gnn_val_auc": 0.77774082190298,
+      "secondary_val_auc": 0.7948876922381168,
+      "val_auc_mean": 0.7952929882597335
+    },
+    {
+      "dataset": "elliptic_transactions",
+      "dataset_short": "et",
+      "base_run_dir": "experiment/outputs/elliptic_transactions/training/models/m7_utpm/thesis_et_m7_v4_unified_s42_e8",
+      "secondary_run_dir": "experiment/outputs/elliptic_transactions/training/models/xgboost_gpu/thesis_graphprop_rr0215_hpe_et",
+      "run_name": "thesis_m7_v4_graphpropblend082_et",
+      "summary_path": "experiment/outputs/elliptic_transactions/training/blends/thesis_m7_v4_graphpropblend082_et/summary.json",
+      "gnn_val_auc": 0.8019135875277404,
+      "secondary_val_auc": 0.9683194796654438,
+      "val_auc_mean": 0.949435862593804
+    },
+    {
+      "dataset": "ellipticpp_transactions",
+      "dataset_short": "epp",
+      "base_run_dir": "experiment/outputs/ellipticpp_transactions/training/models/m7_utpm/thesis_epp_m7_v4_unified_s42_e8",
+      "secondary_run_dir": "experiment/outputs/ellipticpp_transactions/training/models/xgboost_gpu/thesis_graphprop_rr0215_hpe_epp",
+      "run_name": "thesis_m7_v4_graphpropblend082_epp",
+      "summary_path": "experiment/outputs/ellipticpp_transactions/training/blends/thesis_m7_v4_graphpropblend082_epp/summary.json",
+      "gnn_val_auc": 0.7782761453815138,
+      "secondary_val_auc": 0.9637358127480674,
+      "val_auc_mean": 0.9465836685331215
+    }
+  ]
+}
