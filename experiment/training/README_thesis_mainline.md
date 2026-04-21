@@ -5,9 +5,9 @@
 - [Repository README](../../README.md)
 - [Method Overview](../../docs/thesis_method.md)
 - [Experiment Table](../../docs/thesis_experiments.md)
-- [Recommended Result JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json)
-- [Pure Teacher Backbone JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json)
-- [Recommended Leakage Audit](../outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.md)
+- [Recommended Result JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999/summary.json)
+- [Pure Teacher Backbone JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1/summary.json)
+- [Recommended Leakage Audit](../outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999/leakage_audit.md)
 - [Dataset Hparam Profile](configs/thesis_dataset_hparams.search_v1.json)
 
 ## Recommended Surface
@@ -27,7 +27,7 @@
 
 因此：
 
-- `thesis_m8_utgt_teacher_gnnprimary04999` 是论文主结果
+- `thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999` 是论文主结果
 - `thesis_m8_utgt_graphpropblend091` 只是 appendix
 
 ## Unified Architecture, Separate Tuning
@@ -73,7 +73,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_ma
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py \
-  --suite-name thesis_m8_utgt_teacher_e8_s42_v1 \
+  --suite-name thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1 \
   --model m8_utgt \
   --preset utgt_temporal_shift_teacher_v1 \
   --feature-profile utpm_unified \
@@ -85,15 +85,15 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_su
 
 输出：
 
-- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json`
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1/summary.json`
 
 ### 3. Run Recommended GNN-primary Blend
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py \
-  --suite-name thesis_m8_utgt_teacher_gnnprimary04999 \
+  --suite-name thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999 \
   --base-model m8_utgt \
-  --base-run-name-template thesis_m8_utgt_teacher_e8_s42_v1_{dataset_short} \
+  --base-run-name-template thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1_{dataset_short} \
   --dataset-hparams experiment/training/configs/thesis_dataset_hparams.search_v1.json \
   --blend-alpha 0.4999 \
   --skip-existing
@@ -101,7 +101,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hy
 
 输出：
 
-- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json`
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999/summary.json`
 
 ### 4. Run AUC-first Appendix
 
@@ -123,33 +123,33 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hy
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_leakage.py \
-  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json
+  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999/summary.json
 ```
 
 输出：
 
-- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.md`
-- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.json`
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999/leakage_audit.md`
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999/leakage_audit.json`
 
 ## Current Recommended Metrics
 
 推荐主线当前验证集 AUC：
 
-- XinYe: `0.7949135994047345`
-- Elliptic: `0.8910933262455981`
-- Elliptic++: `0.8934221198737458`
+- XinYe: `0.7960912312634558`
+- Elliptic: `0.8976530494361453`
+- Elliptic++: `0.8991860885961518`
 
 纯 teacher-guided GNN：
 
-- XinYe: `0.7831006345660136`
-- Elliptic: `0.7853975419669594`
-- Elliptic++: `0.783195281377972`
+- XinYe: `0.7923906331620709`
+- Elliptic: `0.784233801549338`
+- Elliptic++: `0.7837331225324542`
 
 从这两组数可以直接说明：
 
 - teacher guidance 本身有效
 - fixed logit residual correction 也有效
-- 最终主线确实保持了 GNN 为主，同时把 XinYe 推到 `0.7947+`
+- 最终主线确实保持了 GNN 为主，同时把 XinYe 推到 `0.7960+`
 
 ## Legacy Supporting Experiments
 
