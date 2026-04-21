@@ -15,6 +15,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from experiment.datasets.registry import DATASET_ENV_VAR, get_dataset_spec
+from experiment.training.thesis_hparam_profiles import (
+    MainlineDatasetHparams,
+    load_thesis_hparam_profile,
+    resolve_mainline_dataset_hparams,
+)
 from experiment.training.thesis_contract import (
     OFFICIAL_BACKBONE_FEATURE_PROFILE,
     OFFICIAL_BACKBONE_MODEL,
@@ -104,6 +109,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--dataset-hparams",
+        type=Path,
+        default=None,
+        help=(
+            "Optional JSON profile that keeps the architecture fixed but allows dataset-local "
+            "hyperparameter overrides such as attr_proj_dim, hidden_dim, fanouts, or blend weights."
+        ),
+    )
+    parser.add_argument(
         "--device",
         default="cuda",
         help="Torch device passed through to the mainline trainer.",
@@ -138,6 +152,24 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=list(OFFICIAL_MAINLINE_FANOUTS),
         help="Neighbor fanouts used for every dataset in this suite.",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=None,
+        help="Optional learning-rate override applied to every dataset unless the profile overrides it.",
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=None,
+        help="Optional weight-decay override applied to every dataset unless the profile overrides it.",
+    )
+    parser.add_argument(
+        "--dropout",
+        type=float,
+        default=None,
+        help="Optional dropout override applied to every dataset unless the profile overrides it.",
     )
     parser.add_argument(
         "--seeds",
@@ -214,7 +246,11 @@ def _dataset_training_root(dataset_name: str) -> Path:
     return outputs_root / spec.output_namespace / "training"
 
 
-def _run_name_for_dataset(args: argparse.Namespace, dataset_name: str) -> str:
+def _run_name_for_dataset(
+    args: argparse.Namespace,
+    dataset_name: str,
+    settings: MainlineDatasetHparams,
+) -> str:
     dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
     return str(args.run_name_template).format(
         suite_name=args.suite_name,
@@ -222,11 +258,16 @@ def _run_name_for_dataset(args: argparse.Namespace, dataset_name: str) -> str:
         dataset_short=dataset_short,
         model=args.model,
         preset=args.preset,
-        epochs=args.epochs,
+        epochs=settings.epochs,
     )
 
 
-def _format_dataset_template(template: str, args: argparse.Namespace, dataset_name: str) -> str:
+def _format_dataset_template(
+    template: str,
+    args: argparse.Namespace,
+    dataset_name: str,
+    settings: MainlineDatasetHparams,
+) -> str:
     dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
     return str(template).format(
         suite_name=args.suite_name,
@@ -234,7 +275,7 @@ def _format_dataset_template(template: str, args: argparse.Namespace, dataset_na
         dataset_short=dataset_short,
         model=args.model,
         preset=args.preset,
-        epochs=args.epochs,
+        epochs=settings.epochs,
     )
 
 
@@ -242,20 +283,24 @@ def _prediction_signal_run_dir(
     *,
     args: argparse.Namespace,
     dataset_name: str,
+    settings: MainlineDatasetHparams,
     run_name_template: str,
 ) -> Path:
-    run_name = _format_dataset_template(run_name_template, args, dataset_name)
+    run_name = _format_dataset_template(run_name_template, args, dataset_name, settings)
     return _dataset_training_root(dataset_name) / "models" / str(args.teacher_signal_model_family) / run_name
 
 
-def _feature_dir_for_dataset(args: argparse.Namespace, dataset_name: str) -> Path | None:
-    if args.feature_subdir:
-        return _dataset_training_root(dataset_name) / str(args.feature_subdir)
-    return args.feature_dir
+def _feature_dir_for_dataset(dataset_name: str, settings: MainlineDatasetHparams) -> Path | None:
+    if settings.feature_subdir:
+        return _dataset_training_root(dataset_name) / str(settings.feature_subdir)
+    return settings.feature_dir
 
 
-def _command_preview(command: list[str], dataset_name: str) -> str:
-    return f"{DATASET_ENV_VAR}={shlex.quote(dataset_name)} " + shlex.join(command)
+def _command_preview(command: list[str], dataset_name: str, *, extra_env: dict[str, str] | None = None) -> str:
+    env_assignments = [f"{DATASET_ENV_VAR}={shlex.quote(dataset_name)}"]
+    for key in sorted((extra_env or {}).keys()):
+        env_assignments.append(f"{key}={shlex.quote(str(extra_env[key]))}")
+    return " ".join(env_assignments) + " " + shlex.join(command)
 
 
 def _build_feature_command(*, feature_dir: Path | None) -> list[str]:
@@ -275,9 +320,10 @@ def _build_train_command(
     *,
     args: argparse.Namespace,
     dataset_name: str,
+    settings: MainlineDatasetHparams,
     run_name: str,
 ) -> list[str]:
-    feature_dir = _feature_dir_for_dataset(args, dataset_name)
+    feature_dir = _feature_dir_for_dataset(dataset_name, settings)
     command: list[str] = [
         sys.executable,
         str(REPO_ROOT / "experiment" / "training" / "run_thesis_mainline.py"),
@@ -293,20 +339,26 @@ def _build_train_command(
         "--device",
         args.device,
         "--epochs",
-        str(args.epochs),
+        str(settings.epochs),
         "--batch-size",
-        str(args.batch_size),
+        str(settings.batch_size),
         "--hidden-dim",
-        str(args.hidden_dim),
+        str(settings.hidden_dim),
         "--rel-dim",
-        str(args.rel_dim),
+        str(settings.rel_dim),
         "--fanouts",
-        *[str(v) for v in args.fanouts],
+        *[str(v) for v in settings.fanouts],
         "--seeds",
         *[str(v) for v in args.seeds],
     ]
     if feature_dir is not None:
         command.extend(["--feature-dir", str(feature_dir)])
+    if settings.learning_rate is not None:
+        command.extend(["--learning-rate", str(settings.learning_rate)])
+    if settings.weight_decay is not None:
+        command.extend(["--weight-decay", str(settings.weight_decay)])
+    if settings.dropout is not None:
+        command.extend(["--dropout", str(settings.dropout)])
     if args.target_context_prediction_run_name_template:
         command.extend(
             [
@@ -315,6 +367,7 @@ def _build_train_command(
                     _prediction_signal_run_dir(
                         args=args,
                         dataset_name=dataset_name,
+                        settings=settings,
                         run_name_template=args.target_context_prediction_run_name_template,
                     )
                 ),
@@ -330,23 +383,32 @@ def _build_train_command(
                     _prediction_signal_run_dir(
                         args=args,
                         dataset_name=dataset_name,
+                        settings=settings,
                         run_name_template=args.teacher_distill_prediction_run_name_template,
                     )
                 ),
             ]
         )
-    for override in args.graph_config_override:
+    for override in settings.graph_config_overrides:
         command.extend(["--graph-config-override", str(override)])
     return command
 
 
-def _run_command(command: list[str], dataset_name: str, *, dry_run: bool) -> None:
-    preview = _command_preview(command, dataset_name)
+def _run_command(
+    command: list[str],
+    dataset_name: str,
+    *,
+    extra_env: dict[str, str] | None,
+    dry_run: bool,
+) -> None:
+    preview = _command_preview(command, dataset_name, extra_env=extra_env)
     print(preview)
     if dry_run:
         return
     env = os.environ.copy()
     env[DATASET_ENV_VAR] = dataset_name
+    for key, value in (extra_env or {}).items():
+        env[str(key)] = str(value)
     subprocess.run(command, cwd=REPO_ROOT, env=env, check=True)
 
 
@@ -395,6 +457,7 @@ def _format_metric(value: Any) -> str:
 
 def main() -> None:
     args = parse_args()
+    profile = load_thesis_hparam_profile(args.dataset_hparams)
     if args.preset is None:
         if str(args.model) == "m5_temporal_graphsage":
             args.preset = "unified_baseline"
@@ -431,21 +494,39 @@ def main() -> None:
             args.target_context_prediction_transform = OFFICIAL_TEACHER_SIGNAL_TRANSFORM
 
     results: list[dict[str, Any]] = []
+    resolved_hparams_by_dataset: dict[str, dict[str, Any]] = {}
     for dataset_name in args.datasets:
         _ = get_dataset_spec(dataset_name)
-        run_name = _run_name_for_dataset(args, dataset_name)
+        dataset_hparams = resolve_mainline_dataset_hparams(
+            args=args,
+            dataset_name=dataset_name,
+            profile=profile,
+        )
+        resolved_hparams_by_dataset[dataset_name] = dataset_hparams.to_summary_payload()
+        run_name = _run_name_for_dataset(args, dataset_name, dataset_hparams)
         summary_target = _dataset_training_root(dataset_name) / "models" / args.model / run_name / "summary.json"
         if args.skip_existing and summary_target.exists():
             summary_path, summary_payload = _load_run_summary(dataset_name, args.model, run_name)
         else:
             if args.build_features:
                 _run_command(
-                    _build_feature_command(feature_dir=_feature_dir_for_dataset(args, dataset_name)),
+                    _build_feature_command(feature_dir=_feature_dir_for_dataset(dataset_name, dataset_hparams)),
                     dataset_name,
+                    extra_env=dataset_hparams.feature_env,
                     dry_run=args.dry_run,
                 )
-            train_command = _build_train_command(args=args, dataset_name=dataset_name, run_name=run_name)
-            _run_command(train_command, dataset_name, dry_run=args.dry_run)
+            train_command = _build_train_command(
+                args=args,
+                dataset_name=dataset_name,
+                settings=dataset_hparams,
+                run_name=run_name,
+            )
+            _run_command(
+                train_command,
+                dataset_name,
+                extra_env=dataset_hparams.feature_env,
+                dry_run=args.dry_run,
+            )
             if args.dry_run:
                 continue
             summary_path, summary_payload = _load_run_summary(dataset_name, args.model, run_name)
@@ -458,6 +539,7 @@ def main() -> None:
                 "val_auc_mean": summary_payload.get("val_auc_mean"),
                 "test_auc_mean": summary_payload.get("test_auc_mean"),
                 "external_auc_mean": summary_payload.get("external_auc_mean"),
+                "hparams": dataset_hparams.to_summary_payload(),
             }
         )
 
@@ -471,9 +553,8 @@ def main() -> None:
         "feature_profile": args.feature_profile,
         "feature_dir": None if args.feature_dir is None else str(args.feature_dir),
         "feature_subdir": args.feature_subdir,
-        "feature_env_overrides": {
-            "GRADPROJ_UTPM_ATTR_PROJ_DIM": os.environ.get("GRADPROJ_UTPM_ATTR_PROJ_DIM"),
-        },
+        "dataset_hparams_path": None if profile is None else str(profile.path.relative_to(REPO_ROOT)),
+        "feature_env_overrides": {"GRADPROJ_UTPM_ATTR_PROJ_DIM": os.environ.get("GRADPROJ_UTPM_ATTR_PROJ_DIM")},
         "graph_config_overrides": [str(v) for v in args.graph_config_override],
         "teacher_signal_model_family": args.teacher_signal_model_family,
         "target_context_prediction_run_name_template": args.target_context_prediction_run_name_template,
@@ -484,7 +565,8 @@ def main() -> None:
         "same_architecture_across_datasets": True,
         "split_guardrails": [
             "Each dataset is trained separately under its own dataset env and output namespace.",
-            "All datasets share the same model family, feature contract, and training protocol.",
+            "All datasets share the same model family, feature contract, and teacher/decision protocol.",
+            "Dataset-local tuning is limited to feature capacity, model capacity, optimization, and low-level regularization hyperparameters.",
             "No dataset contributes labels, predictions, or normalization statistics to another dataset.",
         ],
         "epochs": int(args.epochs),
@@ -492,7 +574,11 @@ def main() -> None:
         "hidden_dim": int(args.hidden_dim),
         "rel_dim": int(args.rel_dim),
         "fanouts": [int(v) for v in args.fanouts],
+        "learning_rate": None if args.learning_rate is None else float(args.learning_rate),
+        "weight_decay": None if args.weight_decay is None else float(args.weight_decay),
+        "dropout": None if args.dropout is None else float(args.dropout),
         "seeds": [int(v) for v in args.seeds],
+        "dataset_hparams": resolved_hparams_by_dataset,
         "results": results,
     }
     summary_path = _write_suite_summary(suite_name=args.suite_name, payload=payload)

@@ -17,6 +17,7 @@
 | [Method Overview](docs/thesis_method.md) | 统一架构、teacher 含义、为什么这不是“两套模型” |
 | [Experiment Results](docs/thesis_experiments.md) | 主结果、对比模型、消融实验、取舍说明 |
 | [Mainline Guide](experiment/training/README_thesis_mainline.md) | 复现实验命令、推荐套件、legacy 支撑实验 |
+| [Dataset Hparam Profile](experiment/training/configs/thesis_dataset_hparams.search_v1.json) | 统一架构下的数据集级调参模板 |
 | [Recommended Result JSON](experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json) | 当前推荐论文主结果 |
 | [Recommended Leakage Audit](experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.md) | 新主结果的硬泄露审计 |
 | [Pure Teacher Backbone JSON](experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json) | 不加决策层时的纯 GNN 结果 |
@@ -46,6 +47,22 @@
 - `teacher` 指的是训练期的只读教师信号，不是另一套主模型
 - `secondary-only` 指的是单独使用 graphprop 分支做预测，它不是 GNN
 - 当前论文主结果是 `GNN-primary blend 0.4999`，不是 `secondary-only`
+
+## Architecture vs Hyperparameters
+
+现在仓库明确区分两件事：
+
+- 必须统一：`utpm_unified` 输入契约、`m8_utgt` 主干家族、teacher 读法、secondary 家族、GNN-primary 决策公式
+- 可以按数据集调：`attr_proj_dim`、`hidden_dim`、`rel_dim`、`fanouts`、`batch_size`、`epochs`、`learning_rate`、`weight_decay`、`dropout`、低层 `graph_config_overrides`、`blend_alpha`
+
+统一批跑时优先使用：
+
+- [thesis_dataset_hparams.search_v1.json](experiment/training/configs/thesis_dataset_hparams.search_v1.json)
+
+这样做的含义是：
+
+- 不是三个数据集三套模型
+- 而是一套统一架构下的 dataset-local hyperparameter tuning
 
 ## Result Snapshot
 

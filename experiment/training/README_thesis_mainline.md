@@ -8,6 +8,7 @@
 - [Recommended Result JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json)
 - [Pure Teacher Backbone JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json)
 - [Recommended Leakage Audit](../outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.md)
+- [Dataset Hparam Profile](configs/thesis_dataset_hparams.search_v1.json)
 
 ## Recommended Surface
 
@@ -28,6 +29,16 @@
 
 - `thesis_m8_utgt_teacher_gnnprimary04999` 是论文主结果
 - `thesis_m8_utgt_graphpropblend091` 只是 appendix
+
+## Unified Architecture, Separate Tuning
+
+现在 thesis runner 支持一份统一 JSON profile 管理数据集级超参：
+
+- 架构固定：`m8_utgt` / `utpm_unified` / dataset-local teacher / GNN-primary hybrid
+- 允许分别调：`attr_proj_dim`、`hidden_dim`、`rel_dim`、`fanouts`、`batch_size`、`epochs`、`learning_rate`、`weight_decay`、`dropout`、`graph_config_overrides`、`blend_alpha`
+- 推荐 profile：`configs/thesis_dataset_hparams.search_v1.json`
+
+如果不传 `--dataset-hparams`，suite 会退回全局统一超参。
 
 ## What The Current Model Actually Is
 
@@ -66,6 +77,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_su
   --model m8_utgt \
   --preset utgt_temporal_shift_teacher_v1 \
   --feature-profile utpm_unified \
+  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.search_v1.json \
   --epochs 8 \
   --seeds 42 \
   --skip-existing
@@ -82,6 +94,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hy
   --suite-name thesis_m8_utgt_teacher_gnnprimary04999 \
   --base-model m8_utgt \
   --base-run-name-template thesis_m8_utgt_teacher_e8_s42_v1_{dataset_short} \
+  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.search_v1.json \
   --blend-alpha 0.4999 \
   --skip-existing
 ```
@@ -97,6 +110,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hy
   --suite-name thesis_m8_utgt_graphpropblend091 \
   --base-model m8_utgt \
   --base-run-name-template thesis_m8_utgt_e8_s42_v1_{dataset_short} \
+  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.search_v1.json \
   --blend-alpha 0.91 \
   --skip-existing
 ```
@@ -165,6 +179,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_ba
 - `experiment/training/run_thesis_mainline.py`
 - `experiment/training/run_thesis_suite.py`
 - `experiment/training/run_thesis_hybrid_suite.py`
+- `experiment/training/thesis_hparam_profiles.py`
 - `experiment/training/run_thesis_hybrid_blend.py`
 - `experiment/training/thesis_contract.py`
 - `experiment/training/thesis_presets.py`

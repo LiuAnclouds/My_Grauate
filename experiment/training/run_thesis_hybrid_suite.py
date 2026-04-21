@@ -15,6 +15,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from experiment.datasets.registry import DATASET_ENV_VAR, get_dataset_spec
+from experiment.training.thesis_hparam_profiles import (
+    load_thesis_hparam_profile,
+    resolve_hybrid_dataset_hparams,
+)
 from experiment.training.thesis_contract import (
     OFFICIAL_HYBRID_BASE_MODEL,
     OFFICIAL_BACKBONE_MODEL,
@@ -80,6 +84,12 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=OFFICIAL_HYBRID_BLEND_ALPHA,
         help="Secondary logit weight alpha. Keep `alpha < 0.5` to preserve a strict GNN-primary hybrid.",
+    )
+    parser.add_argument(
+        "--dataset-hparams",
+        type=Path,
+        default=None,
+        help="Optional JSON profile. When present, `hybrid.datasets.<dataset>.blend_alpha` overrides the global alpha.",
     )
     parser.add_argument("--skip-existing", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -174,9 +184,16 @@ def _write_suite_summary(*, suite_name: str, payload: dict[str, Any]) -> Path:
 
 def main() -> None:
     args = parse_args()
+    profile = load_thesis_hparam_profile(args.dataset_hparams)
     results: list[dict[str, Any]] = []
+    blend_alphas: list[float] = []
     for dataset_name in args.datasets:
         dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
+        dataset_hparams = resolve_hybrid_dataset_hparams(
+            args=args,
+            dataset_name=dataset_name,
+            profile=profile,
+        )
         base_run_name = _base_run_name(args, dataset_name)
         secondary_run_name = _secondary_run_name(args, dataset_name)
         hybrid_run_name = _hybrid_run_name(args, dataset_name)
@@ -192,8 +209,6 @@ def main() -> None:
                 secondary_run_name,
             ]
             _run_command(secondary_command, dataset_name, dry_run=args.dry_run)
-            if args.dry_run:
-                continue
         if args.skip_existing and summary_path.exists():
             summary = _load_summary(summary_path)
         else:
@@ -201,13 +216,14 @@ def main() -> None:
                 base_run_dir=base_run_dir,
                 secondary_run_dir=secondary_run_dir,
                 run_name=hybrid_run_name,
-                blend_alpha=float(args.blend_alpha),
+                blend_alpha=float(dataset_hparams.blend_alpha),
             )
             _run_command(command, dataset_name, dry_run=args.dry_run)
             if args.dry_run:
                 continue
             summary = _load_summary(summary_path)
 
+        blend_alphas.append(float(dataset_hparams.blend_alpha))
         results.append(
             {
                 "dataset": dataset_name,
@@ -216,9 +232,11 @@ def main() -> None:
                 "secondary_run_dir": str(secondary_run_dir.relative_to(REPO_ROOT)),
                 "run_name": hybrid_run_name,
                 "summary_path": str(summary_path.relative_to(REPO_ROOT)),
+                "blend_alpha": float(dataset_hparams.blend_alpha),
                 "gnn_val_auc": summary.get("gnn_val_auc"),
                 "secondary_val_auc": summary.get("secondary_val_auc"),
                 "val_auc_mean": summary.get("val_auc_mean"),
+                "hparams": dataset_hparams.to_summary_payload(),
             }
         )
 
@@ -230,14 +248,17 @@ def main() -> None:
         "family": "thesis_gnn_primary_hybrid",
         "base_model": str(args.base_model),
         "blend_alpha": float(args.blend_alpha),
+        "dataset_hparams_path": None if profile is None else str(profile.path.relative_to(REPO_ROOT)),
         "base_run_name_template": str(args.base_run_name_template),
         "dataset_isolation": True,
         "cross_dataset_training": False,
         "same_architecture_across_datasets": True,
         "same_secondary_hyperparameters_across_datasets": True,
+        "same_blend_alpha_across_datasets": len({round(value, 10) for value in blend_alphas}) <= 1,
         "split_guardrails": [
             "Every dataset loads only its own saved v4 backbone run.",
             "Every dataset fits its own graphprop residual branch on phase1_train only.",
+            "The hybrid keeps one shared GNN-primary formula; only the scalar blend weight may be tuned per dataset.",
             "No cross-dataset prediction bundle or feature cache is reused.",
         ],
         "secondary_model": {

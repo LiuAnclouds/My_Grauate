@@ -7,6 +7,7 @@
 - [Recommended Result JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json)
 - [Pure Teacher Backbone JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json)
 - [Recommended Leakage Audit](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.md)
+- [Dataset Hparam Profile](../experiment/training/configs/thesis_dataset_hparams.search_v1.json)
 
 ## 1. Problem Setting
 
@@ -19,6 +20,21 @@
 - 主模型必须是动态图神经网络
 - 二级决策层允许存在，但只能作为 GNN 主干的残差校正
 - 不允许把 `secondary-only` 包装成论文主模型
+
+允许的数据集级调参：
+
+- 特征容量：`attr_proj_dim`
+- 主干容量：`hidden_dim`、`rel_dim`、`fanouts`、`attention_num_heads`
+- 优化参数：`batch_size`、`epochs`、`learning_rate`、`weight_decay`、`dropout`
+- 正则与课程：`prototype_*`、`pseudo_contrastive_*`、`teacher_distill_*`、`context_residual_*`
+- 决策标定：`blend_alpha`
+
+不允许的变化：
+
+- 数据集 A 用 `m8_utgt`，数据集 B 换成别的模型家族
+- 某个数据集脱离 `utpm_unified` 输入契约
+- 跨数据集混训或复用别的数据集预测缓存
+- 用验证/测试标签反哺训练
 
 ## 2. Final Recommended Architecture
 
@@ -34,6 +50,25 @@
 也就是说，推荐主线不是“先树模型、后 GNN”，也不是“两套模型并列投票”，而是：
 
 `统一输入契约 + teacher-guided dynamic GNN + leakage-safe residual correction`
+
+## 2.5 Unified Architecture, Dataset-local Tuning
+
+从现在开始，仓库把“统一架构”和“分别调参”彻底拆开：
+
+- 架构统一：主干始终是 `m8_utgt`，teacher 始终来自 dataset-local graphprop，最终融合仍然是固定 logit-space GNN-primary
+- 调参分离：不同数据集只允许在容量、优化和正则权重上做超参搜索
+
+对应的统一入口是：
+
+- [run_thesis_suite.py](../experiment/training/run_thesis_suite.py)
+- [run_thesis_hybrid_suite.py](../experiment/training/run_thesis_hybrid_suite.py)
+- [thesis_dataset_hparams.search_v1.json](../experiment/training/configs/thesis_dataset_hparams.search_v1.json)
+
+这意味着后续批跑不再需要手动改脚本：
+
+- `mainline.datasets.<dataset>` 负责该数据集的 GNN 容量与训练超参
+- `hybrid.datasets.<dataset>` 负责该数据集的 `blend_alpha`
+- suite summary 会回写每个数据集的实际超参，方便后续画图和论文表格复现
 
 ## 3. What The Run Names Actually Mean
 
@@ -152,6 +187,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_su
   --model m8_utgt \
   --preset utgt_temporal_shift_teacher_v1 \
   --feature-profile utpm_unified \
+  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.search_v1.json \
   --epochs 8 \
   --seeds 42 \
   --skip-existing
@@ -164,6 +200,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hy
   --suite-name thesis_m8_utgt_teacher_gnnprimary04999 \
   --base-model m8_utgt \
   --base-run-name-template thesis_m8_utgt_teacher_e8_s42_v1_{dataset_short} \
+  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.search_v1.json \
   --blend-alpha 0.4999 \
   --skip-existing
 ```
