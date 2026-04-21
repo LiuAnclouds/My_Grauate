@@ -252,7 +252,8 @@ def _run_name_for_dataset(
     settings: MainlineDatasetHparams,
 ) -> str:
     dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
-    return str(args.run_name_template).format(
+    template = settings.run_name_template or str(args.run_name_template)
+    return str(template).format(
         suite_name=args.suite_name,
         dataset=dataset_name,
         dataset_short=dataset_short,
@@ -557,6 +558,7 @@ def main() -> None:
         "feature_env_overrides": {"GRADPROJ_UTPM_ATTR_PROJ_DIM": os.environ.get("GRADPROJ_UTPM_ATTR_PROJ_DIM")},
         "graph_config_overrides": [str(v) for v in args.graph_config_override],
         "teacher_signal_model_family": args.teacher_signal_model_family,
+        "run_name_template": args.run_name_template,
         "target_context_prediction_run_name_template": args.target_context_prediction_run_name_template,
         "target_context_prediction_transform": args.target_context_prediction_transform,
         "teacher_distill_prediction_run_name_template": args.teacher_distill_prediction_run_name_template,

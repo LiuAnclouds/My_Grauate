@@ -4,10 +4,10 @@
 
 - [Back to README](../README.md)
 - [Experiment Table](thesis_experiments.md)
-- [Recommended Result JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999/summary.json)
-- [Pure Teacher Backbone JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1/summary.json)
-- [Recommended Leakage Audit](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999/leakage_audit.md)
-- [Dataset Hparam Profile](../experiment/training/configs/thesis_dataset_hparams.search_v1.json)
+- [Recommended Result JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch2_gnnprimary04999/summary.json)
+- [Pure Teacher Backbone JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch2_e8_s42_v1/summary.json)
+- [Recommended Leakage Audit](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch2_gnnprimary04999/leakage_audit.md)
+- [Dataset Hparam Profile](../experiment/training/configs/thesis_dataset_hparams.search_v2.json)
 
 ## 1. Problem Setting
 
@@ -62,7 +62,7 @@
 
 - [run_thesis_suite.py](../experiment/training/run_thesis_suite.py)
 - [run_thesis_hybrid_suite.py](../experiment/training/run_thesis_hybrid_suite.py)
-- [thesis_dataset_hparams.search_v1.json](../experiment/training/configs/thesis_dataset_hparams.search_v1.json)
+- [thesis_dataset_hparams.search_v2.json](../experiment/training/configs/thesis_dataset_hparams.search_v2.json)
 
 这意味着后续批跑不再需要手动改脚本：
 
@@ -76,10 +76,18 @@
 
 | Name | Meaning | Is It The Main Model? |
 | --- | --- | --- |
-| `thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1` | 纯 GNN 主干结果，teacher 只在训练期提供辅助信号 | 是 |
+| `thesis_m8_utgt_teacher_hpsearch2_e8_s42_v1` | 纯 GNN 主干汇总套件，底层复用各数据集已验证的 teacher-guided backbone run | 是 |
 | `secondary-only` | 单独使用 graphprop 分支做预测 | 否 |
-| `thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999` | 最终论文主结果，`50.01% GNN + 49.99% secondary` | 是 |
+| `thesis_m8_utgt_teacher_hpsearch2_gnnprimary04999` | 最终论文主结果，`50.01% GNN + 49.99% secondary` | 是 |
 | `thesis_m8_utgt_graphpropblend091` | 只追 AUC 的 appendix 结果，`9% GNN + 91% secondary` | 否 |
+
+其中 `hpsearch2` pure suite 复用的是这三条 dataset-local backbone run：
+
+- XinYe: `thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1_xy`
+- Elliptic: `probe_m8_teacher_unified_ap64_hd160_r48_f2015_h4_e8_et`
+- Elliptic++: `probe_m8_teacher_unified_ap64_hd160_r48_f2015_h16_e8_epp`
+
+它们属于同一 `m8_utgt + utpm_unified + teacher-guided` 架构，只是 dataset-local 容量超参数不同。
 
 其中 `teacher` 的准确含义是：
 
@@ -117,8 +125,8 @@
 | Prototype memory | legacy shared-module ablation | 更像结构正则与类别稳定器 |
 | Pseudo-contrastive temporal mining | 去掉后宏平均下降 `0.006182` | 是最明确有效的共享主干模块 |
 | Drift residual target context | legacy shared-module ablation | 更偏稳健性与上下文校准 |
-| Teacher-guided temporal normality bridge | pure `m8_utgt` -> teacher pure `m8_utgt`，宏平均 `+0.019646` | 说明 teacher guidance 有效 |
-| Graphprop residual correction + fixed fusion | teacher pure `m8` -> recommended blend，宏平均 `+0.077524` | 是最终主结果跃升的关键模块 |
+| Teacher-guided temporal normality bridge | pure `m8_utgt` -> teacher pure `m8_utgt`，宏平均 `+0.030817` | 说明 teacher guidance 有效 |
+| Graphprop residual correction + fixed fusion | teacher pure `m8` -> recommended blend，宏平均 `+0.068794` | 是最终主结果跃升的关键模块 |
 
 这里需要实话实说：
 
@@ -161,7 +169,7 @@
 
 推荐主线已经重新审计过：
 
-- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999/leakage_audit.md)
+- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch2_gnnprimary04999/leakage_audit.md)
 
 审计结论：
 
@@ -183,11 +191,11 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_ma
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py \
-  --suite-name thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1 \
+  --suite-name thesis_m8_utgt_teacher_hpsearch2_e8_s42_v1 \
   --model m8_utgt \
   --preset utgt_temporal_shift_teacher_v1 \
   --feature-profile utpm_unified \
-  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.search_v1.json \
+  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.search_v2.json \
   --epochs 8 \
   --seeds 42 \
   --skip-existing
@@ -197,10 +205,9 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_su
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py \
-  --suite-name thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999 \
+  --suite-name thesis_m8_utgt_teacher_hpsearch2_gnnprimary04999 \
   --base-model m8_utgt \
-  --base-run-name-template thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1_{dataset_short} \
-  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.search_v1.json \
+  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.search_v2.json \
   --blend-alpha 0.4999 \
   --skip-existing
 ```
@@ -220,5 +227,5 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hy
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_leakage.py \
-  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch1_gnnprimary04999/summary.json
+  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_hpsearch2_gnnprimary04999/summary.json
 ```

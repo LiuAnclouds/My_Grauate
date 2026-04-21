@@ -1,0 +1,203 @@
+{
+  "suite_name": "thesis_m8_utgt_teacher_hpsearch2_e8_s42_v1",
+  "model": "m8_utgt",
+  "preset": "utgt_temporal_shift_teacher_v1",
+  "feature_profile": "utpm_unified",
+  "feature_dir": null,
+  "feature_subdir": null,
+  "dataset_hparams_path": "experiment/training/configs/thesis_dataset_hparams.search_v2.json",
+  "feature_env_overrides": {
+    "GRADPROJ_UTPM_ATTR_PROJ_DIM": null
+  },
+  "graph_config_overrides": [],
+  "teacher_signal_model_family": "xgboost_gpu",
+  "run_name_template": "{suite_name}_{dataset_short}",
+  "target_context_prediction_run_name_template": "thesis_graphprop_rr0215_hpe_{dataset_short}",
+  "target_context_prediction_transform": "logit",
+  "teacher_distill_prediction_run_name_template": "thesis_graphprop_rr0215_hpe_{dataset_short}",
+  "dataset_isolation": true,
+  "cross_dataset_training": false,
+  "same_architecture_across_datasets": true,
+  "split_guardrails": [
+    "Each dataset is trained separately under its own dataset env and output namespace.",
+    "All datasets share the same model family, feature contract, and teacher/decision protocol.",
+    "Dataset-local tuning is limited to feature capacity, model capacity, optimization, and low-level regularization hyperparameters.",
+    "No dataset contributes labels, predictions, or normalization statistics to another dataset."
+  ],
+  "epochs": 8,
+  "batch_size": 512,
+  "hidden_dim": 128,
+  "rel_dim": 32,
+  "fanouts": [
+    15,
+    10
+  ],
+  "learning_rate": null,
+  "weight_decay": null,
+  "dropout": null,
+  "seeds": [
+    42
+  ],
+  "dataset_hparams": {
+    "xinye_dgraph": {
+      "run_name_template": "thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1_{dataset_short}",
+      "feature_dir": null,
+      "feature_subdir": "features_ap32",
+      "feature_env": {
+        "GRADPROJ_UTPM_ATTR_PROJ_DIM": "32"
+      },
+      "attr_proj_dim": 32,
+      "epochs": 8,
+      "batch_size": 512,
+      "hidden_dim": 128,
+      "rel_dim": 32,
+      "fanouts": [
+        15,
+        10
+      ],
+      "learning_rate": null,
+      "weight_decay": null,
+      "dropout": null,
+      "graph_config_overrides": []
+    },
+    "elliptic_transactions": {
+      "run_name_template": "probe_m8_teacher_unified_ap64_hd160_r48_f2015_h4_e8_{dataset_short}",
+      "feature_dir": null,
+      "feature_subdir": "features_ap64",
+      "feature_env": {
+        "GRADPROJ_UTPM_ATTR_PROJ_DIM": "64"
+      },
+      "attr_proj_dim": 64,
+      "epochs": 8,
+      "batch_size": 512,
+      "hidden_dim": 160,
+      "rel_dim": 48,
+      "fanouts": [
+        20,
+        15
+      ],
+      "learning_rate": null,
+      "weight_decay": null,
+      "dropout": null,
+      "graph_config_overrides": [
+        "attention_num_heads=4"
+      ]
+    },
+    "ellipticpp_transactions": {
+      "run_name_template": "probe_m8_teacher_unified_ap64_hd160_r48_f2015_h16_e8_{dataset_short}",
+      "feature_dir": null,
+      "feature_subdir": "features_ap64",
+      "feature_env": {
+        "GRADPROJ_UTPM_ATTR_PROJ_DIM": "64"
+      },
+      "attr_proj_dim": 64,
+      "epochs": 8,
+      "batch_size": 512,
+      "hidden_dim": 160,
+      "rel_dim": 48,
+      "fanouts": [
+        20,
+        15
+      ],
+      "learning_rate": null,
+      "weight_decay": null,
+      "dropout": null,
+      "graph_config_overrides": [
+        "attention_num_heads=16"
+      ]
+    }
+  },
+  "results": [
+    {
+      "dataset": "xinye_dgraph",
+      "run_name": "thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1_xy",
+      "summary_path": "experiment/outputs/training/models/m8_utgt/thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1_xy/summary.json",
+      "val_auc_mean": 0.7923906331620709,
+      "test_auc_mean": null,
+      "external_auc_mean": null,
+      "hparams": {
+        "run_name_template": "thesis_m8_utgt_teacher_hpsearch1_e8_s42_v1_{dataset_short}",
+        "feature_dir": null,
+        "feature_subdir": "features_ap32",
+        "feature_env": {
+          "GRADPROJ_UTPM_ATTR_PROJ_DIM": "32"
+        },
+        "attr_proj_dim": 32,
+        "epochs": 8,
+        "batch_size": 512,
+        "hidden_dim": 128,
+        "rel_dim": 32,
+        "fanouts": [
+          15,
+          10
+        ],
+        "learning_rate": null,
+        "weight_decay": null,
+        "dropout": null,
+        "graph_config_overrides": []
+      }
+    },
+    {
+      "dataset": "elliptic_transactions",
+      "run_name": "probe_m8_teacher_unified_ap64_hd160_r48_f2015_h4_e8_et",
+      "summary_path": "experiment/outputs/elliptic_transactions/training/models/m8_utgt/probe_m8_teacher_unified_ap64_hd160_r48_f2015_h4_e8_et/summary.json",
+      "val_auc_mean": 0.784275003049719,
+      "test_auc_mean": null,
+      "external_auc_mean": null,
+      "hparams": {
+        "run_name_template": "probe_m8_teacher_unified_ap64_hd160_r48_f2015_h4_e8_{dataset_short}",
+        "feature_dir": null,
+        "feature_subdir": "features_ap64",
+        "feature_env": {
+          "GRADPROJ_UTPM_ATTR_PROJ_DIM": "64"
+        },
+        "attr_proj_dim": 64,
+        "epochs": 8,
+        "batch_size": 512,
+        "hidden_dim": 160,
+        "rel_dim": 48,
+        "fanouts": [
+          20,
+          15
+        ],
+        "learning_rate": null,
+        "weight_decay": null,
+        "dropout": null,
+        "graph_config_overrides": [
+          "attention_num_heads=4"
+        ]
+      }
+    },
+    {
+      "dataset": "ellipticpp_transactions",
+      "run_name": "probe_m8_teacher_unified_ap64_hd160_r48_f2015_h16_e8_epp",
+      "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m8_utgt/probe_m8_teacher_unified_ap64_hd160_r48_f2015_h16_e8_epp/summary.json",
+      "val_auc_mean": 0.8172063120698583,
+      "test_auc_mean": null,
+      "external_auc_mean": null,
+      "hparams": {
+        "run_name_template": "probe_m8_teacher_unified_ap64_hd160_r48_f2015_h16_e8_{dataset_short}",
+        "feature_dir": null,
+        "feature_subdir": "features_ap64",
+        "feature_env": {
+          "GRADPROJ_UTPM_ATTR_PROJ_DIM": "64"
+        },
+        "attr_proj_dim": 64,
+        "epochs": 8,
+        "batch_size": 512,
+        "hidden_dim": 160,
+        "rel_dim": 48,
+        "fanouts": [
+          20,
+          15
+        ],
+        "learning_rate": null,
+        "weight_decay": null,
+        "dropout": null,
+        "graph_config_overrides": [
+          "attention_num_heads=16"
+        ]
+      }
+    }
+  ]
+}

@@ -24,10 +24,14 @@ _MAINLINE_ALLOWED_KEYS = {
     "hidden_dim",
     "learning_rate",
     "rel_dim",
+    "run_name_template",
     "weight_decay",
 }
 _HYBRID_ALLOWED_KEYS = {
+    "base_run_name_template",
     "blend_alpha",
+    "run_name_template",
+    "secondary_run_name_template",
 }
 
 
@@ -48,6 +52,7 @@ class LoadedThesisHparamProfile:
 @dataclass(frozen=True)
 class MainlineDatasetHparams:
     dataset_name: str
+    run_name_template: str | None
     feature_dir: Path | None
     feature_subdir: str | None
     feature_env: dict[str, str]
@@ -70,6 +75,7 @@ class MainlineDatasetHparams:
 
     def to_summary_payload(self) -> dict[str, Any]:
         return {
+            "run_name_template": self.run_name_template,
             "feature_dir": None if self.feature_dir is None else str(self.feature_dir),
             "feature_subdir": self.feature_subdir,
             "feature_env": dict(self.feature_env),
@@ -90,10 +96,16 @@ class MainlineDatasetHparams:
 class HybridDatasetHparams:
     dataset_name: str
     blend_alpha: float
+    base_run_name_template: str | None
+    secondary_run_name_template: str | None
+    run_name_template: str | None
 
     def to_summary_payload(self) -> dict[str, Any]:
         return {
             "blend_alpha": float(self.blend_alpha),
+            "base_run_name_template": self.base_run_name_template,
+            "secondary_run_name_template": self.secondary_run_name_template,
+            "run_name_template": self.run_name_template,
         }
 
 
@@ -122,6 +134,7 @@ def resolve_mainline_dataset_hparams(
         feature_env[ATTR_PROJ_ENV_VAR] = str(int(env_attr_proj_dim))
 
     resolved: dict[str, Any] = {
+        "run_name_template": str(getattr(args, "run_name_template")),
         "feature_dir": _coerce_optional_path(getattr(args, "feature_dir", None)),
         "feature_subdir": _coerce_optional_str(getattr(args, "feature_subdir", None)),
         "feature_env": feature_env,
@@ -185,6 +198,7 @@ def resolve_mainline_dataset_hparams(
 
     return MainlineDatasetHparams(
         dataset_name=str(dataset_name),
+        run_name_template=_coerce_optional_str(resolved["run_name_template"]),
         feature_dir=resolved["feature_dir"],
         feature_subdir=resolved["feature_subdir"],
         feature_env=dict(resolved["feature_env"]),
@@ -207,6 +221,9 @@ def resolve_hybrid_dataset_hparams(
     profile: LoadedThesisHparamProfile | None,
 ) -> HybridDatasetHparams:
     resolved_blend_alpha = float(getattr(args, "blend_alpha"))
+    resolved_base_run_name_template = str(getattr(args, "base_run_name_template"))
+    resolved_secondary_run_name_template = str(getattr(args, "secondary_run_name_template"))
+    resolved_run_name_template = str(getattr(args, "run_name_template"))
     if profile is not None:
         hybrid_section = profile.section("hybrid")
         dataset_section = _coerce_dataset_mapping(
@@ -235,9 +252,24 @@ def resolve_hybrid_dataset_hparams(
             resolved_blend_alpha = float(defaults["blend_alpha"])
         if "blend_alpha" in dataset_overrides:
             resolved_blend_alpha = float(dataset_overrides["blend_alpha"])
+        if "base_run_name_template" in defaults:
+            resolved_base_run_name_template = str(defaults["base_run_name_template"])
+        if "base_run_name_template" in dataset_overrides:
+            resolved_base_run_name_template = str(dataset_overrides["base_run_name_template"])
+        if "secondary_run_name_template" in defaults:
+            resolved_secondary_run_name_template = str(defaults["secondary_run_name_template"])
+        if "secondary_run_name_template" in dataset_overrides:
+            resolved_secondary_run_name_template = str(dataset_overrides["secondary_run_name_template"])
+        if "run_name_template" in defaults:
+            resolved_run_name_template = str(defaults["run_name_template"])
+        if "run_name_template" in dataset_overrides:
+            resolved_run_name_template = str(dataset_overrides["run_name_template"])
     return HybridDatasetHparams(
         dataset_name=str(dataset_name),
         blend_alpha=float(resolved_blend_alpha),
+        base_run_name_template=resolved_base_run_name_template,
+        secondary_run_name_template=resolved_secondary_run_name_template,
+        run_name_template=resolved_run_name_template,
     )
 
 
@@ -248,6 +280,8 @@ def _merge_mainline_section(
     location: str,
 ) -> dict[str, Any]:
     merged = dict(resolved)
+    if "run_name_template" in section:
+        merged["run_name_template"] = str(section["run_name_template"])
     if "feature_dir" in section:
         merged["feature_dir"] = _coerce_optional_path(section.get("feature_dir"))
     if "feature_subdir" in section:

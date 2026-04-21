@@ -108,31 +108,25 @@ def _dataset_blend_root(dataset_name: str) -> Path:
     return _dataset_training_root(dataset_name) / "blends"
 
 
-def _base_run_name(args: argparse.Namespace, dataset_name: str) -> str:
+def _dataset_template_name(template: str, *, args: argparse.Namespace, dataset_name: str) -> str:
     dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
-    return str(args.base_run_name_template).format(
+    return str(template).format(
         suite_name=args.suite_name,
         dataset=dataset_name,
         dataset_short=dataset_short,
     )
 
 
-def _hybrid_run_name(args: argparse.Namespace, dataset_name: str) -> str:
-    dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
-    return str(args.run_name_template).format(
-        suite_name=args.suite_name,
-        dataset=dataset_name,
-        dataset_short=dataset_short,
-    )
+def _base_run_name(args: argparse.Namespace, dataset_name: str, template: str) -> str:
+    return _dataset_template_name(template, args=args, dataset_name=dataset_name)
 
 
-def _secondary_run_name(args: argparse.Namespace, dataset_name: str) -> str:
-    dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
-    return str(args.secondary_run_name_template).format(
-        suite_name=args.suite_name,
-        dataset=dataset_name,
-        dataset_short=dataset_short,
-    )
+def _hybrid_run_name(args: argparse.Namespace, dataset_name: str, template: str) -> str:
+    return _dataset_template_name(template, args=args, dataset_name=dataset_name)
+
+
+def _secondary_run_name(args: argparse.Namespace, dataset_name: str, template: str) -> str:
+    return _dataset_template_name(template, args=args, dataset_name=dataset_name)
 
 
 def _command_preview(command: list[str], dataset_name: str) -> str:
@@ -187,6 +181,7 @@ def main() -> None:
     profile = load_thesis_hparam_profile(args.dataset_hparams)
     results: list[dict[str, Any]] = []
     blend_alphas: list[float] = []
+    resolved_hparams_by_dataset: dict[str, dict[str, Any]] = {}
     for dataset_name in args.datasets:
         dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
         dataset_hparams = resolve_hybrid_dataset_hparams(
@@ -194,9 +189,10 @@ def main() -> None:
             dataset_name=dataset_name,
             profile=profile,
         )
-        base_run_name = _base_run_name(args, dataset_name)
-        secondary_run_name = _secondary_run_name(args, dataset_name)
-        hybrid_run_name = _hybrid_run_name(args, dataset_name)
+        resolved_hparams_by_dataset[dataset_name] = dataset_hparams.to_summary_payload()
+        base_run_name = _base_run_name(args, dataset_name, dataset_hparams.base_run_name_template)
+        secondary_run_name = _secondary_run_name(args, dataset_name, dataset_hparams.secondary_run_name_template)
+        hybrid_run_name = _hybrid_run_name(args, dataset_name, dataset_hparams.run_name_template)
         base_run_dir = _dataset_training_root(dataset_name) / "models" / args.base_model / base_run_name
         secondary_run_dir = _dataset_training_root(dataset_name) / "models" / "xgboost_gpu" / secondary_run_name
         summary_path = _dataset_blend_root(dataset_name) / hybrid_run_name / "summary.json"
@@ -250,6 +246,8 @@ def main() -> None:
         "blend_alpha": float(args.blend_alpha),
         "dataset_hparams_path": None if profile is None else str(profile.path.relative_to(REPO_ROOT)),
         "base_run_name_template": str(args.base_run_name_template),
+        "run_name_template": str(args.run_name_template),
+        "secondary_run_name_template": str(args.secondary_run_name_template),
         "dataset_isolation": True,
         "cross_dataset_training": False,
         "same_architecture_across_datasets": True,
@@ -273,6 +271,7 @@ def main() -> None:
             "background_weight": float(OFFICIAL_HYBRID_GRAPHPROP_BACKGROUND_WEIGHT),
             "prop_half_life_days": [float(value) for value in OFFICIAL_HYBRID_GRAPHPROP_PROP_HALF_LIFE_DAYS],
         },
+        "dataset_hparams": resolved_hparams_by_dataset,
         "results": results,
     }
     summary_path = _write_suite_summary(suite_name=args.suite_name, payload=payload)
