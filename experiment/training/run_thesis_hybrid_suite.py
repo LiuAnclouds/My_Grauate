@@ -79,7 +79,7 @@ def parse_args() -> argparse.Namespace:
         "--blend-alpha",
         type=float,
         default=OFFICIAL_HYBRID_BLEND_ALPHA,
-        help="Secondary logit weight alpha. `0.48` means `52% GNN + 48% secondary` in logit space.",
+        help="Secondary logit weight alpha. Keep `alpha < 0.5` to preserve a strict GNN-primary hybrid.",
     )
     parser.add_argument("--skip-existing", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

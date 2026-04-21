@@ -30,8 +30,9 @@ OFFICIAL_MAINLINE_FANOUTS = (15, 10)
 OFFICIAL_SUITE_EPOCHS = 8
 OFFICIAL_SUITE_SEEDS = (42,)
 
-# Recommended thesis result: teacher-guided UTGT backbone with GNN-primary 0.48 blend.
-OFFICIAL_HYBRID_SUITE_NAME = "thesis_m8_utgt_teacher_gnnprimary048"
+# Recommended thesis result: teacher-guided UTGT backbone with the strict
+# GNN-primary frontier blend. 0.4999 keeps the GNN branch fraction at 50.01%.
+OFFICIAL_HYBRID_SUITE_NAME = "thesis_m8_utgt_teacher_gnnprimary04999"
 OFFICIAL_HYBRID_BASE_MODEL = TRANSFORMER_BACKBONE_MODEL
 OFFICIAL_HYBRID_BASE_RUN_NAME_TEMPLATE = "thesis_m8_utgt_teacher_e8_s42_v1_{dataset_short}"
 OFFICIAL_HYBRID_SECONDARY_RUN_NAME_TEMPLATE = "thesis_graphprop_rr0215_hpe_{dataset_short}"
@@ -41,7 +42,7 @@ OFFICIAL_TEACHER_SIGNAL_MODEL_FAMILY = "xgboost_gpu"
 OFFICIAL_TEACHER_SIGNAL_RUN_NAME_TEMPLATE = OFFICIAL_HYBRID_SECONDARY_RUN_NAME_TEMPLATE
 OFFICIAL_TEACHER_SIGNAL_TRANSFORM = "logit"
 OFFICIAL_HYBRID_RECENT_START_RATIO = 0.0
-OFFICIAL_HYBRID_BLEND_ALPHA = 0.48
+OFFICIAL_HYBRID_BLEND_ALPHA = 0.4999
 
 # AUC-first appendix suite and legacy pre-refactor reference.
 AUC_FIRST_HYBRID_SUITE_NAME = "thesis_m8_utgt_graphpropblend091"

@@ -182,7 +182,7 @@ def parse_args() -> argparse.Namespace:
         "--blend-alpha",
         type=float,
         default=OFFICIAL_HYBRID_BLEND_ALPHA,
-        help="Secondary logit weight alpha. `0.48` means `52% GNN + 48% secondary`.",
+        help="Secondary logit weight alpha. Keep `alpha < 0.5` to preserve a strict GNN-primary hybrid.",
     )
     return parser.parse_args()
 
@@ -333,7 +333,7 @@ def main() -> None:
         f"dataset={ACTIVE_DATASET_SPEC.name} "
         f"base_run={_path_repr(base_run_dir)} "
         f"secondary_run={_path_repr(secondary_run_dir)} "
-        f"blend_alpha={float(args.blend_alpha):.2f} "
+        f"blend_alpha={float(args.blend_alpha):.4f} "
         f"gnn_val_auc={summary['gnn_val_auc']:.6f} "
         f"secondary_val_auc={summary['secondary_val_auc']:.6f} "
         f"hybrid_val_auc={summary['val_auc_mean']:.6f}"

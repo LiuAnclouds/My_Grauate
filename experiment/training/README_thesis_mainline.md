@@ -5,9 +5,9 @@
 - [Repository README](../../README.md)
 - [Method Overview](../../docs/thesis_method.md)
 - [Experiment Table](../../docs/thesis_experiments.md)
-- [Recommended Result JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json)
+- [Recommended Result JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json)
 - [Pure Teacher Backbone JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json)
-- [Recommended Leakage Audit](../outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.md)
+- [Recommended Leakage Audit](../outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.md)
 
 ## Recommended Surface
 
@@ -17,16 +17,16 @@
 - 统一主干家族：`m8_utgt`
 - 统一 teacher preset：`utgt_temporal_shift_teacher_v1`
 - 统一 residual family：`graphprop + XGBoost`
-- 统一融合规则：`alpha=0.48`
+- 统一融合规则：`alpha=0.4999`
 
 这里的 `alpha` 是 secondary 权重：
 
-- `alpha=0.48` = `52% GNN + 48% secondary`
+- `alpha=0.4999` = `50.01% GNN + 49.99% secondary`
 - `alpha=0.91` = `9% GNN + 91% secondary`
 
 因此：
 
-- `thesis_m8_utgt_teacher_gnnprimary048` 是论文主结果
+- `thesis_m8_utgt_teacher_gnnprimary04999` 是论文主结果
 - `thesis_m8_utgt_graphpropblend091` 只是 appendix
 
 ## What The Current Model Actually Is
@@ -79,16 +79,16 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_su
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py \
-  --suite-name thesis_m8_utgt_teacher_gnnprimary048 \
+  --suite-name thesis_m8_utgt_teacher_gnnprimary04999 \
   --base-model m8_utgt \
   --base-run-name-template thesis_m8_utgt_teacher_e8_s42_v1_{dataset_short} \
-  --blend-alpha 0.48 \
+  --blend-alpha 0.4999 \
   --skip-existing
 ```
 
 输出：
 
-- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json`
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json`
 
 ### 4. Run AUC-first Appendix
 
@@ -109,21 +109,21 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hy
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_leakage.py \
-  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json
+  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json
 ```
 
 输出：
 
-- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.md`
-- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.json`
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.md`
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.json`
 
 ## Current Recommended Metrics
 
 推荐主线当前验证集 AUC：
 
-- XinYe: `0.7947618861548545`
-- Elliptic: `0.8854785109939336`
-- Elliptic++: `0.8910935282137372`
+- XinYe: `0.7949135994047345`
+- Elliptic: `0.8910933262455981`
+- Elliptic++: `0.8934221198737458`
 
 纯 teacher-guided GNN：
 

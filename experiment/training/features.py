@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -44,7 +45,18 @@ TEMPORAL_ADAPTIVE_CONTRAST_WINDOWS = (7, 60)
 ACTIVE_FEATURE_STRONG_PAIRS = tuple(get_active_dataset_spec().strong_pairs)
 BACKGROUND_LABELS = tuple(get_active_dataset_spec().background_labels)
 
-UTPM_ATTR_PROJ_DIM = 32
+def _env_override_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return int(default)
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"Environment variable `{name}` must be an integer, got `{raw}`.") from exc
+    return max(value, 1)
+
+
+UTPM_ATTR_PROJ_DIM = _env_override_int("GRADPROJ_UTPM_ATTR_PROJ_DIM", 32)
 UTPM_ATTR_STATS_DIM = 16
 UTPM_GRAPH_CORE_DIM = 16
 UTPM_RELATION_CORE_DIM = 16
@@ -93,6 +105,7 @@ def _feature_schema_payload() -> dict[str, Any]:
         "background_labels": [int(label) for label in _active_background_labels()],
         "strong_pairs": [[int(left), int(right)] for left, right in ACTIVE_FEATURE_STRONG_PAIRS],
         "num_time_windows": int(NUM_TIME_WINDOWS),
+        "utpm_attr_proj_dim": int(UTPM_ATTR_PROJ_DIM),
         "utpm_unified_groups": utpm_unified_feature_groups(),
         "utpm_unified_dim": int(
             UTPM_ATTR_PROJ_DIM
@@ -114,6 +127,7 @@ def _feature_schema_payload() -> dict[str, Any]:
             + UTPM_AUX_LABEL_DIM
             + UTPM_TEMPORAL_SHIFT_DIM
         ),
+        "utpm_shift_enhanced_groups": utpm_shift_enhanced_feature_groups(),
     }
 
 

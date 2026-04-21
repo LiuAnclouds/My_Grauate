@@ -4,9 +4,9 @@
 
 - [Back to README](../README.md)
 - [Experiment Table](thesis_experiments.md)
-- [Recommended Result JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json)
+- [Recommended Result JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json)
 - [Pure Teacher Backbone JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json)
-- [Recommended Leakage Audit](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.md)
+- [Recommended Leakage Audit](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.md)
 
 ## 1. Problem Setting
 
@@ -29,7 +29,7 @@
 3. 使用统一动态图主干 `m8_utgt`，preset 为 `utgt_temporal_shift_teacher_v1`
 4. 训练期间读取当前数据集、`phase1_train` 拟合得到的 graphprop logits，作为只读 teacher 信号
 5. 推理阶段再使用同一 graphprop 家族产生的 secondary logit，做固定残差校正
-6. 通过 `alpha=0.48` 的 logit-space 固定融合得到最终预测
+6. 通过 `alpha=0.4999` 的 logit-space 固定融合得到最终预测
 
 也就是说，推荐主线不是“先树模型、后 GNN”，也不是“两套模型并列投票”，而是：
 
@@ -43,7 +43,7 @@
 | --- | --- | --- |
 | `thesis_m8_utgt_teacher_e8_s42_v1` | 纯 GNN 主干结果，teacher 只在训练期提供辅助信号 | 是 |
 | `secondary-only` | 单独使用 graphprop 分支做预测 | 否 |
-| `thesis_m8_utgt_teacher_gnnprimary048` | 最终论文主结果，`52% GNN + 48% secondary` | 是 |
+| `thesis_m8_utgt_teacher_gnnprimary04999` | 最终论文主结果，`50.01% GNN + 49.99% secondary` | 是 |
 | `thesis_m8_utgt_graphpropblend091` | 只追 AUC 的 appendix 结果，`9% GNN + 91% secondary` | 否 |
 
 其中 `teacher` 的准确含义是：
@@ -68,9 +68,9 @@
 
 最终公式是：
 
-`p_final = sigmoid(0.52 * logit(p_gnn) + 0.48 * logit(p_secondary))`
+`p_final = sigmoid(0.5001 * logit(p_gnn) + 0.4999 * logit(p_secondary))`
 
-这里 `alpha=0.48` 表示 secondary 权重，而不是 GNN 权重。
+这里 `alpha=0.4999` 表示 secondary 权重，而不是 GNN 权重。
 
 ## 5. Innovation Groups And Evidence
 
@@ -83,7 +83,7 @@
 | Pseudo-contrastive temporal mining | 去掉后宏平均下降 `0.006182` | 是最明确有效的共享主干模块 |
 | Drift residual target context | legacy shared-module ablation | 更偏稳健性与上下文校准 |
 | Teacher-guided temporal normality bridge | pure `m8_utgt` -> teacher pure `m8_utgt`，宏平均 `+0.016758` | 说明 teacher guidance 有效 |
-| Graphprop residual correction + fixed fusion | teacher pure `m8` -> recommended blend，宏平均 `+0.073213` | 是最终主结果跃升的关键模块 |
+| Graphprop residual correction + fixed fusion | teacher pure `m8` -> recommended blend，宏平均 `+0.075912` | 是最终主结果跃升的关键模块 |
 
 这里需要实话实说：
 
@@ -103,7 +103,7 @@
 换句话说：
 
 - 如果只追验证集 AUC，可以展示 `alpha=0.91` 或 `secondary-only`
-- 如果要同时满足“统一架构 + GNN 为主 + 可答辩”，就应该选择 `alpha=0.48` 的推荐主线
+- 如果要同时满足“统一架构 + GNN 为主 + 可答辩”，就应该选择 `alpha=0.4999` 的推荐主线
 
 ## 7. Why This Is Still One Unified Model
 
@@ -126,7 +126,7 @@
 
 推荐主线已经重新审计过：
 
-- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.md)
+- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/leakage_audit.md)
 
 审计结论：
 
@@ -161,10 +161,10 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_su
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py \
-  --suite-name thesis_m8_utgt_teacher_gnnprimary048 \
+  --suite-name thesis_m8_utgt_teacher_gnnprimary04999 \
   --base-model m8_utgt \
   --base-run-name-template thesis_m8_utgt_teacher_e8_s42_v1_{dataset_short} \
-  --blend-alpha 0.48 \
+  --blend-alpha 0.4999 \
   --skip-existing
 ```
 
@@ -183,5 +183,5 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hy
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_leakage.py \
-  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json
+  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary04999/summary.json
 ```

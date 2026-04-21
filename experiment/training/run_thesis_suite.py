@@ -87,6 +87,23 @@ def parse_args() -> argparse.Namespace:
         help="Shared feature contract for all datasets in the suite.",
     )
     parser.add_argument(
+        "--feature-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional dataset-scoped feature root passed through to build_features/train. "
+            "Use this to keep alternative unified feature caches separate from the default thesis cache."
+        ),
+    )
+    parser.add_argument(
+        "--feature-subdir",
+        default=None,
+        help=(
+            "Optional feature subdirectory name created under each dataset's training root, "
+            "for example `features_ap64`. This is the safest way to keep tri-dataset feature variants isolated."
+        ),
+    )
+    parser.add_argument(
         "--device",
         default="cuda",
         help="Torch device passed through to the mainline trainer.",
@@ -231,18 +248,27 @@ def _prediction_signal_run_dir(
     return _dataset_training_root(dataset_name) / "models" / str(args.teacher_signal_model_family) / run_name
 
 
+def _feature_dir_for_dataset(args: argparse.Namespace, dataset_name: str) -> Path | None:
+    if args.feature_subdir:
+        return _dataset_training_root(dataset_name) / str(args.feature_subdir)
+    return args.feature_dir
+
+
 def _command_preview(command: list[str], dataset_name: str) -> str:
     return f"{DATASET_ENV_VAR}={shlex.quote(dataset_name)} " + shlex.join(command)
 
 
-def _build_feature_command() -> list[str]:
-    return [
+def _build_feature_command(*, feature_dir: Path | None) -> list[str]:
+    command = [
         sys.executable,
         str(REPO_ROOT / "experiment" / "training" / "run_thesis_mainline.py"),
         "build_features",
         "--phase",
         "both",
     ]
+    if feature_dir is not None:
+        command.extend(["--outdir", str(feature_dir)])
+    return command
 
 
 def _build_train_command(
@@ -251,6 +277,7 @@ def _build_train_command(
     dataset_name: str,
     run_name: str,
 ) -> list[str]:
+    feature_dir = _feature_dir_for_dataset(args, dataset_name)
     command: list[str] = [
         sys.executable,
         str(REPO_ROOT / "experiment" / "training" / "run_thesis_mainline.py"),
@@ -278,6 +305,8 @@ def _build_train_command(
         "--seeds",
         *[str(v) for v in args.seeds],
     ]
+    if feature_dir is not None:
+        command.extend(["--feature-dir", str(feature_dir)])
     if args.target_context_prediction_run_name_template:
         command.extend(
             [
@@ -410,7 +439,11 @@ def main() -> None:
             summary_path, summary_payload = _load_run_summary(dataset_name, args.model, run_name)
         else:
             if args.build_features:
-                _run_command(_build_feature_command(), dataset_name, dry_run=args.dry_run)
+                _run_command(
+                    _build_feature_command(feature_dir=_feature_dir_for_dataset(args, dataset_name)),
+                    dataset_name,
+                    dry_run=args.dry_run,
+                )
             train_command = _build_train_command(args=args, dataset_name=dataset_name, run_name=run_name)
             _run_command(train_command, dataset_name, dry_run=args.dry_run)
             if args.dry_run:
@@ -436,6 +469,16 @@ def main() -> None:
         "model": args.model,
         "preset": args.preset,
         "feature_profile": args.feature_profile,
+        "feature_dir": None if args.feature_dir is None else str(args.feature_dir),
+        "feature_subdir": args.feature_subdir,
+        "feature_env_overrides": {
+            "GRADPROJ_UTPM_ATTR_PROJ_DIM": os.environ.get("GRADPROJ_UTPM_ATTR_PROJ_DIM"),
+        },
+        "graph_config_overrides": [str(v) for v in args.graph_config_override],
+        "teacher_signal_model_family": args.teacher_signal_model_family,
+        "target_context_prediction_run_name_template": args.target_context_prediction_run_name_template,
+        "target_context_prediction_transform": args.target_context_prediction_transform,
+        "teacher_distill_prediction_run_name_template": args.teacher_distill_prediction_run_name_template,
         "dataset_isolation": True,
         "cross_dataset_training": False,
         "same_architecture_across_datasets": True,
