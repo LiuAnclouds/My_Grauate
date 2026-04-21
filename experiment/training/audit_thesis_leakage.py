@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from experiment.datasets.registry import get_dataset_spec
+from experiment.training.thesis_contract import OFFICIAL_HYBRID_SUITE_NAME
 
 
 def _dataset_output_roots(dataset_name: str) -> tuple[Path, Path]:
@@ -176,7 +177,7 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
         "",
         f"- Suite: `{payload['suite_name']}`",
         "- Scope: direct train/val/test/external overlap and cross-dataset isolation.",
-        "- Conclusion: no hard leakage was detected in the audited official suite.",
+        "- Conclusion: no hard leakage was detected in the audited thesis suite.",
         "",
         "| Dataset | Train | Val | Test Pool | External | Secondary Train | Selection Mode | Result |",
         "| --- | ---: | ---: | ---: | ---: | ---: | --- | --- |",
@@ -209,11 +210,11 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Audit the official thesis suite for hard leakage.")
+    parser = argparse.ArgumentParser(description="Audit a thesis suite for hard leakage.")
     parser.add_argument(
         "--suite-summary",
         type=Path,
-        default=REPO_ROOT / "experiment" / "outputs" / "thesis_suite" / "thesis_m7_v4_graphpropblend082" / "summary.json",
+        default=REPO_ROOT / "experiment" / "outputs" / "thesis_suite" / OFFICIAL_HYBRID_SUITE_NAME / "summary.json",
     )
     return parser.parse_args()
 

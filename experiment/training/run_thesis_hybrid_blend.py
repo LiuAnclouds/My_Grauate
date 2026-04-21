@@ -30,10 +30,17 @@ from experiment.training.thesis_contract import (
     OFFICIAL_BACKBONE_PRESET,
     OFFICIAL_HYBRID_BLEND_ALPHA,
     OFFICIAL_HYBRID_SECONDARY_MODEL,
+    TRANSFORMER_BACKBONE_MODEL,
+    TRANSFORMER_BACKBONE_PRESET,
+    TRANSFORMER_BACKBONE_TEACHER_PRESET,
 )
 
 
 ACTIVE_DATASET_SPEC = get_active_dataset_spec()
+SUPPORTED_THESIS_HYBRID_BACKBONES = {
+    OFFICIAL_BACKBONE_MODEL,
+    TRANSFORMER_BACKBONE_MODEL,
+}
 
 
 def _path_repr(path: Path) -> str:
@@ -162,16 +169,21 @@ def _blend_probability(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Blend one saved thesis GNN backbone run with one saved official graphprop residual run. "
-            "The hybrid keeps the shared dynamic GNN backbone and applies a fixed logit-space correction "
-            "from the leakage-safe phase1-train graph propagation branch."
+            "Blend one saved thesis GNN backbone run with one saved graphprop residual run. "
+            "The recommended thesis result keeps the dynamic GNN as the main branch and applies "
+            "a fixed logit-space correction from the leakage-safe phase1-train graph propagation branch."
         )
     )
     parser.add_argument("--base-run-dir", type=Path, required=True)
     parser.add_argument("--secondary-run-dir", type=Path, required=True)
     parser.add_argument("--run-name", required=True)
     parser.add_argument("--outdir", type=Path, default=BLEND_OUTPUT_ROOT)
-    parser.add_argument("--blend-alpha", type=float, default=OFFICIAL_HYBRID_BLEND_ALPHA)
+    parser.add_argument(
+        "--blend-alpha",
+        type=float,
+        default=OFFICIAL_HYBRID_BLEND_ALPHA,
+        help="Secondary logit weight alpha. `0.48` means `52% GNN + 48% secondary`.",
+    )
     return parser.parse_args()
 
 
@@ -195,17 +207,27 @@ def main() -> None:
             "Secondary run dataset mismatch: "
             f"expected `{ACTIVE_DATASET_SPEC.name}`, got `{secondary_dataset}` from {secondary_run_dir}."
         )
-    if str(base_summary.get("model_name")) != OFFICIAL_BACKBONE_MODEL:
-        raise ValueError(f"The official thesis hybrid expects an `{OFFICIAL_BACKBONE_MODEL}` backbone run.")
+    base_model_name = str(base_summary.get("model_name") or "")
+    if base_model_name not in SUPPORTED_THESIS_HYBRID_BACKBONES:
+        supported = ", ".join(sorted(SUPPORTED_THESIS_HYBRID_BACKBONES))
+        raise ValueError(f"The thesis hybrid expects one of: {supported}. Got `{base_model_name}`.")
     base_preset = str(base_summary.get("preset") or OFFICIAL_BACKBONE_PRESET)
-    if base_preset != OFFICIAL_BACKBONE_PRESET:
+    if base_model_name == OFFICIAL_BACKBONE_MODEL and base_preset != OFFICIAL_BACKBONE_PRESET:
         raise ValueError(
-            f"The official thesis hybrid is locked to the unified `{OFFICIAL_BACKBONE_PRESET}` backbone."
+            f"The legacy m7 hybrid is locked to the unified `{OFFICIAL_BACKBONE_PRESET}` backbone."
+        )
+    if (
+        base_model_name == TRANSFORMER_BACKBONE_MODEL
+        and base_preset not in {TRANSFORMER_BACKBONE_PRESET, TRANSFORMER_BACKBONE_TEACHER_PRESET}
+    ):
+        raise ValueError(
+            "The transformer-style thesis hybrid is locked to the unified presets "
+            f"`{TRANSFORMER_BACKBONE_PRESET}` and `{TRANSFORMER_BACKBONE_TEACHER_PRESET}`."
         )
     feature_profile = str(base_summary.get("feature_profile") or OFFICIAL_BACKBONE_FEATURE_PROFILE)
     if feature_profile != OFFICIAL_BACKBONE_FEATURE_PROFILE:
         raise ValueError(
-            f"The official thesis hybrid requires the shared `{OFFICIAL_BACKBONE_FEATURE_PROFILE}` feature contract."
+            f"The thesis hybrid requires the shared `{OFFICIAL_BACKBONE_FEATURE_PROFILE}` feature contract."
         )
 
     train_ids, y_train, gnn_train_prob = _load_split_bundle(base_run_dir, "phase1_train")
@@ -257,13 +279,18 @@ def main() -> None:
         "run_name": args.run_name,
         "dataset": ACTIVE_DATASET_SPEC.name,
         "feature_profile": feature_profile,
+        "base_model_name": base_model_name,
         "base_run_dir": _path_repr(base_run_dir),
         "secondary_run_dir": _path_repr(secondary_run_dir),
         "base_preset": base_preset,
         "blend_alpha": float(args.blend_alpha),
         "hybrid_principle": (
-            "UTPM dynamic GNN backbone + leakage-safe phase1-train graphprop residual head "
-            "under one shared feature contract"
+            (
+                "UTPM dynamic GNN backbone"
+                if base_model_name == OFFICIAL_BACKBONE_MODEL
+                else "UTGT transformer-style dynamic GNN backbone"
+            )
+            + " + leakage-safe phase1-train graphprop residual head under one shared feature contract"
         ),
         "dataset_isolation": True,
         "cross_dataset_training": False,

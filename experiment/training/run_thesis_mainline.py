@@ -39,6 +39,7 @@ from experiment.training.thesis_contract import (
     OFFICIAL_TARGET_CONTEXT_GROUPS,
     TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_PRESET,
+    TRANSFORMER_BACKBONE_TEACHER_PRESET,
 )
 from experiment.training.thesis_runtime import prepare_thesis_runtime
 from experiment.training.thesis_presets import (
@@ -57,6 +58,15 @@ def _path_repr(path: Path) -> str:
         return str(path.relative_to(REPO_ROOT))
     except ValueError:
         return str(path)
+
+
+def _coerce_optional_path(value: Path | str | None) -> Path | None:
+    if value is None:
+        return None
+    path = Path(value)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    return path
 
 
 def _metric_mean(metrics: list[dict[str, Any]], key: str) -> float | None:
@@ -112,7 +122,7 @@ def parse_args() -> argparse.Namespace:
     default_build_phase = "both" if len(dataset_spec.default_artifacts) > 1 else dataset_spec.default_artifacts[0]
 
     parser = argparse.ArgumentParser(
-        description="Official thesis mainline for unified dynamic-graph anti-fraud experiments."
+        description="Unified thesis mainline for dynamic-graph anti-fraud experiments."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -148,8 +158,8 @@ def parse_args() -> argparse.Namespace:
         default=OFFICIAL_BACKBONE_MODEL,
         help=(
             "`m5_temporal_graphsage` is the unified baseline; "
-            "`m7_utpm` is the stable GraphSAGE thesis backbone; "
-            "`m8_utgt` is the transformer-style thesis backbone candidate."
+            "`m7_utpm` is the legacy stable GraphSAGE thesis backbone; "
+            "`m8_utgt` is the transformer-style thesis backbone and the recommended final-result family."
         ),
     )
     train_parser.add_argument(
@@ -158,8 +168,9 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Named thesis preset. "
             "`m5_temporal_graphsage`: unified_baseline. "
-            "`m7_utpm`: utpm_temporal_shift_v4 (stable official). "
-            f"`{TRANSFORMER_BACKBONE_MODEL}`: {TRANSFORMER_BACKBONE_PRESET} (transformer-style candidate)."
+            "`m7_utpm`: utpm_temporal_shift_v4 (legacy stable backbone). "
+            f"`{TRANSFORMER_BACKBONE_MODEL}`: {TRANSFORMER_BACKBONE_PRESET} (pure UTGT) or "
+            f"`{TRANSFORMER_BACKBONE_TEACHER_PRESET}` (teacher-guided recommended backbone)."
         ),
     )
     train_parser.add_argument(
@@ -178,6 +189,24 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=FEATURE_OUTPUT_ROOT,
         help="Feature cache directory from build_features.",
+    )
+    train_parser.add_argument(
+        "--target-context-prediction-dir",
+        type=Path,
+        default=None,
+        help="Optional dataset-local prediction directory used as auxiliary target-context teacher features.",
+    )
+    train_parser.add_argument(
+        "--target-context-prediction-transform",
+        choices=("raw", "logit"),
+        default="raw",
+        help="Transform applied to target-context teacher predictions before fusion.",
+    )
+    train_parser.add_argument(
+        "--teacher-distill-prediction-dir",
+        type=Path,
+        default=None,
+        help="Optional dataset-local prediction directory used as fixed teacher distillation targets.",
     )
     train_parser.add_argument(
         "--outdir",
@@ -361,10 +390,22 @@ def run_train(args: argparse.Namespace) -> None:
         raise NotImplementedError("The thesis mainline requires train/val to come from the same graph.")
 
     graph_config = _build_graph_config(args)
-    if float(graph_config.teacher_distill_weight) > 0.0:
+    target_context_prediction_dir = _coerce_optional_path(args.target_context_prediction_dir)
+    teacher_distill_prediction_dir = _coerce_optional_path(args.teacher_distill_prediction_dir)
+    teacher_guidance_requested = (
+        target_context_prediction_dir is not None
+        or teacher_distill_prediction_dir is not None
+        or float(graph_config.teacher_distill_weight) > 0.0
+    )
+    if str(args.model) == OFFICIAL_BACKBONE_MODEL and teacher_guidance_requested:
         raise ValueError(
-            "The official thesis mainline forbids teacher distillation. "
-            "Keep `teacher_distill_weight=0` and use the unified v4 preset."
+            "The legacy `m7_utpm` backbone is kept teacher-free. "
+            "Use `m8_utgt` for teacher-guided thesis runs."
+        )
+    if float(graph_config.teacher_distill_weight) > 0.0 and teacher_distill_prediction_dir is None:
+        raise ValueError(
+            "teacher_distill_weight > 0 requires --teacher-distill-prediction-dir "
+            "so the thesis runtime can load fixed teacher targets."
         )
     metadata = _mainline_metadata(args.model, graph_config)
     runtime = prepare_thesis_runtime(
@@ -374,6 +415,9 @@ def run_train(args: argparse.Namespace) -> None:
         train_ids=train_ids,
         graph_config=graph_config,
         feature_profile=args.feature_profile,
+        target_context_prediction_dir=target_context_prediction_dir,
+        target_context_prediction_transform=args.target_context_prediction_transform,
+        teacher_distill_prediction_dir=teacher_distill_prediction_dir,
     )
     graph_config = runtime.graph_config
     phase1_context = runtime.phase1_context
@@ -566,6 +610,18 @@ def run_train(args: argparse.Namespace) -> None:
         else None
     )
 
+    leakage_safeguards = [
+        "Feature normalization is fit on split-train nodes only.",
+        "Known-label artifacts are built with the time threshold and never consume future labels.",
+        "Validation and test_pool predictions are inference-only; their labels never flow back into training.",
+        "Each dataset is trained in isolation under its own dataset-scoped cache and output directory.",
+        "The target-context bridge reuses only dataset-local feature caches and train-fit normalizers.",
+    ]
+    if teacher_guidance_requested:
+        leakage_safeguards.append(
+            "Teacher predictions are fixed dataset-local inference outputs from phase1-train-fitted models; "
+            "they are loaded read-only and never refit on validation labels inside the GNN run."
+        )
     summary = {
         "model_name": args.model,
         "run_name": args.run_name,
@@ -577,13 +633,7 @@ def run_train(args: argparse.Namespace) -> None:
         "official_eval_contract": ["train", "val", "test_pool"],
         "dataset_isolation": True,
         "cross_dataset_training": False,
-        "leakage_safeguards": [
-            "Feature normalization is fit on split-train nodes only.",
-            "Known-label artifacts are built with the time threshold and never consume future labels.",
-            "Validation and test_pool predictions are inference-only; their labels never flow back into training.",
-            "Each dataset is trained in isolation under its own dataset-scoped cache and output directory.",
-            "The target-context bridge reuses only dataset-local feature caches and train-fit normalizers.",
-        ],
+        "leakage_safeguards": leakage_safeguards,
         "thesis_mainline_enabled": metadata["thesis_mainline_enabled"],
         "main_innovation": metadata["main_innovation"],
         "aux_regularizer": metadata["aux_regularizer"],
@@ -595,6 +645,29 @@ def run_train(args: argparse.Namespace) -> None:
             if runtime.target_context_feature_groups
             else "none"
         ),
+        "teacher_guidance": {
+            "enabled": bool(teacher_guidance_requested),
+            "preset_teacher_candidate": bool(
+                getattr(args, "resolved_preset", None) == TRANSFORMER_BACKBONE_TEACHER_PRESET
+            ),
+            "target_context_prediction_dir": (
+                None if target_context_prediction_dir is None else _path_repr(target_context_prediction_dir)
+            ),
+            "target_context_prediction_transform": str(args.target_context_prediction_transform),
+            "teacher_distill_prediction_dir": (
+                None if teacher_distill_prediction_dir is None else _path_repr(teacher_distill_prediction_dir)
+            ),
+            "teacher_distill_weight": float(graph_config.teacher_distill_weight),
+            "hard_negative_teacher_blend": float(graph_config.hard_negative_teacher_blend),
+            "target_aux_feature_count": (
+                0 if phase1_context.target_aux_feature_names is None else len(phase1_context.target_aux_feature_names)
+            ),
+            "distill_train_coverage": (
+                None
+                if phase1_context.distill_target_mask is None or train_ids.size == 0
+                else float(np.mean(np.asarray(phase1_context.distill_target_mask[train_ids], dtype=np.float32)))
+            ),
+        },
         "split_style": split.split_style,
         "train_phase": split.train_phase,
         "val_phase": split.val_phase,

@@ -1,0 +1,51 @@
+{
+  "suite_name": "thesis_m8_utgt_teacher_e8_s42_v1",
+  "model": "m8_utgt",
+  "preset": "utgt_temporal_shift_teacher_v1",
+  "feature_profile": "utpm_unified",
+  "dataset_isolation": true,
+  "cross_dataset_training": false,
+  "same_architecture_across_datasets": true,
+  "split_guardrails": [
+    "Each dataset is trained separately under its own dataset env and output namespace.",
+    "All datasets share the same model family, feature contract, and training protocol.",
+    "No dataset contributes labels, predictions, or normalization statistics to another dataset."
+  ],
+  "epochs": 8,
+  "batch_size": 512,
+  "hidden_dim": 128,
+  "rel_dim": 32,
+  "fanouts": [
+    15,
+    10
+  ],
+  "seeds": [
+    42
+  ],
+  "results": [
+    {
+      "dataset": "xinye_dgraph",
+      "run_name": "thesis_m8_utgt_teacher_e8_s42_v1_xy",
+      "summary_path": "experiment/outputs/training/models/m8_utgt/thesis_m8_utgt_teacher_e8_s42_v1_xy/summary.json",
+      "val_auc_mean": 0.7831006345660136,
+      "test_auc_mean": null,
+      "external_auc_mean": null
+    },
+    {
+      "dataset": "elliptic_transactions",
+      "run_name": "thesis_m8_utgt_teacher_e8_s42_v1_et",
+      "summary_path": "experiment/outputs/elliptic_transactions/training/models/m8_utgt/thesis_m8_utgt_teacher_e8_s42_v1_et/summary.json",
+      "val_auc_mean": 0.7853975419669594,
+      "test_auc_mean": null,
+      "external_auc_mean": null
+    },
+    {
+      "dataset": "ellipticpp_transactions",
+      "run_name": "thesis_m8_utgt_teacher_e8_s42_v1_epp",
+      "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m8_utgt/thesis_m8_utgt_teacher_e8_s42_v1_epp/summary.json",
+      "val_auc_mean": 0.783195281377972,
+      "test_auc_mean": null,
+      "external_auc_mean": null
+    }
+  ]
+}

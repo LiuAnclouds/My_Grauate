@@ -18,10 +18,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from experiment.training.thesis_contract import (
+    LEGACY_M7_HYBRID_BLEND_ALPHA,
+    LEGACY_M7_HYBRID_SUITE_NAME,
     OFFICIAL_BACKBONE_FEATURE_PROFILE,
     OFFICIAL_BACKBONE_MODEL,
     OFFICIAL_BACKBONE_PRESET,
-    OFFICIAL_HYBRID_BLEND_ALPHA,
     OFFICIAL_SUITE_EPOCHS,
     OFFICIAL_SUITE_SEEDS,
 )
@@ -29,7 +30,7 @@ from experiment.training.thesis_contract import (
 
 THESIS_SUITE_ROOT = REPO_ROOT / "experiment" / "outputs" / "thesis_suite"
 THESIS_ABLATION_ROOT = REPO_ROOT / "experiment" / "outputs" / "thesis_ablation"
-OFFICIAL_HYBRID_SUITE = "thesis_m7_v4_graphpropblend082"
+OFFICIAL_HYBRID_SUITE = LEGACY_M7_HYBRID_SUITE_NAME
 
 
 @dataclass(frozen=True)
@@ -187,8 +188,8 @@ def _load_hybrid_reference() -> dict[str, Any]:
                 "suite_name": OFFICIAL_HYBRID_SUITE,
                 "summary_path": row.get("summary_path"),
                 "description": (
-                    "Current official thesis result with GNN-primary fixed logit fusion "
-                    f"(alpha={float(payload.get('blend_alpha', OFFICIAL_HYBRID_BLEND_ALPHA)):.2f})."
+                    "Legacy m7 reference hybrid result with GNN-primary fixed logit fusion "
+                    f"(alpha={float(payload.get('blend_alpha', LEGACY_M7_HYBRID_BLEND_ALPHA)):.2f})."
                 ),
                 "graph_config_overrides": [],
             }
@@ -385,7 +386,7 @@ def _write_results_files(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run tri-dataset m7 backbone ablations and write plotting-friendly result artifacts."
+        description="Run tri-dataset shared-module ablations on the legacy m7 backbone and write plotting-friendly result artifacts."
     )
     parser.add_argument(
         "--device",

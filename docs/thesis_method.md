@@ -4,9 +4,9 @@
 
 - [Back to README](../README.md)
 - [Experiment Table](thesis_experiments.md)
-- [Official Result JSON](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/summary.json)
-- [Backbone Ablation Report](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md)
-- [Leakage Audit](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/leakage_audit.md)
+- [Recommended Result JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json)
+- [Pure Teacher Backbone JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json)
+- [Recommended Leakage Audit](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.md)
 
 ## 1. Problem Setting
 
@@ -18,227 +18,170 @@
 - 各数据集各自预处理后，全部映射到同一特征契约 `utpm_unified`
 - 主模型必须是动态图神经网络
 - 二级决策层允许存在，但只能作为 GNN 主干的残差校正
+- 不允许把 `secondary-only` 包装成论文主模型
 
-## 2. Official Architecture
+## 2. Final Recommended Architecture
 
-统一流程如下：
+当前推荐主线如下：
 
-1. 各数据集构建自己的 `graph_gdata/phase_gdata` 与统一特征缓存
-2. 根据各自 `recommended_split.json` 读取 `phase1_train / phase1_val / test_pool`
-3. 用统一动态图 GNN 主干训练，当前 official 为 `m7_utpm`，现代化候选为 `m8_utgt`
-4. 仅在当前数据集的 `phase1_train` 上训练 `graphprop residual` tree 分支
-5. 用固定 logit 融合形成最终预测
+1. 各数据集分别构建自己的图缓存与特征缓存
+2. 所有数据都映射到统一输入契约 `utpm_unified`
+3. 使用统一动态图主干 `m8_utgt`，preset 为 `utgt_temporal_shift_teacher_v1`
+4. 训练期间读取当前数据集、`phase1_train` 拟合得到的 graphprop logits，作为只读 teacher 信号
+5. 推理阶段再使用同一 graphprop 家族产生的 secondary logit，做固定残差校正
+6. 通过 `alpha=0.48` 的 logit-space 固定融合得到最终预测
 
-这里“统一模型”的正确含义是：
+也就是说，推荐主线不是“先树模型、后 GNN”，也不是“两套模型并列投票”，而是：
 
-- 统一输入契约
-- 统一主模型族
+`统一输入契约 + teacher-guided dynamic GNN + leakage-safe residual correction`
+
+## 3. What The Run Names Actually Mean
+
+这几个名词一定要分清：
+
+| Name | Meaning | Is It The Main Model? |
+| --- | --- | --- |
+| `thesis_m8_utgt_teacher_e8_s42_v1` | 纯 GNN 主干结果，teacher 只在训练期提供辅助信号 | 是 |
+| `secondary-only` | 单独使用 graphprop 分支做预测 | 否 |
+| `thesis_m8_utgt_teacher_gnnprimary048` | 最终论文主结果，`52% GNN + 48% secondary` | 是 |
+| `thesis_m8_utgt_graphpropblend091` | 只追 AUC 的 appendix 结果，`9% GNN + 91% secondary` | 否 |
+
+其中 `teacher` 的准确含义是：
+
+- teacher 预测来自当前数据集、`phase1_train` 拟合出的 graphprop 模型
+- 这些预测在 GNN 训练时只读加载，不重新在验证集标签上拟合
+- teacher 参与的是 target-context、rank distill、hard negative guidance
+- teacher 不是第二套主模型，也不是额外的数据集分支
+
+## 4. Backbone And Decision Formula
+
+推荐主线的主干与决策层如下：
+
+| Layer | Current Choice | Role |
+| --- | --- | --- |
+| Input contract | `utpm_unified` | 三个数据集统一输入空间 |
+| Main GNN backbone | `m8_utgt` | 多头时序关系注意力主干 |
+| Shared backbone modules | `prototype memory` + `pseudo-contrastive temporal mining` + `drift residual target context` | 处理时间漂移、类别结构和上下文偏移 |
+| Teacher guidance | dataset-local graphprop logits | 训练期辅助目标与难负样本引导 |
+| Residual decision branch | leakage-safe `graphprop + XGBoost` | 推理期残差校正 |
+| Final output | fixed logit fusion | 保持 GNN-primary |
+
+最终公式是：
+
+`p_final = sigmoid(0.52 * logit(p_gnn) + 0.48 * logit(p_secondary))`
+
+这里 `alpha=0.48` 表示 secondary 权重，而不是 GNN 权重。
+
+## 5. Innovation Groups And Evidence
+
+当前论文最稳妥的创新叙述应该按“创新组”来讲，而不是按零散超参数来讲。
+
+| Innovation Group | Evidence | Current Reading |
+| --- | --- | --- |
+| Temporal relation attention backbone | `m8_utgt` 在统一合同下替换 `m7_utpm` 的局部聚合器 | 主干现代化本身成立 |
+| Prototype memory | legacy shared-module ablation | 更像结构正则与类别稳定器 |
+| Pseudo-contrastive temporal mining | 去掉后宏平均下降 `0.006182` | 是最明确有效的共享主干模块 |
+| Drift residual target context | legacy shared-module ablation | 更偏稳健性与上下文校准 |
+| Teacher-guided temporal normality bridge | pure `m8_utgt` -> teacher pure `m8_utgt`，宏平均 `+0.016758` | 说明 teacher guidance 有效 |
+| Graphprop residual correction + fixed fusion | teacher pure `m8` -> recommended blend，宏平均 `+0.073213` | 是最终主结果跃升的关键模块 |
+
+这里需要实话实说：
+
+- `m8_utgt` 单独替换主干并不会自动变强，pure `m8_utgt` 宏平均只有 `0.767140`
+- 真正有效的是 `UTGT + teacher guidance + residual correction` 这个统一组合
+- 所以论文创新点不能写成“attention 一上去就全赢了”，而应该写成“在统一动态图合同下，把 attention 主干、teacher-guided temporal bridge 与 leakage-safe residual correction 有机整合起来”
+
+## 6. Why Secondary-only Is Higher On ET/EPP
+
+这个问题必须直接回答：
+
+1. `secondary-only` 不是 GNN，而是 graphprop tree 分支
+2. ET 和 EPP 的传播结构对 graphprop 更友好，所以单列分数会更高
+3. 但它不满足“主模型必须是动态图 GNN”的论文硬约束
+4. 因此它只能作为上界分支、ablation 或 appendix，不能直接当论文主结果
+
+换句话说：
+
+- 如果只追验证集 AUC，可以展示 `alpha=0.91` 或 `secondary-only`
+- 如果要同时满足“统一架构 + GNN 为主 + 可答辩”，就应该选择 `alpha=0.48` 的推荐主线
+
+## 7. Why This Is Still One Unified Model
+
+有人会把现在这套方法误解成“两套模型”。这个说法不成立，原因有 4 个：
+
+1. 三个数据集都映射到同一输入契约 `utpm_unified`
+2. 三个数据集都使用同一 GNN 主干家族 `m8_utgt`
+3. teacher、secondary、blend 的规则在三个数据集上完全一致
+4. 所有训练与推理都严格在各自数据集内部完成
+
+因此这里的“统一模型”含义是：
+
+- 统一输入
+- 统一主干
 - 统一训练协议
 - 统一决策规则
 - 但不混数据集
 
-### 2.1 Current Model Breakdown
+## 8. Hard-Leakage Guardrails
 
-为了避免把现在的模型误读成“两套模型混着跑”，这里把当前方法直接拆成 5 层：
+推荐主线已经重新审计过：
 
-| Layer | Current Official Choice | Role |
-| --- | --- | --- |
-| Input contract | `utpm_unified` | 把 3 个数据集映射到同一输入空间 |
-| Main backbone | `m7_utpm` | 当前 official 动态图 GNN 主干 |
-| Backbone innovations | `prototype memory` + `pseudo-contrastive temporal mining` + `drift residual target context` | 提升时间漂移下的异常识别能力 |
-| Residual decision branch | leakage-safe `graphprop + XGBoost` | 只做残差校正，不替代主 GNN |
-| Final output | fixed logit fusion | 形成 official 主结果 |
+- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.md)
 
-所以当前论文主线真正的方法是：
+审计结论：
 
-`统一输入契约 + 动态图 GNN 主干 + 3 个主干创新模块 + 可选残差分支 + 固定融合`
+- `train / val / test_pool / external` 四个 split 两两不重叠
+- secondary 训练样本严格属于当前数据集的 `phase1_train`
+- hybrid 与 secondary 的验证 bundle 都与官方 `phase1_val` 完全对齐
+- 所有路径都在数据集作用域内，未复用跨数据集缓存或预测
+- teacher 信号来自数据集内、只读的训练期输出，不回流验证标签
 
-而不是下面这些东西：
+## 9. Repro Commands
 
-- 不是“每个数据集一套单独策略”
-- 不是“XGBoost 先提特征，再喂给 GNN 分类”
-- 不是“graphprop tree 分支才是主模型”
-- 不是“两个 GNN 并列投票”
-
-## 3. Main GNN Backbone
-
-当前 official 主模型为 `m7_utpm`，统一现代化候选为 `m8_utgt`。
-
-主干固定项：
-
-- 共享输入契约：`utpm_unified`
-- 共享目标上下文组：
-  - `graph_time_detrend`
-  - `neighbor_similarity`
-  - `activation_early`
-- 统一超参数：
-  - hidden dim = `128`
-  - relation dim = `32`
-  - fanouts = `(15, 10)`
-  - epochs = `8`
-
-这个主干负责学习动态图中的时间漂移、邻域关系与行为上下文，是论文的主模型，而不是附属模型。
-
-### 3.1 Backbone Modernization
-
-为回应“不能只是旧 GraphSAGE 外挂一些模块”的问题，当前代码里新增了真正统一的候选主干 `m8_utgt`。
-
-它和 `m7_utpm` 的关系不是“另一套实验分支”，而是：
-
-- 同一个输入契约：`utpm_unified`
-- 同一个训练协议：`phase1_train -> phase1_val -> test_pool`
-- 同一组 thesis 模块：`prototype memory`、`pseudo-contrastive temporal mining`、`drift residual target context`
-- 只替换主干内部的局部聚合算子
-
-具体来说：
-
-| Backbone | Local Aggregation | Role |
-| --- | --- | --- |
-| `m7_utpm` | GraphSAGE-style relation aggregation | 当前 official 主干 |
-| `m8_utgt` | multi-head temporal relation attention | 现代化候选主干 |
-
-因此这次重构的创新点不是“给不同数据集换不同 trick”，而是在统一合同下，把主干升级成更接近时序图 Transformer 的关系注意力结构。
-
-### 3.2 Official Backbone Vs Candidate Backbone
-
-如果只看现在仓库里的方法名，最容易混淆的是下面 4 个概念：
-
-| Name | Is It The Main GNN? | Current Status | Meaning |
-| --- | --- | --- | --- |
-| `m7_utpm` | Yes | official | 当前正式论文主干 |
-| `m8_utgt` | Yes | candidate | 在同一合同下升级成 attention-style 主干的候选版本 |
-| `secondary-only` | No | ablation / upper-bound branch | 非 GNN 的 graphprop tree 分支单独预测 |
-| `official blend` | Yes | official | `m7_utpm` 主干输出再加 graphprop 残差校正后的最终结果 |
-
-其中：
-
-- `m7_utpm` 和 `m8_utgt` 都是主 GNN
-- `secondary-only` 不是 GNN
-- `official blend` 也不是“第二个主模型”，而是以主 GNN 为前提的统一决策层
-
-## 4. Innovation Modules
-
-当前 thesis mainline 里真正需要做消融的创新模块一共 5 个：
-
-| Layer | Module | Role |
-| --- | --- | --- |
-| GNN backbone | `prototype memory` | 用时间桶原型约束稳定类别结构 |
-| GNN backbone | `pseudo-contrastive temporal mining` | 增强时间漂移下的正负分离 |
-| GNN backbone | `drift residual target context` | 对时间漂移和上下文偏移做残差适配 |
-| Decision layer | `graphprop residual head` | 用泄露安全的 graphprop 分支纠正 GNN 局部排序误差 |
-| Decision layer | `fixed logit fusion` | 保证 graphprop 只是残差校正，而不是重新训练一个 stacker |
-
-这意味着：
-
-- `utpm_unified` 是统一输入契约，不计入 ablation 模块数。
-- 你的方法不是老式的“单纯 GraphSAGE/GAT + 手工特征”。
-- 但也不应该夸成“提出了一个全新的基础图神经网络家族”。
-- 更准确的表述是：这是一个 thesis-level 的统一动态图反欺诈架构，把现代时序 GNN 主干、原型记忆、伪对比约束和 graphprop 残差校正整合到了同一 leakage-safe 合同里。
-
-当前官方 tri-dataset 主干消融的直接证据是：
-
-- `pseudo-contrastive temporal mining` 去掉后宏平均从 `0.788895` 降到 `0.782712`，是最明确有效的主干模块。
-- `prototype memory` 与 `drift residual target context` 在当前单种子 `phase1_val` 上更接近弱正则/上下文校准，数值变化都在 `0.002` 量级内。
-- 决策层两项创新 `graphprop residual head + fixed logit fusion` 仍然是 official result 大幅跃升的主要来源。
-
-## 5. Why The Second Column Is Stronger But Not The Official Main Result
-
-这个问题必须说清楚，因为现在 GitHub 上最容易被误读的地方就在这里。
-
-结果上：
-
-- `Secondary-only (non-GNN graphprop)` 在 Elliptic 和 Elliptic++ 上确实比 `Official GNN-primary Blend` 更高。
-- 三数据集宏平均里，`Secondary-only` 也是当前数值最高的一列，达到 `0.908981`。
-
-但它不是 official main result，原因也很明确：
-
-1. 第二列不是第二个 GNN，而是非 GNN 的 graphprop tree 分支。
-2. 你的论文硬约束是“主模型必须是动态图 GNN”，所以不能把树模型直接写成主模型。
-3. 因此，第二列应该被定义为“强上界 secondary branch / ablation”，而不是被包装成论文主干。
-4. 正式论文主线使用 `GNN-primary Blend`，因为它满足“GNN 为主、graphprop 为残差校正”的设计契约。
-
-换句话说：
-
-- 如果只追数值，第二列更强。
-- 如果要满足论文主模型定义，official 结果就必须是第三列。
-
-## 6. Effective Gain
-
-`UTPM Dynamic GNN + Graphprop Residual Correction`
-
-在官方主线下，纯 GNN 到 official blend 的提升如下：
-
-| Dataset | Pure `m7_utpm` | Official GNN-primary Blend | Gain |
-| --- | ---: | ---: | ---: |
-| XinYe DGraph | 0.776439 | 0.795293 | +0.018854 |
-| Elliptic | 0.812635 | 0.949436 | +0.136801 |
-| Elliptic++ | 0.777611 | 0.946584 | +0.168973 |
-
-因此，graphprop 分支不是替代 GNN，而是官方主架构中的残差校正层。
-
-## 7. Why This Is Not Hard Leakage
-
-本项目采用的是“无硬泄露”标准：
-
-- `train/val/test_pool/external` 节点集合互不重叠
-- 特征归一化只在 `phase1_train` 上拟合
-- secondary 只在 `phase1_train` 上训练
-- `val` 只参与评估与固定权重选择，不参与二级模型拟合
-- 不存在跨数据集特征缓存、预测缓存或训练样本复用
-
-正式审计文件：
-
-- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/leakage_audit.md)
-
-## 8. Repro Commands
-
-构建缓存：
+构建特征缓存：
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_mainline.py build_features --phase both
 ```
 
-训练纯 GNN 官方主干：
+运行纯 teacher-guided GNN 套件：
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py \
-  --suite-name thesis_m7_v4_unified_e8 \
-  --model m7_utpm \
-  --preset utpm_temporal_shift_v4 \
-  --feature-profile utpm_unified \
-  --epochs 8 \
-  --seeds 42
-```
-
-训练 transformer-style 候选主干：
-
-```bash
-conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py \
-  --suite-name thesis_m8_utgt_e8 \
+  --suite-name thesis_m8_utgt_teacher_e8_s42_v1 \
   --model m8_utgt \
-  --preset utgt_temporal_shift_v1 \
+  --preset utgt_temporal_shift_teacher_v1 \
   --feature-profile utpm_unified \
   --epochs 8 \
-  --seeds 42
+  --seeds 42 \
+  --skip-existing
 ```
 
-训练官方 hybrid 套件：
+运行推荐论文主结果：
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py \
-  --suite-name thesis_m7_v4_graphpropblend082 \
-  --blend-alpha 0.82
+  --suite-name thesis_m8_utgt_teacher_gnnprimary048 \
+  --base-model m8_utgt \
+  --base-run-name-template thesis_m8_utgt_teacher_e8_s42_v1_{dataset_short} \
+  --blend-alpha 0.48 \
+  --skip-existing
 ```
 
-训练官方主干三模块消融并导出可画图汇总：
+运行只追 AUC 的 appendix 结果：
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_backbone_ablation.py \
+conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py \
+  --suite-name thesis_m8_utgt_graphpropblend091 \
+  --base-model m8_utgt \
+  --base-run-name-template thesis_m8_utgt_e8_s42_v1_{dataset_short} \
+  --blend-alpha 0.91 \
   --skip-existing
 ```
 
 生成硬泄露审计：
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_leakage.py
+conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_leakage.py \
+  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json
 ```

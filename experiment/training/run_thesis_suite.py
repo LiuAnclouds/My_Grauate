@@ -20,6 +20,9 @@ from experiment.training.thesis_contract import (
     OFFICIAL_BACKBONE_MODEL,
     OFFICIAL_BACKBONE_PRESET,
     OFFICIAL_DATASETS,
+    OFFICIAL_TEACHER_SIGNAL_MODEL_FAMILY,
+    OFFICIAL_TEACHER_SIGNAL_RUN_NAME_TEMPLATE,
+    OFFICIAL_TEACHER_SIGNAL_TRANSFORM,
     OFFICIAL_MAINLINE_BATCH_SIZE,
     OFFICIAL_MAINLINE_FANOUTS,
     OFFICIAL_MAINLINE_HIDDEN_DIM,
@@ -28,6 +31,7 @@ from experiment.training.thesis_contract import (
     OFFICIAL_SUITE_SEEDS,
     TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_PRESET,
+    TRANSFORMER_BACKBONE_TEACHER_PRESET,
 )
 
 DEFAULT_DATASETS = OFFICIAL_DATASETS
@@ -41,7 +45,7 @@ DATASET_SHORT_NAMES = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run the official thesis mainline on multiple datasets with one unified experiment contract."
+            "Run the unified thesis GNN mainline on multiple datasets with one shared experiment contract."
         )
     )
     parser.add_argument(
@@ -61,8 +65,8 @@ def parse_args() -> argparse.Namespace:
         default=OFFICIAL_BACKBONE_MODEL,
         help=(
             "Unified thesis-mainline model family. "
-            "`m7_utpm` is the stable official backbone; "
-            "`m8_utgt` is the transformer-style backbone candidate."
+            "`m7_utpm` is the legacy stable backbone; "
+            "`m8_utgt` is the transformer-style backbone family used by the recommended result."
         ),
     )
     parser.add_argument(
@@ -72,7 +76,8 @@ def parse_args() -> argparse.Namespace:
             "Preset passed through to run_thesis_mainline.py. "
             "Defaults: `m5_temporal_graphsage` -> `unified_baseline`, "
             f"`{OFFICIAL_BACKBONE_MODEL}` -> `{OFFICIAL_BACKBONE_PRESET}`, "
-            f"`{TRANSFORMER_BACKBONE_MODEL}` -> `{TRANSFORMER_BACKBONE_PRESET}`."
+            f"`{TRANSFORMER_BACKBONE_MODEL}` -> `{TRANSFORMER_BACKBONE_PRESET}`. "
+            f"The teacher-guided recommended backbone preset is `{TRANSFORMER_BACKBONE_TEACHER_PRESET}`."
         ),
     )
     parser.add_argument(
@@ -132,6 +137,33 @@ def parse_args() -> argparse.Namespace:
         help="Repeatable low-level GraphModelConfig override forwarded to the mainline trainer.",
     )
     parser.add_argument(
+        "--teacher-signal-model-family",
+        default=OFFICIAL_TEACHER_SIGNAL_MODEL_FAMILY,
+        help="Model-family directory that stores dataset-local teacher prediction runs.",
+    )
+    parser.add_argument(
+        "--target-context-prediction-run-name-template",
+        default=None,
+        help=(
+            "Optional dataset-templated run-name used as the auxiliary teacher-context source. "
+            "Available fields: {suite_name}, {dataset}, {dataset_short}, {model}, {preset}, {epochs}."
+        ),
+    )
+    parser.add_argument(
+        "--target-context-prediction-transform",
+        choices=("raw", "logit"),
+        default="raw",
+        help="Transform applied to teacher prediction features before target-context fusion.",
+    )
+    parser.add_argument(
+        "--teacher-distill-prediction-run-name-template",
+        default=None,
+        help=(
+            "Optional dataset-templated run-name used as the fixed teacher distillation source. "
+            "Available fields: {suite_name}, {dataset}, {dataset_short}, {model}, {preset}, {epochs}."
+        ),
+    )
+    parser.add_argument(
         "--run-name-template",
         default="{suite_name}_{dataset_short}",
         help=(
@@ -177,6 +209,28 @@ def _run_name_for_dataset(args: argparse.Namespace, dataset_name: str) -> str:
     )
 
 
+def _format_dataset_template(template: str, args: argparse.Namespace, dataset_name: str) -> str:
+    dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
+    return str(template).format(
+        suite_name=args.suite_name,
+        dataset=dataset_name,
+        dataset_short=dataset_short,
+        model=args.model,
+        preset=args.preset,
+        epochs=args.epochs,
+    )
+
+
+def _prediction_signal_run_dir(
+    *,
+    args: argparse.Namespace,
+    dataset_name: str,
+    run_name_template: str,
+) -> Path:
+    run_name = _format_dataset_template(run_name_template, args, dataset_name)
+    return _dataset_training_root(dataset_name) / "models" / str(args.teacher_signal_model_family) / run_name
+
+
 def _command_preview(command: list[str], dataset_name: str) -> str:
     return f"{DATASET_ENV_VAR}={shlex.quote(dataset_name)} " + shlex.join(command)
 
@@ -194,6 +248,7 @@ def _build_feature_command() -> list[str]:
 def _build_train_command(
     *,
     args: argparse.Namespace,
+    dataset_name: str,
     run_name: str,
 ) -> list[str]:
     command: list[str] = [
@@ -223,6 +278,34 @@ def _build_train_command(
         "--seeds",
         *[str(v) for v in args.seeds],
     ]
+    if args.target_context_prediction_run_name_template:
+        command.extend(
+            [
+                "--target-context-prediction-dir",
+                str(
+                    _prediction_signal_run_dir(
+                        args=args,
+                        dataset_name=dataset_name,
+                        run_name_template=args.target_context_prediction_run_name_template,
+                    )
+                ),
+                "--target-context-prediction-transform",
+                str(args.target_context_prediction_transform),
+            ]
+        )
+    if args.teacher_distill_prediction_run_name_template:
+        command.extend(
+            [
+                "--teacher-distill-prediction-dir",
+                str(
+                    _prediction_signal_run_dir(
+                        args=args,
+                        dataset_name=dataset_name,
+                        run_name_template=args.teacher_distill_prediction_run_name_template,
+                    )
+                ),
+            ]
+        )
     for override in args.graph_config_override:
         command.extend(["--graph-config-override", str(override)])
     return command
@@ -295,18 +378,28 @@ def main() -> None:
 
     if str(args.model) == OFFICIAL_BACKBONE_MODEL and str(args.preset) != OFFICIAL_BACKBONE_PRESET:
         raise ValueError(
-            "The official thesis suite is locked to the unified m7 v4 backbone. "
+            "The legacy m7 thesis suite is locked to the unified m7 v4 backbone. "
             "Use `run_thesis_mainline.py` for ad hoc ablations."
         )
     if str(args.model) == "m5_temporal_graphsage" and str(args.preset) != "unified_baseline":
         raise ValueError(
             "The official thesis suite is locked to the unified m5 baseline preset `unified_baseline`."
         )
-    if str(args.model) == TRANSFORMER_BACKBONE_MODEL and str(args.preset) != TRANSFORMER_BACKBONE_PRESET:
+    if (
+        str(args.model) == TRANSFORMER_BACKBONE_MODEL
+        and str(args.preset) not in {TRANSFORMER_BACKBONE_PRESET, TRANSFORMER_BACKBONE_TEACHER_PRESET}
+    ):
         raise ValueError(
-            "The transformer-style thesis suite is locked to the unified m8 preset "
-            f"`{TRANSFORMER_BACKBONE_PRESET}` for controlled comparisons."
+            "The transformer-style thesis suite is locked to the unified m8 presets: "
+            f"`{TRANSFORMER_BACKBONE_PRESET}` or `{TRANSFORMER_BACKBONE_TEACHER_PRESET}`."
         )
+    if str(args.preset) == TRANSFORMER_BACKBONE_TEACHER_PRESET:
+        if args.target_context_prediction_run_name_template is None:
+            args.target_context_prediction_run_name_template = OFFICIAL_TEACHER_SIGNAL_RUN_NAME_TEMPLATE
+        if args.teacher_distill_prediction_run_name_template is None:
+            args.teacher_distill_prediction_run_name_template = OFFICIAL_TEACHER_SIGNAL_RUN_NAME_TEMPLATE
+        if str(args.target_context_prediction_transform) == "raw":
+            args.target_context_prediction_transform = OFFICIAL_TEACHER_SIGNAL_TRANSFORM
 
     results: list[dict[str, Any]] = []
     for dataset_name in args.datasets:
@@ -318,7 +411,7 @@ def main() -> None:
         else:
             if args.build_features:
                 _run_command(_build_feature_command(), dataset_name, dry_run=args.dry_run)
-            train_command = _build_train_command(args=args, run_name=run_name)
+            train_command = _build_train_command(args=args, dataset_name=dataset_name, run_name=run_name)
             _run_command(train_command, dataset_name, dry_run=args.dry_run)
             if args.dry_run:
                 continue

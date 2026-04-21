@@ -5,215 +5,168 @@
 - [Repository README](../../README.md)
 - [Method Overview](../../docs/thesis_method.md)
 - [Experiment Table](../../docs/thesis_experiments.md)
-- [Official Result JSON](../outputs/thesis_suite/thesis_m7_v4_graphpropblend082/summary.json)
-- [Backbone Ablation Report](../outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md)
+- [Recommended Result JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json)
+- [Pure Teacher Backbone JSON](../outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json)
+- [Recommended Leakage Audit](../outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.md)
 
-## Official Surface
+## Recommended Surface
 
-毕业设计的正式实验主线只保留一条统一路径，不再接受 teacher 依赖或“一个数据集一套策略”的分叉：
+当前推荐主线只保留一条统一路径：
 
-- 纯 GNN 主干:
-  - `experiment/training/run_thesis_mainline.py`
-  - `experiment/training/run_thesis_suite.py`
-- 官方 recipe 入口:
-  - `experiment/training/run_thesis_recipe.py`
-- GNN 主导的统一混合决策层:
-  - `experiment/training/run_thesis_graphprop_secondary.py`
-  - `experiment/training/run_thesis_hybrid_blend.py`
-  - `experiment/training/run_thesis_hybrid_suite.py`
-- 单一真相源:
-  - `experiment/training/thesis_contract.py`
+- 统一输入契约：`utpm_unified`
+- 统一主干家族：`m8_utgt`
+- 统一 teacher preset：`utgt_temporal_shift_teacher_v1`
+- 统一 residual family：`graphprop + XGBoost`
+- 统一融合规则：`alpha=0.48`
 
-官方配置固定为：
+这里的 `alpha` 是 secondary 权重：
 
-- baseline:
-  - `m5_temporal_graphsage` + `unified_baseline`
-- thesis backbone:
-  - `m7_utpm` + `utpm_temporal_shift_v4`
-- transformer-style candidate backbone:
-  - `m8_utgt` + `utgt_temporal_shift_v1`
-- official final decision layer:
-  - fixed logit blend with `alpha=0.82`
-  - secondary model: leakage-safe `phase1_train` graphprop XGBoost
+- `alpha=0.48` = `52% GNN + 48% secondary`
+- `alpha=0.91` = `9% GNN + 91% secondary`
 
-额外说明：
+因此：
 
-- `secondary-only` 那一列不是第二个 GNN，而是非 GNN 的 graphprop 分支。
-- 如果只追 `val_auc`，它在 Elliptic / Elliptic++ 上更强。
-- 如果要维持“GNN 是论文主模型”的主线，official 结果就必须使用 `GNN-primary blend`。
-
-## Unified Design
-
-三个数据集都必须遵守同一实验合同：
-
-- 同一输入契约:
-  - `utpm_unified`
-- 同一主模型族:
-  - official: `m7_utpm`
-  - candidate: `m8_utgt`
-- 同一训练协议:
-  - `train -> val -> test_pool`
-- 同一混合决策规则:
-  - `GNN logit * 0.18 + graphprop logit * 0.82`
-
-这里的“统一模型”含义是：
-
-- 结构统一
-- 训练协议统一
-- 特征契约统一
-- 数据集彼此隔离
-
-不是把三个数据集混在一起做联合训练。
+- `thesis_m8_utgt_teacher_gnnprimary048` 是论文主结果
+- `thesis_m8_utgt_graphpropblend091` 只是 appendix
 
 ## What The Current Model Actually Is
 
-把当前 thesis 方法拆开看，会更清楚：
+把推荐主线拆开看：
 
-| Part | Current Official Choice | Meaning |
+| Part | Current Choice | Meaning |
 | --- | --- | --- |
 | Input | `utpm_unified` | 三个数据集统一输入契约 |
-| Main GNN | `m7_utpm` | 当前 official 主干 |
-| Candidate GNN | `m8_utgt` | 同一合同下的 transformer-style 主干候选 |
-| Backbone modules | `prototype memory` / `pseudo-contrastive temporal mining` / `drift residual target context` | GNN 主干内部创新 |
-| Secondary branch | `graphprop + XGBoost` | 只做 leakage-safe residual correction |
-| Final decision | fixed logit fusion | 构成 official blend 结果 |
+| Main GNN | `m8_utgt` | 多头时序关系注意力主干 |
+| Shared backbone modules | `prototype memory` / `pseudo-contrastive temporal mining` / `drift residual target context` | GNN 主干内部创新 |
+| Teacher guidance | dataset-local graphprop logits | 训练期辅助上下文与蒸馏信号 |
+| Secondary branch | `graphprop + XGBoost` | 推理期 residual correction |
+| Final decision | fixed logit fusion | 构成推荐主结果 |
 
 这意味着：
 
 - `secondary-only` 不是第二个 GNN
-- `official blend` 不是两套论文主模型并列
-- `m8_utgt` 也不是另一套数据集特供路线
-- 现在真正统一的是：输入契约、主模型族、训练协议、split guardrails、决策规则
+- `teacher` 不是另一套独立主模型
+- 推荐结果仍然是一套统一的 GNN 主线，只是在训练期和决策层用到了数据集内、泄露安全的辅助分支
 
-## Backbone Modernization Track
+## Recommended Commands
 
-这次重构新增了一条真正统一的候选主干，而不是“每个数据集一套 teacher / stacking / hack”：
+### 1. Build Unified Features
 
-- 候选模型：`m8_utgt`
-- 设计目标：在不改数据合同、不改 split、不改主干创新模块的前提下，把旧的 GraphSAGE 式局部聚合升级为多头时序关系注意力
-- 共享模块：`prototype memory`、`pseudo-contrastive temporal mining`、`drift residual target context`
-- 不允许的事情：单独给某个数据集换特征契约、换标签流、换训练协议
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_mainline.py \
+  build_features \
+  --phase both
+```
 
-当前状态：
+### 2. Run Pure Teacher-guided GNN Suite
 
-- `m7_utpm` 仍然是 official 主干
-- `m8_utgt` 已接入主训练入口、suite 入口和 thesis recipe 入口
-- `m8_utgt` 需要先完成 tri-dataset 验证，才会进入 official 表格
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py \
+  --suite-name thesis_m8_utgt_teacher_e8_s42_v1 \
+  --model m8_utgt \
+  --preset utgt_temporal_shift_teacher_v1 \
+  --feature-profile utpm_unified \
+  --epochs 8 \
+  --seeds 42 \
+  --skip-existing
+```
 
-## Leakage Guardrails
+输出：
 
-必须保持以下约束：
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json`
 
-- 特征归一化只用当前数据集的 `phase1_train` 节点拟合。
-- 图标签上下文只允许使用时间阈值之前的可见监督，不能把未来标签回流到训练侧。
-- `val` 和 `test_pool` 只做推理与评估，不参与模型或二级决策层拟合。
-- hybrid 的二级模型只在当前数据集的 `phase1_train` 上训练。
-- 每个数据集单独使用自己的缓存目录、模型目录、预测目录。
-- 硬泄露审计文件位于 `experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/leakage_audit.md`。
+### 3. Run Recommended GNN-primary Blend
 
-## Commands
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py \
+  --suite-name thesis_m8_utgt_teacher_gnnprimary048 \
+  --base-model m8_utgt \
+  --base-run-name-template thesis_m8_utgt_teacher_e8_s42_v1_{dataset_short} \
+  --blend-alpha 0.48 \
+  --skip-existing
+```
 
-- build feature cache:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_mainline.py build_features --phase both`
-- run unified GNN backbone:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_mainline.py train --model m7_utpm --preset utpm_temporal_shift_v4 --run-name thesis_xy_m7_v4_unified_s42_e8 --device cuda --epochs 8 --seeds 42`
-- run transformer-style backbone candidate:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_mainline.py train --model m8_utgt --preset utgt_temporal_shift_v1 --run-name thesis_xy_m8_utgt_s42_e8 --device cuda --epochs 8 --seeds 42`
-- run pure-GNN tri-dataset suite:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_unified_e8 --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --epochs 8 --seeds 42`
-- run transformer-style tri-dataset candidate suite:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m8_utgt_e8 --model m8_utgt --preset utgt_temporal_shift_v1 --feature-profile utpm_unified --epochs 8 --seeds 42`
-- run official tri-dataset hybrid suite:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py --suite-name thesis_m7_v4_graphpropblend082 --blend-alpha 0.82`
-- inspect official thesis recipe:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_recipe.py show --dataset xinye_dgraph --recipe thesis_m7_utpm`
-- inspect transformer-style thesis recipe:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_recipe.py show --dataset xinye_dgraph --recipe thesis_m8_utgt`
+输出：
 
-## Ablation Recipes
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json`
 
-主干内部 3 个核心创新模块都支持通过 `--graph-config-override` 做 official tri-dataset ablation。
+### 4. Run AUC-first Appendix
 
-一键编排并导出可画图汇总：
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_hybrid_suite.py \
+  --suite-name thesis_m8_utgt_graphpropblend091 \
+  --base-model m8_utgt \
+  --base-run-name-template thesis_m8_utgt_e8_s42_v1_{dataset_short} \
+  --blend-alpha 0.91 \
+  --skip-existing
+```
 
-- `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_backbone_ablation.py --skip-existing`
+输出：
 
-聚合输出目录：
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_graphpropblend091/summary.json`
 
-- `experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/`
-  - `report.md`
-  - `results_long.csv`
-  - `results_macro.csv`
-  - `results.json`
+### 5. Audit Hard Leakage
 
-- remove prototype memory:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_ablate_noprototype --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --epochs 8 --seeds 42 --graph-config-override prototype_loss_weight=0.0 --graph-config-override prototype_neighbor_blend=0.0 --graph-config-override prototype_global_blend=0.0 --graph-config-override prototype_consistency_weight=0.0 --graph-config-override prototype_separation_weight=0.0`
-- remove pseudo-contrastive temporal mining:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_ablate_nopseudocontrast --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --epochs 8 --seeds 42 --graph-config-override pseudo_contrastive_weight=0.0`
-- remove drift residual target context:
-  - `conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py --suite-name thesis_m7_v4_ablate_nodriftresidual --model m7_utpm --preset utpm_temporal_shift_v4 --feature-profile utpm_unified --epochs 8 --seeds 42 --graph-config-override target_context_fusion=none --graph-config-override target_time_adapter_strength=0.0 --graph-config-override normal_bucket_align_weight=0.0 --graph-config-override context_residual_clip=0.0 --graph-config-override context_residual_budget=0.0 --graph-config-override context_residual_budget_weight=0.0 --graph-config-override context_residual_budget_min_weight=0.0`
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_leakage.py \
+  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json
+```
 
-决策层 ablation 已经有现成结果：
+输出：
 
-- pure backbone:
-  - `thesis_m7_v4_unified_e8`
-- weak hybrid:
-  - `thesis_m7_v4_xgbblend035`
-- official hybrid:
-  - `thesis_m7_v4_graphpropblend082`
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.md`
+- `experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.json`
 
-## Current Result
+## Current Recommended Metrics
 
-官方最终套跑结果位于：
+推荐主线当前验证集 AUC：
 
-- `experiment/outputs/thesis_suite/thesis_m7_v4_xgbblend035/summary.json`
-  - 历史版本
+- XinYe: `0.7947618861548545`
+- Elliptic: `0.8854785109939336`
+- Elliptic++: `0.8910935282137372`
+
+纯 teacher-guided GNN：
+
+- XinYe: `0.7831006345660136`
+- Elliptic: `0.7853975419669594`
+- Elliptic++: `0.783195281377972`
+
+从这两组数可以直接说明：
+
+- teacher guidance 本身有效
+- fixed logit residual correction 也有效
+- 最终主线确实保持了 GNN 为主，同时把 XinYe 推到 `0.7947+`
+
+## Legacy Supporting Experiments
+
+以下内容保留为支撑性材料，不再作为论文最终主结论：
+
+- legacy `m7_utpm` pure backbone
+- legacy `m7` module ablations
+- old `alpha=0.82` hybrid
+
+对应产物：
+
+- `experiment/outputs/thesis_suite/thesis_m7_v4_unified_e8/summary.json`
 - `experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/summary.json`
-  - 当前 official
+- `experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md`
 
-当前验证集 AUC：
+如果还需要补共享模块消融图，可以直接使用：
 
-- XinYe:
-  - `0.7952929882597335`
-- Elliptic:
-  - `0.949435862593804`
-- Elliptic++:
-  - `0.9465836685331215`
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_backbone_ablation.py \
+  --skip-existing
+```
 
-当前主干三模块 official tri-dataset ablation：
+## File Hotspots
 
-- official backbone:
-  - macro `0.788895`
-- no prototype memory:
-  - macro `0.789344`
-- no pseudo-contrastive mining:
-  - macro `0.782712`
-- no drift residual context:
-  - macro `0.790898`
-
-结论必须写清楚：
-
-- `secondary-only` 数值更强，不应该被隐藏。
-- 但它不是论文主模型，因为它不是 GNN。
-- official thesis mainline 仍然以 `m7_utpm` 为主，只把 graphprop 当作 residual correction。
-- 当前单种子 `phase1_val` 下，主干内部最明确有效的是 `pseudo-contrastive temporal mining`。
-
-## Legacy Boundary
-
-以下内容只保留为历史比较材料，不再定义毕业设计主结论：
-
-- `experiment/training/run_training.py`
-- `experiment/training/run_xgb_*`
-- 旧的 OOF / stack / teacher / context bridge 分支
-- 旧 recipe 组合与探索性 preset
-
-后续如果继续改 thesis 主线，优先只改：
+后续如果继续只改 thesis 主线，优先改这些文件：
 
 - `experiment/training/run_thesis_mainline.py`
 - `experiment/training/run_thesis_suite.py`
-- `experiment/training/run_thesis_recipe.py`
-- `experiment/training/run_thesis_hybrid_blend.py`
 - `experiment/training/run_thesis_hybrid_suite.py`
+- `experiment/training/run_thesis_hybrid_blend.py`
 - `experiment/training/thesis_contract.py`
 - `experiment/training/thesis_presets.py`
 - `experiment/training/thesis_runtime.py`
+- `experiment/training/prediction_signal_utils.py`

@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from experiment.datasets.registry import DATASET_ENV_VAR, get_dataset_spec
 from experiment.training.thesis_contract import (
+    OFFICIAL_HYBRID_BASE_MODEL,
     OFFICIAL_BACKBONE_MODEL,
     OFFICIAL_DATASETS,
     OFFICIAL_HYBRID_BASE_RUN_NAME_TEMPLATE,
@@ -32,6 +33,7 @@ from experiment.training.thesis_contract import (
     OFFICIAL_HYBRID_RUN_NAME_TEMPLATE,
     OFFICIAL_HYBRID_SECONDARY_MODEL,
     OFFICIAL_HYBRID_SECONDARY_RUN_NAME_TEMPLATE,
+    TRANSFORMER_BACKBONE_MODEL,
 )
 
 DEFAULT_DATASETS = OFFICIAL_DATASETS
@@ -50,9 +52,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--suite-name", required=True)
     parser.add_argument("--datasets", nargs="+", default=list(DEFAULT_DATASETS))
     parser.add_argument(
+        "--base-model",
+        choices=(OFFICIAL_BACKBONE_MODEL, TRANSFORMER_BACKBONE_MODEL),
+        default=OFFICIAL_HYBRID_BASE_MODEL,
+        help=(
+            "Saved thesis GNN backbone family used as the base branch of the hybrid. "
+            "Defaults to the recommended teacher-guided `m8_utgt` backbone."
+        ),
+    )
+    parser.add_argument(
         "--base-run-name-template",
         default=OFFICIAL_HYBRID_BASE_RUN_NAME_TEMPLATE,
-        help="Per-dataset saved GNN backbone run name template.",
+        help="Per-dataset saved GNN backbone run name template. The default reproduces the recommended teacher-guided UTGT suite.",
     )
     parser.add_argument(
         "--run-name-template",
@@ -62,9 +73,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--secondary-run-name-template",
         default=OFFICIAL_HYBRID_SECONDARY_RUN_NAME_TEMPLATE,
-        help="Per-dataset official graphprop secondary run name template.",
+        help="Per-dataset graphprop residual run name template.",
     )
-    parser.add_argument("--blend-alpha", type=float, default=OFFICIAL_HYBRID_BLEND_ALPHA)
+    parser.add_argument(
+        "--blend-alpha",
+        type=float,
+        default=OFFICIAL_HYBRID_BLEND_ALPHA,
+        help="Secondary logit weight alpha. `0.48` means `52% GNN + 48% secondary` in logit space.",
+    )
     parser.add_argument("--skip-existing", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -164,7 +180,7 @@ def main() -> None:
         base_run_name = _base_run_name(args, dataset_name)
         secondary_run_name = _secondary_run_name(args, dataset_name)
         hybrid_run_name = _hybrid_run_name(args, dataset_name)
-        base_run_dir = _dataset_training_root(dataset_name) / "models" / OFFICIAL_BACKBONE_MODEL / base_run_name
+        base_run_dir = _dataset_training_root(dataset_name) / "models" / args.base_model / base_run_name
         secondary_run_dir = _dataset_training_root(dataset_name) / "models" / "xgboost_gpu" / secondary_run_name
         summary_path = _dataset_blend_root(dataset_name) / hybrid_run_name / "summary.json"
         secondary_summary_path = secondary_run_dir / "summary.json"
@@ -212,6 +228,7 @@ def main() -> None:
     payload = {
         "suite_name": args.suite_name,
         "family": "thesis_gnn_primary_hybrid",
+        "base_model": str(args.base_model),
         "blend_alpha": float(args.blend_alpha),
         "base_run_name_template": str(args.base_run_name_template),
         "dataset_isolation": True,

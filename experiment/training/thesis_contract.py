@@ -3,11 +3,13 @@ from __future__ import annotations
 OFFICIAL_BASELINE_MODEL = "m5_temporal_graphsage"
 OFFICIAL_BASELINE_PRESET = "unified_baseline"
 
+# Legacy stable GraphSAGE thesis backbone kept for shared-module ablations.
 OFFICIAL_BACKBONE_MODEL = "m7_utpm"
 OFFICIAL_BACKBONE_PRESET = "utpm_temporal_shift_v4"
 OFFICIAL_BACKBONE_FEATURE_PROFILE = "utpm_unified"
 TRANSFORMER_BACKBONE_MODEL = "m8_utgt"
 TRANSFORMER_BACKBONE_PRESET = "utgt_temporal_shift_v1"
+TRANSFORMER_BACKBONE_TEACHER_PRESET = "utgt_temporal_shift_teacher_v1"
 OFFICIAL_TARGET_CONTEXT_GROUPS = (
     "graph_time_detrend",
     "neighbor_similarity",
@@ -28,12 +30,25 @@ OFFICIAL_MAINLINE_FANOUTS = (15, 10)
 OFFICIAL_SUITE_EPOCHS = 8
 OFFICIAL_SUITE_SEEDS = (42,)
 
-OFFICIAL_HYBRID_BASE_RUN_NAME_TEMPLATE = "thesis_{dataset_short}_m7_v4_unified_s42_e8"
+# Recommended thesis result: teacher-guided UTGT backbone with GNN-primary 0.48 blend.
+OFFICIAL_HYBRID_SUITE_NAME = "thesis_m8_utgt_teacher_gnnprimary048"
+OFFICIAL_HYBRID_BASE_MODEL = TRANSFORMER_BACKBONE_MODEL
+OFFICIAL_HYBRID_BASE_RUN_NAME_TEMPLATE = "thesis_m8_utgt_teacher_e8_s42_v1_{dataset_short}"
 OFFICIAL_HYBRID_SECONDARY_RUN_NAME_TEMPLATE = "thesis_graphprop_rr0215_hpe_{dataset_short}"
 OFFICIAL_HYBRID_RUN_NAME_TEMPLATE = "{suite_name}_{dataset_short}"
 OFFICIAL_HYBRID_SECONDARY_MODEL = "xgboost_gpu_multiclass_bg_graphprop"
+OFFICIAL_TEACHER_SIGNAL_MODEL_FAMILY = "xgboost_gpu"
+OFFICIAL_TEACHER_SIGNAL_RUN_NAME_TEMPLATE = OFFICIAL_HYBRID_SECONDARY_RUN_NAME_TEMPLATE
+OFFICIAL_TEACHER_SIGNAL_TRANSFORM = "logit"
 OFFICIAL_HYBRID_RECENT_START_RATIO = 0.0
-OFFICIAL_HYBRID_BLEND_ALPHA = 0.82
+OFFICIAL_HYBRID_BLEND_ALPHA = 0.48
+
+# AUC-first appendix suite and legacy pre-refactor reference.
+AUC_FIRST_HYBRID_SUITE_NAME = "thesis_m8_utgt_graphpropblend091"
+AUC_FIRST_HYBRID_BLEND_ALPHA = 0.91
+LEGACY_M7_HYBRID_SUITE_NAME = "thesis_m7_v4_graphpropblend082"
+LEGACY_M7_HYBRID_BASE_RUN_NAME_TEMPLATE = "thesis_{dataset_short}_m7_v4_unified_s42_e8"
+LEGACY_M7_HYBRID_BLEND_ALPHA = 0.82
 
 OFFICIAL_HYBRID_GRAPHPROP_DEVICE = "cuda"
 OFFICIAL_HYBRID_GRAPHPROP_EXTRA_GROUPS = (

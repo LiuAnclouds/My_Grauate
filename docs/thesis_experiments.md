@@ -5,152 +5,111 @@
 - [Back to README](../README.md)
 - [Method Overview](thesis_method.md)
 - [Mainline Guide](../experiment/training/README_thesis_mainline.md)
-- [Official Result JSON](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/summary.json)
-- [Backbone Ablation Report](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md)
-- [Backbone Ablation CSV](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/results_long.csv)
-- [Leakage Audit](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/leakage_audit.md)
+- [Recommended Result JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json)
+- [Pure Teacher Backbone JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_e8_s42_v1/summary.json)
+- [AUC-first Appendix JSON](../experiment/outputs/thesis_suite/thesis_m8_utgt_graphpropblend091/summary.json)
+- [Recommended Leakage Audit](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.md)
+- [Shared-module Ablation Report](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md)
 
 ## 1. Main Result
 
-官方套件文件：
+当前推荐论文主结果：
 
-- [thesis_m7_v4_graphpropblend082](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/summary.json)
+- [thesis_m8_utgt_teacher_gnnprimary048](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/summary.json)
 
-| Dataset | Official GNN Backbone | Secondary-only (non-GNN graphprop) | Official GNN-primary Blend | Gain vs Pure GNN |
+| Dataset | Pure Teacher GNN | Secondary-only Graphprop | Recommended GNN-primary Blend | Gain vs Pure Teacher GNN |
 | --- | ---: | ---: | ---: | ---: |
-| XinYe DGraph | 0.776439 | 0.794888 | 0.795293 | +0.018854 |
-| Elliptic | 0.812635 | 0.968319 | 0.949436 | +0.136801 |
-| Elliptic++ | 0.777611 | 0.963736 | 0.946584 | +0.168973 |
+| XinYe DGraph | 0.783101 | 0.795130 | 0.794762 | +0.011661 |
+| Elliptic | 0.785398 | 0.968031 | 0.885479 | +0.100081 |
+| Elliptic++ | 0.783195 | 0.963736 | 0.891094 | +0.107898 |
+| Macro Val AUC | 0.783898 | 0.908965 | 0.857111 | +0.073213 |
 
-宏平均：
+这张表的正确解释是：
 
-- `Official GNN Backbone`: `0.788895`
-- `Secondary-only (non-GNN graphprop)`: `0.908981`
-- `Official GNN-primary Blend`: `0.897104`
+- 第二列是纯 GNN，已经是统一主干结果
+- 第三列不是 GNN，而是单独的 graphprop 分支
+- 第四列才是最终论文主结果，因为它满足 `GNN-primary`
 
-## 2. Design Decision
+## 2. Comparison Models
 
-这个问题不能回避：
+这里固定给出 5 条主要对比线，避免只和 1 个弱 baseline 比。
 
-1. 从纯验证集数值看，第二列 `Secondary-only` 确实整体更强。
-2. 但第二列不是第二个 GNN，而是非 GNN 的 graphprop tree 分支。
-3. 论文硬约束是“主模型必须是动态图 GNN”，所以它不能直接被写成 official main result。
-4. 因此，正式结论要分成两层：
-   - `Secondary-only`：作为强上界分支和 ablation，对外公开
-   - `Official GNN-primary Blend`：作为满足论文约束的正式主线结果
-
-如果只想冲当前 `val_auc`，第二列更优。
-如果要同时满足“统一架构 + GNN 为主”的论文定义，第三列才是 official result。
-
-## 3. Backbone Modernization Track
-
-当前 official 表格还没有把 `m8_utgt` 写进去，原因不是没做，而是这次重构先完成了统一入口与主干替换能力，tri-dataset 全量验证还在后续里程碑。
-
-这条候选线的定位必须写清楚：
-
-- `m8_utgt` 不是“另一个数据集特供模型”
-- `m8_utgt` 不是 secondary-only 分支
-- `m8_utgt` 仍然是主 GNN，只是把局部关系聚合升级为多头时序关系注意力
-- `m8_utgt` 和 `m7_utpm` 共享同一 `utpm_unified` 输入契约、同一训练协议、同一 thesis 模块
-
-当前完成的重构面：
-
-- `run_thesis_mainline.py`
-- `run_thesis_suite.py`
-- `run_thesis_recipe.py`
-
-也就是说，后续对比 `m7_utpm` 与 `m8_utgt` 时，比较的是同一实验合同下的“主干替换”，不是两套方法学。
-
-## 4. Comparison Models
-
-这里不再只放 1 条弱对比线，而是固定展示 3 个 baseline 加 1 个 official main result。
-
-| Model | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Role |
+| Model | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Type |
 | --- | ---: | ---: | ---: | ---: | --- |
 | Historical strong GNN `m5_temporal_graphsage` | 0.794628 | 0.793990 | 0.782830 | 0.790483 | 历史强 GNN 基线 |
-| Official pure `m7_utpm` | 0.776439 | 0.812635 | 0.777611 | 0.788895 | 去掉二级校正后的纯主干 |
-| Weak hybrid `alpha=0.35` | 0.784396 | 0.841749 | 0.838915 | 0.821687 | 弱融合对照 |
-| Official GNN-primary blend `alpha=0.82` | 0.795293 | 0.949436 | 0.946584 | 0.897104 | 当前 official thesis result |
+| Legacy thesis GNN `m7_utpm` | 0.776439 | 0.812635 | 0.777611 | 0.788895 | 旧主干 |
+| Pure UTGT `m8_utgt` | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 只做主干替换 |
+| Teacher-guided pure UTGT | 0.783101 | 0.785398 | 0.783195 | 0.783898 | 纯 GNN 推荐主干 |
+| Recommended `m8_utgt` GNN-primary blend `0.48` | 0.794762 | 0.885479 | 0.891094 | 0.857111 | 当前论文主结果 |
 
-对应文件：
+对比结论：
 
-- Historical strong GNN:
-  - `experiment/outputs/training/models/m5_temporal_graphsage/plan69a_m5_tcc_driftexpert015_entreg090w005_xinye_v1/summary.json`
-  - `experiment/outputs/elliptic_transactions/training/models/m5_temporal_graphsage/probe_proto_bucketadv_dpdisc_ctxadaptive_elliptic_v2/summary.json`
-  - `experiment/outputs/ellipticpp_transactions/training/models/m5_temporal_graphsage/plan63_epplus_clean_teacher_semrank_v1/summary.json`
-- Official pure backbone:
-  - `thesis_xy_m7_v4_unified_s42_e8`
-  - `thesis_et_m7_v4_unified_s42_e8`
-  - `thesis_epp_m7_v4_unified_s42_e8`
-- Weak hybrid:
-  - [thesis_m7_v4_xgbblend035](../experiment/outputs/thesis_suite/thesis_m7_v4_xgbblend035/summary.json)
+- 单纯把 `m7` 换成 `m8` 并不会自动提高指标
+- `teacher-guided` 后，pure GNN 宏平均从 `0.767140` 提升到 `0.783898`
+- 再叠加 GNN-primary residual correction 后，宏平均提升到 `0.857111`
 
-## 5. Ablation
+## 3. Backbone-level Ablation
 
-### 5.1 Completed Decision-Layer Ablation
+这部分用来回答“新主线里的几个创新组是否真的有效”。
 
-| Setting | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Meaning |
+| Setting | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Interpretation |
 | --- | ---: | ---: | ---: | ---: | --- |
-| `m7_utpm` only | 0.776439 | 0.812635 | 0.777611 | 0.788895 | 去掉整个二级校正层 |
-| `secondary-only` | 0.794888 | 0.968319 | 0.963736 | 0.908981 | 保留 graphprop 分支，移除 GNN 输出 |
-| weak hybrid `alpha=0.35` | 0.784396 | 0.841749 | 0.838915 | 0.821687 | 融合太弱，无法稳定吸收强 secondary |
-| official blend `alpha=0.82` | 0.795293 | 0.949436 | 0.946584 | 0.897104 | 当前 official thesis result |
+| Pure `m8_utgt` | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 只换 attention 主干，不加 teacher |
+| Teacher-guided pure `m8_utgt` | 0.783101 | 0.785398 | 0.783195 | 0.783898 | 训练期 teacher guidance 有效 |
+| Pure `m8_utgt` + blend `0.48` | 0.791590 | 0.849702 | 0.883761 | 0.841684 | 说明 residual correction 本身有效 |
+| Teacher `m8_utgt` + blend `0.48` | 0.794762 | 0.885479 | 0.891094 | 0.857111 | 推荐主结果 |
+| AUC-first blend `0.91` | 0.794897 | 0.965251 | 0.958475 | 0.906208 | appendix only，不作为论文主线 |
 
-结论：
+从这张表能直接读出的结论：
 
-- XinYe 上，official blend 比 `secondary-only` 略强，说明 GNN 主干仍有正向贡献。
-- Elliptic / Elliptic++ 上，`secondary-only` 更强，说明 graphprop 分支在这两个数据集上接近上界。
-- `alpha=0.35` 明显不足，说明如果保留 GNN-primary 叙事，残差分支必须占更高权重。
+1. `teacher guidance` 贡献为 `0.016758` 宏平均提升
+2. 在相同 `alpha=0.48` 下，teacher-guided 版本比不带 teacher 的版本再高 `0.015427`
+3. `alpha=0.91` 的确更高，但已经偏向 secondary-dominant，不适合作为“GNN 主模型”主线
 
-### 5.2 Completed Backbone-Module Ablation
+## 4. Shared-module Ablation
 
-官方主干三模块消融已经完成，聚合产物位于：
+共享主干模块的逐项消融保留在 legacy `m7` 主干上，因为 `prototype memory / pseudo-contrastive / drift residual` 的实现仍然是共用模块。
 
 - [report.md](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md)
 - [results_long.csv](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/results_long.csv)
 - [results_macro.csv](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/results_macro.csv)
 
-| Setting | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Delta vs Official Backbone |
+| Setting | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Delta vs Legacy `m7` |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| official backbone | 0.776439 | 0.812635 | 0.777611 | 0.788895 | +0.000000 |
+| legacy `m7` backbone | 0.776439 | 0.812635 | 0.777611 | 0.788895 | +0.000000 |
 | no prototype memory | 0.777391 | 0.812275 | 0.778365 | 0.789344 | +0.000449 |
 | no pseudo-contrastive mining | 0.775860 | 0.794927 | 0.777350 | 0.782712 | -0.006182 |
 | no drift residual context | 0.777244 | 0.816354 | 0.779095 | 0.790898 | +0.002003 |
 
-解读要实话实说：
+阅读方式：
 
-- `pseudo-contrastive temporal mining` 是当前单种子 `phase1_val` 下最明确有效的主干创新，去掉后宏平均下降 `0.006182`，其中 Elliptic 单数据集下降 `0.017709`。
-- `prototype memory` 在当前单种子验证上几乎中性，去掉后宏平均只波动 `+0.000449`，不能夸成主要增益来源。
-- `drift residual target context` 在当前单种子验证上也没有带来直接 AUC 提升，去掉后宏平均反而上升 `+0.002003`；它更适合被表述为上下文校准/稳健性设计，而不是主增益模块。
-- 论文级主结果的主要跃升仍然来自决策层两项创新：`graphprop residual head` 和 `fixed logit fusion`。
+- `pseudo-contrastive temporal mining` 是当前最稳定有效的共享主干模块
+- `prototype memory` 更像弱正则，不能夸成主要 AUC 来源
+- `drift residual target context` 更适合表述为稳健性模块，而不是单看验证 AUC 的增益模块
 
-### 5.3 Innovation Module Count
+## 5. Why Secondary-only Is Not The Main Model
 
-当前 thesis mainline 需要单独交代的创新模块一共 5 个：
+这个问题在答辩里一定会被问到：
 
-| Module | Layer | Current Ablation Coverage | Official Status |
-| --- | --- | --- | --- |
-| `prototype memory` | GNN 主干 | 已完成 official tri-dataset ablation | 已完成 |
-| `pseudo-contrastive temporal mining` | GNN 主干 | 已完成 official tri-dataset ablation | 已完成 |
-| `drift residual target context` | GNN 主干 | 已完成 official tri-dataset ablation | 已完成 |
-| `graphprop residual head` | 决策层 | 已完成并在上表公开 | 已完成 |
-| `fixed logit fusion` | 决策层 | 已完成并在上表公开 | 已完成 |
+- 为什么 ET/EPP 上 `secondary-only` 比 `blend` 还高？
 
-也就是说：
+答案是：
 
-- `utpm_unified` 是统一输入契约，不算 ablation 模块。
-- 现在仓库里已经同时有完整的“决策层消融”和“主干内部模块消融”。
-- 三个主干模块都不能省，因为它们决定了你对创新性陈述能否做到逐项举证。
+1. `secondary-only` 不是第二个 GNN，而是 graphprop tree 分支
+2. ET/EPP 的传播结构让 graphprop 单列非常强
+3. 但论文主模型硬约束是“必须是动态图 GNN”
+4. 所以 `secondary-only` 只能作为上界、ablation 或 appendix
+5. 推荐主结果必须使用 `alpha=0.48` 的 `GNN-primary blend`
 
-## 6. Hard-Leakage Audit Summary
+## 6. Hard-Leakage Audit
 
-审计文件：
+推荐主线已经按新 summary 重新审计：
 
-- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_m7_v4_graphpropblend082/leakage_audit.md)
+- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_m8_utgt_teacher_gnnprimary048/leakage_audit.md)
 
 审计结论：
 
-- 三个数据集都没有发现 `train/val/test_pool/external` 交叉
+- 三个数据集都没有发现 `train / val / test_pool / external` 交叉
 - secondary 训练节点都严格属于各自数据集的 `phase1_train`
-- validation 预测 bundle 与官方 split 完全对齐
-- 没有跨数据集输出目录和缓存复用
+- hybrid 验证 bundle 与官方 split 完全对齐
+- teacher 与 secondary 都没有跨数据集缓存复用
