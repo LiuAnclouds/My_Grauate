@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import torch.nn as nn
 
-from experiment.training.dyrift_model import build_dyrift_model
-from experiment.training.gnn_models import GraphModelConfig, TemporalRelationGraphTransformerExperiment
+from experiment.training.dyrift_model import build_dyrift_gnn_model
+from experiment.training.gnn_models import GraphModelConfig, TRGTExperiment
 
 
-class DyRIFTGNNExperiment(TemporalRelationGraphTransformerExperiment):
+class DyRIFTGNNExperiment(TRGTExperiment):
     """Training wrapper for the final DyRIFT-GNN method.
 
     The legacy experiment base still owns batching, sampling, losses, metrics, and checkpointing.
@@ -30,7 +30,7 @@ class DyRIFTGNNExperiment(TemporalRelationGraphTransformerExperiment):
         model_config: GraphModelConfig,
         aggregator_type: str,
     ) -> nn.Module:
-        return build_dyrift_model(
+        return build_dyrift_gnn_model(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             num_layers=num_layers,

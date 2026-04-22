@@ -35,12 +35,12 @@ OFFICIAL_MAINLINE_FANOUTS = (15, 10)
 OFFICIAL_SUITE_EPOCHS = 8
 OFFICIAL_SUITE_SEEDS = (42,)
 
-# Primary thesis result: deployable pure UTGT with dataset-local tuning.
+# Primary thesis result: deployable pure DyRIFT-GNN/TRGT with dataset-local tuning.
 OFFICIAL_PURE_SUITE_NAME = "thesis_m8_utgt_deploy_pure_eppcold_v1"
 OFFICIAL_DEPLOY_PURE_SUITE_NAME = OFFICIAL_PURE_SUITE_NAME
 LEGACY_TEACHER_PURE_SUITE_NAME = "thesis_m8_utgt_teacher_hpsearch2_e8_s42_v1"
 
-# Appendix robustness result: teacher-guided UTGT backbone with the strict
+# Appendix robustness result: teacher-guided legacy TRGT backbone with the strict
 # GNN-primary frontier blend. 0.4999 keeps the GNN branch fraction at 50.01%.
 OFFICIAL_HYBRID_SUITE_NAME = "thesis_m8_utgt_teacher_gnnprimary04999"
 OFFICIAL_HYBRID_BASE_MODEL = TRANSFORMER_BACKBONE_MODEL

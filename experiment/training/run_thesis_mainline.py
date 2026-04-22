@@ -171,8 +171,8 @@ def parse_args() -> argparse.Namespace:
             "Named thesis preset. "
             "`m5_temporal_graphsage`: unified_baseline. "
             "`m7_utpm`: utpm_temporal_shift_v4 (legacy stable backbone). "
-            f"`{TRANSFORMER_BACKBONE_MODEL}`: {TRANSFORMER_BACKBONE_PRESET} (pure UTGT) or "
-            f"`{TRANSFORMER_BACKBONE_TEACHER_PRESET}` (teacher-guided primary backbone)."
+            f"`{TRANSFORMER_BACKBONE_MODEL}`: {TRANSFORMER_BACKBONE_PRESET} (pure TRGT) or "
+            f"`{TRANSFORMER_BACKBONE_TEACHER_PRESET}` (legacy teacher-guided TRGT)."
         ),
     )
     train_parser.add_argument(
@@ -417,7 +417,7 @@ def run_train(args: argparse.Namespace) -> None:
     if str(args.model) == OFFICIAL_BACKBONE_MODEL and teacher_guidance_requested:
         raise ValueError(
             "The legacy `m7_utpm` backbone is kept teacher-free. "
-            "Use `m8_utgt` for teacher-guided thesis runs."
+            "Use `m8_utgt` for DyRIFT-GNN/TRGT thesis runs."
         )
     if float(graph_config.teacher_distill_weight) > 0.0 and teacher_distill_prediction_dir is None:
         raise ValueError(

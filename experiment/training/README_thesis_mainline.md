@@ -119,3 +119,14 @@ conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_
 - `experiment/training/thesis_presets.py`
 - `experiment/training/thesis_contract.py`
 - `experiment/training/audit_thesis_leakage.py`
+
+## Code Names
+
+- `TRGTExperiment`: TRGT backbone training base for temporal-relation attention GNN runs.
+- `DyRIFTGNNModel`: final DyRIFT-GNN model facade.
+- `build_dyrift_gnn_model`: final model factory used by the trainer.
+- `DyRIFTGNNExperiment`: final training wrapper for `m8_utgt`.
+- `TRGTTemporalRelationAttentionBlock`: backbone attention block.
+- `TRGTInternalRiskEncoder`: internal multi-scale risk encoder.
+
+Older aliases such as `TemporalRelationGraphTransformerExperiment`, `DyRIFTGraphModel`, and `build_dyrift_model` are kept only for backward compatibility.

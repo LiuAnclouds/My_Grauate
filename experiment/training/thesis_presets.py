@@ -39,7 +39,7 @@ _BASE_GRAPH_CONFIG = GraphModelConfig(
     aux_inference_blend=0.0,
 )
 
-_M8_UTGT_SHARED: dict[str, Any] = {
+_DYRIFT_TRGT_SHARED: dict[str, Any] = {
     "early_stop_patience": 10,
     "loss_type": "bce",
     "ranking_weight": 0.0,
@@ -81,7 +81,7 @@ _M8_UTGT_SHARED: dict[str, Any] = {
     "context_residual_budget_release_delay_epochs": 3,
 }
 
-_M8_UTGT_CONTEXT_BRIDGE: dict[str, Any] = {
+_DYRIFT_TRGT_CONTEXT_BRIDGE: dict[str, Any] = {
     "target_context_fusion": "drift_residual",
     "target_time_adapter_strength": 0.15,
     "target_time_adapter_type": "drift_expert",
@@ -89,7 +89,7 @@ _M8_UTGT_CONTEXT_BRIDGE: dict[str, Any] = {
     "target_time_expert_entropy_weight": 0.05,
 }
 
-_M8_UTGT_TRAIN_ONLY_TEACHER: dict[str, Any] = {
+_DYRIFT_TRGT_TRAIN_ONLY_TEACHER: dict[str, Any] = {
     "hard_negative_teacher_blend": 0.15,
     "teacher_distill_weight": 0.08,
     "teacher_distill_loss": "rank",
@@ -154,7 +154,7 @@ _PRESET_UPDATES: dict[str, dict[str, dict[str, Any]]] = {
     },
     "m8_utgt": {
         "utgt_temporal_shift_v1": {
-            **_M8_UTGT_SHARED,
+            **_DYRIFT_TRGT_SHARED,
             "target_context_fusion": "none",
             "target_time_adapter_strength": 0.0,
             "internal_risk_fusion": "residual",
@@ -162,13 +162,13 @@ _PRESET_UPDATES: dict[str, dict[str, dict[str, Any]]] = {
             "internal_risk_long_time_scale": 0.45,
         },
         "utgt_temporal_shift_teacher_v1": {
-            **_M8_UTGT_SHARED,
-            **_M8_UTGT_CONTEXT_BRIDGE,
-            **_M8_UTGT_TRAIN_ONLY_TEACHER,
+            **_DYRIFT_TRGT_SHARED,
+            **_DYRIFT_TRGT_CONTEXT_BRIDGE,
+            **_DYRIFT_TRGT_TRAIN_ONLY_TEACHER,
         },
         TRANSFORMER_BACKBONE_DEPLOY_PRESET: {
-            **_M8_UTGT_SHARED,
-            **_M8_UTGT_CONTEXT_BRIDGE,
+            **_DYRIFT_TRGT_SHARED,
+            **_DYRIFT_TRGT_CONTEXT_BRIDGE,
             "dropout": 0.12,
             "attention_num_heads": 8,
             "message_risk_strength": 0.15,

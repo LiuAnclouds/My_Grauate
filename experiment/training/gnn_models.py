@@ -5389,8 +5389,12 @@ class TemporalRelationGATExperiment(BaseGraphSAGEExperiment):
         super().__init__(*args, **kwargs)
 
 
-class TemporalRelationGraphTransformerExperiment(BaseGraphSAGEExperiment):
+class TRGTExperiment(BaseGraphSAGEExperiment):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs["temporal"] = True
         kwargs.setdefault("aggregator_type", "attention")
         super().__init__(*args, **kwargs)
+
+
+# Backward-compatible alias for historical imports and saved metadata readers.
+TemporalRelationGraphTransformerExperiment = TRGTExperiment
