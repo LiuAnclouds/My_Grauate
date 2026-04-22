@@ -13,9 +13,11 @@
 
 ## Recommended Surface
 
-当前推荐主线已经固定为一条统一的 **deployable pure-GNN UTGT**：
+当前推荐主线已经固定为一条统一的 **deployable pure-GNN DyRIFT-GNN**：
 
-- 统一主干家族：`m8_utgt`
+- 统一方法名：`DyRIFT-GNN`
+- 统一 backbone：`TRGT`
+- 兼容代码入口：`m8_utgt`
 - 统一纯 GNN preset：`utgt_temporal_shift_deploy_v1`
 - 统一推理路径：single pure-GNN path
 - 统一论文主结果：[thesis_m8_utgt_deploy_pure_eppcold_v1](../outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/summary.json)
@@ -23,11 +25,14 @@
 
 ## Unified Architecture, Separate Tuning
 
-thesis runner 支持一份统一 JSON profile 管理数据集级超参数：
+thesis runner 支持一份 manifest 加三个独立 JSON 管理数据集级超参数：
 
-- 架构固定：`m8_utgt` / dataset-local UTPM feature schema / single-model inference
+- 架构固定：`DyRIFT-GNN` / `TRGT` / dataset-local UTPM feature schema / single-model inference
 - 允许分别调：`attr_proj_dim`、`hidden_dim`、`rel_dim`、`fanouts`、`attention_num_heads`、`batch_size`、`epochs`、`learning_rate`、`weight_decay`、`dropout`、`graph_config_overrides`
-- 主线 profile：`configs/thesis_dataset_hparams.pure_gnn_eppcold_v1.json`
+- 主线 manifest：`configs/thesis_dataset_hparams.pure_gnn_eppcold_v1.json`
+- XinYe profile：`configs/dyrift_gnn/xinye_dgraph.json`
+- ET profile：`configs/dyrift_gnn/elliptic_transactions.json`
+- EPP profile：`configs/dyrift_gnn/ellipticpp_transactions.json`
 
 如果不传 `--dataset-hparams`，suite 会退回全局统一超参。
 
@@ -36,7 +41,8 @@ thesis runner 支持一份统一 JSON profile 管理数据集级超参数：
 | Part | Current Choice | Meaning |
 | --- | --- | --- |
 | Input | UTPM unified schema family | 三个数据集共享统一输入语义 |
-| Main GNN | `m8_utgt` | 多头时序关系注意力主干 |
+| Full model | `DyRIFT-GNN` | 动态风险感知反欺诈图神经网络 |
+| Backbone | `TRGT` | Temporal-Relational Graph Transformer，多头时序关系注意力主干 |
 | GNN modules | prototype memory / pseudo-contrastive temporal mining / temporal-normality bridge / drift-expert adaptation / internal causal risk fusion / context-conditioned cold-start residual | 论文核心创新 |
 | Final decision | single pure-GNN output | 无外部 residual、无外部 tree head |
 
@@ -107,6 +113,9 @@ conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_
 
 - `experiment/training/run_thesis_mainline.py`
 - `experiment/training/run_thesis_suite.py`
+- `experiment/training/dyrift_training.py`
+- `experiment/training/dyrift_model.py`
+- `experiment/training/trgt_backbone.py`
 - `experiment/training/thesis_presets.py`
 - `experiment/training/thesis_contract.py`
 - `experiment/training/audit_thesis_leakage.py`

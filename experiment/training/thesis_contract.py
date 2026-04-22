@@ -11,6 +11,10 @@ TRANSFORMER_BACKBONE_MODEL = "m8_utgt"
 TRANSFORMER_BACKBONE_PRESET = "utgt_temporal_shift_v1"
 TRANSFORMER_BACKBONE_TEACHER_PRESET = "utgt_temporal_shift_teacher_v1"
 TRANSFORMER_BACKBONE_DEPLOY_PRESET = "utgt_temporal_shift_deploy_v1"
+TRGT_BACKBONE_DISPLAY_NAME = "Temporal-Relational Graph Transformer"
+TRGT_BACKBONE_SHORT_NAME = "TRGT"
+DYRIFT_MODEL_DISPLAY_NAME = "Dynamic Risk-Informed Fraud Graph Neural Network"
+DYRIFT_MODEL_SHORT_NAME = "DyRIFT-GNN"
 OFFICIAL_TARGET_CONTEXT_GROUPS = (
     "graph_time_detrend",
     "neighbor_similarity",

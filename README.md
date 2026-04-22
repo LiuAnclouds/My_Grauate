@@ -2,7 +2,7 @@
 
 基于动态图异常检测的金融反欺诈毕业设计项目。
 
-当前仓库已经收口为一条统一、可审计、三数据集可复现的主线：三个数据集先经过各自的数据清洗与统一特征映射，再进入同一套纯 GNN 主架构 `m8_utgt`。最终结果不依赖外部 residual、XGBoost 或 teacher 推理分支，部署路径就是单路 UTGT。
+当前仓库已经收口为一条统一、可审计、三数据集可复现的主线：三个数据集先经过各自的数据清洗与统一特征映射，再进入同一套纯 GNN 主架构 `DyRIFT-GNN`。它的 backbone 命名为 `TRGT`，代码入口仍兼容保留为 `m8_utgt`。最终结果不依赖外部 residual、XGBoost 或 teacher 推理分支，部署路径就是单路纯 GNN。
 
 ## Quick Links
 
@@ -15,7 +15,10 @@
 | [Final Leakage Audit](experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/leakage_audit.md) | 最终 pure-GNN 套件硬泄露审计 |
 | [Final Metrics CSV](docs/results/thesis_m8_utgt_deploy_pure_eppcold_v1_metrics.csv) | 三数据集最终指标汇总 |
 | [Epoch Metrics CSV](docs/results/thesis_m8_utgt_deploy_pure_eppcold_v1_epoch_metrics.csv) | 三数据集逐 epoch 训练日志合并表 |
-| [Dataset Hparams](experiment/training/configs/thesis_dataset_hparams.pure_gnn_eppcold_v1.json) | 数据集级超参数模板 |
+| [Dataset Hparams Manifest](experiment/training/configs/thesis_dataset_hparams.pure_gnn_eppcold_v1.json) | 数据集级超参数总入口 |
+| [XinYe Hparams](experiment/training/configs/dyrift_gnn/xinye_dgraph.json) | XinYe 独立超参数文件 |
+| [ET Hparams](experiment/training/configs/dyrift_gnn/elliptic_transactions.json) | ET 独立超参数文件 |
+| [EPP Hparams](experiment/training/configs/dyrift_gnn/ellipticpp_transactions.json) | EPP 独立超参数文件 |
 | [Shared-module Ablation](experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md) | 共享模块消融报告 |
 
 ## Final Thesis Route
@@ -24,7 +27,8 @@
 
 | Item | Choice |
 | --- | --- |
-| Unified backbone family | `m8_utgt` |
+| Unified method family | `DyRIFT-GNN` |
+| Unified backbone family | `TRGT` |
 | Unified preset family | `utgt_temporal_shift_deploy_v1` |
 | Unified deployment path | single pure-GNN path |
 | Unified feature schema family | UTPM contract with dataset-local subsets |
@@ -32,7 +36,7 @@
 | Final suite | [thesis_m8_utgt_deploy_pure_eppcold_v1](experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/summary.json) |
 | Leakage audit | [leakage_audit.md](experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/leakage_audit.md) |
 
-这里不再做外部融合。训练与推理都是同一条 `m8_utgt` 路径，数据集之间只允许合理的超参数差异，不允许改成三套不同模型。
+这里不再做外部融合。训练与推理都是同一条 `DyRIFT-GNN` 路径，数据集之间只允许合理的超参数差异，不允许改成三套不同模型。
 
 注意：最终 EPP run name 中的 `hybrid120` 只表示内部邻居采样器使用 recent/random 混合采样窗口，不表示外部 hybrid 模型、XGBoost 分支或二阶段分类器。
 
@@ -57,8 +61,8 @@
 | --- | ---: | ---: | ---: | ---: | --- |
 | Historical strong GNN `m5_temporal_graphsage` | 0.794628 | 0.793990 | 0.782830 | 0.790483 | 历史强 GNN 参考线 |
 | Legacy thesis GNN `m7_utpm` | 0.776439 | 0.812635 | 0.777611 | 0.788895 | 旧主干 |
-| Early pure UTGT `m8_utgt` | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 初始纯 UTGT 基线 |
-| Final pure UTGT `m8_utgt` | 0.790455 | 0.821329 | 0.821953 | 0.811246 | 当前论文主结果 |
+| Early pure TRGT `m8_utgt` | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 初始纯 TRGT 基线 |
+| Final `DyRIFT-GNN` / `TRGT` | 0.790455 | 0.821329 | 0.821953 | 0.811246 | 当前论文主结果 |
 
 ## Why ET And EPP Are Lower Than The Historical 0.9+ Runs
 
@@ -73,7 +77,7 @@
 
 | Group | Evidence |
 | --- | --- |
-| Temporal relation attention backbone | `m7_utpm -> m8_utgt` 完成统一动态图主干现代化 |
+| Temporal relation attention backbone | `m7_utpm -> TRGT` 完成统一动态图主干现代化 |
 | Temporal-normality bridge | 目标节点级上下文桥接，保留纯 GNN 单路推理 |
 | Drift-expert adaptation | 用时间漂移专家调节不同时间段的上下文融合 |
 | Prototype memory | 共享模块消融保留，作为结构正则与类别稳定器 |

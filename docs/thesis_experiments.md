@@ -26,7 +26,7 @@
 
 这张表的正确解释：
 
-- 这四个数来自同一套纯 GNN UTGT 主线。
+- 这四个数来自同一套纯 GNN `DyRIFT-GNN / TRGT` 主线。
 - 不存在第二个外部模型参与最终推理。
 - 三个数据集共享同一主架构，只在合理超参数上分开调优。
 
@@ -38,8 +38,8 @@
 | --- | ---: | ---: | ---: | ---: | --- |
 | Historical strong GNN `m5_temporal_graphsage` | 0.794628 | 0.793990 | 0.782830 | 0.790483 | 历史强 GNN 参考 |
 | Legacy thesis GNN `m7_utpm` | 0.776439 | 0.812635 | 0.777611 | 0.788895 | 旧主干 |
-| Early pure UTGT `m8_utgt` | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 初始纯 UTGT 基线 |
-| Final pure UTGT `m8_utgt` | 0.790455 | 0.821329 | 0.821953 | 0.811246 | 当前论文主结果 |
+| Early pure TRGT `m8_utgt` | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 初始纯 TRGT 基线 |
+| Final `DyRIFT-GNN` / `TRGT` | 0.790455 | 0.821329 | 0.821953 | 0.811246 | 当前论文主结果 |
 
 历史强 GNN 参考线来源：
 
@@ -49,7 +49,7 @@
 
 结论：
 
-- 单纯换成 `m8_utgt` 不会自动赢，early pure `m8_utgt` 宏平均只有 `0.767140`。
+- 单纯换成早期 `TRGT` 不会自动赢，early pure `m8_utgt` 宏平均只有 `0.767140`。
 - 继续沿着纯 GNN 路线做统一输入重构、桥接、冷启动增强和容量调优后，宏平均提升到 `0.811246`。
 - 当前最终结果已经超过历史强 GNN 宏平均 `0.790483`。
 
@@ -60,12 +60,12 @@
 | Setting | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Interpretation |
 | --- | ---: | ---: | ---: | ---: | --- |
 | Legacy `m7_utpm` | 0.776439 | 0.812635 | 0.777611 | 0.788895 | 旧 thesis 主干 |
-| Early pure `m8_utgt` | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 只换 backbone 的初始版本 |
-| Final pure `m8_utgt` | 0.790455 | 0.821329 | 0.821953 | 0.811246 | 当前统一纯 GNN 主线 |
+| Early pure `TRGT` | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 只换 backbone 的初始版本 |
+| Final `DyRIFT-GNN` | 0.790455 | 0.821329 | 0.821953 | 0.811246 | 当前统一纯 GNN 主线 |
 
 从这张表能直接读出的结论：
 
-- `m8_utgt` 的价值不是“换个 Transformer 就天然变强”。
+- `TRGT` 的价值不是“换个 Transformer 就天然变强”。
 - GNN 侧真正有效的是统一输入重构、temporal-normality bridge、drift-expert 适配、prototype/pseudo-contrastive 正则和内部风险分支的组合。
 - 这条单模型纯 GNN 路线已经把三数据集宏平均拉到 `0.811246`。
 

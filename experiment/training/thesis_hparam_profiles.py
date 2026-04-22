@@ -125,7 +125,85 @@ def load_thesis_hparam_profile(path: Path | str | None) -> LoadedThesisHparamPro
     payload = json.loads(profile_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Hyperparameter profile `{profile_path}` must contain a JSON object.")
+    payload = _expand_dataset_file_refs(profile_path=profile_path, payload=payload)
     return LoadedThesisHparamProfile(path=profile_path, payload=payload)
+
+
+def _expand_dataset_file_refs(*, profile_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    """Expand mainline.dataset_files into mainline.datasets.
+
+    The final DyRIFT-GNN profile keeps each dataset's hyperparameters in a separate
+    JSON file while preserving the existing single-profile suite entrypoint.
+    """
+    mainline_section = payload.get("mainline")
+    if not isinstance(mainline_section, dict):
+        return payload
+    dataset_files = mainline_section.get("dataset_files")
+    if dataset_files is None:
+        return payload
+    if not isinstance(dataset_files, dict):
+        raise ValueError(f"`{profile_path}:mainline.dataset_files` must be a JSON object.")
+
+    expanded_mainline = dict(mainline_section)
+    expanded_mainline.pop("dataset_files", None)
+    datasets = _coerce_dataset_mapping(
+        expanded_mainline.get("datasets"),
+        location=f"{profile_path}:mainline.datasets",
+    )
+    for dataset_name, raw_ref in dataset_files.items():
+        dataset_key = str(dataset_name)
+        dataset_path = _resolve_profile_ref(profile_path=profile_path, raw_ref=raw_ref)
+        dataset_payload = json.loads(dataset_path.read_text(encoding="utf-8"))
+        if not isinstance(dataset_payload, dict):
+            raise ValueError(f"Dataset hyperparameter file `{dataset_path}` must contain a JSON object.")
+        dataset_override = _extract_dataset_hparam_payload(
+            dataset_name=dataset_key,
+            dataset_path=dataset_path,
+            dataset_payload=dataset_payload,
+        )
+        merged_override = dict(datasets.get(dataset_key) or {})
+        merged_override.update(dataset_override)
+        datasets[dataset_key] = merged_override
+    expanded_mainline["datasets"] = datasets
+    expanded_payload = dict(payload)
+    expanded_payload["mainline"] = expanded_mainline
+    return expanded_payload
+
+
+def _resolve_profile_ref(*, profile_path: Path, raw_ref: Any) -> Path:
+    ref_path = Path(str(raw_ref))
+    if not ref_path.is_absolute():
+        ref_path = (profile_path.parent / ref_path).resolve()
+    return ref_path
+
+
+def _extract_dataset_hparam_payload(
+    *,
+    dataset_name: str,
+    dataset_path: Path,
+    dataset_payload: dict[str, Any],
+) -> dict[str, Any]:
+    if "hparams" in dataset_payload:
+        return _coerce_section_mapping(
+            dataset_payload.get("hparams"),
+            location=f"{dataset_path}:hparams",
+        )
+    mainline_section = dataset_payload.get("mainline")
+    if isinstance(mainline_section, dict):
+        dataset_section = _coerce_dataset_mapping(
+            mainline_section.get("datasets"),
+            location=f"{dataset_path}:mainline.datasets",
+        )
+        if dataset_name in dataset_section:
+            return _coerce_section_mapping(
+                dataset_section.get(dataset_name),
+                location=f"{dataset_path}:mainline.datasets.{dataset_name}",
+            )
+    dataset_copy = dict(dataset_payload)
+    dataset_copy.pop("schema_version", None)
+    dataset_copy.pop("dataset", None)
+    dataset_copy.pop("notes", None)
+    return _coerce_section_mapping(dataset_copy, location=str(dataset_path))
 
 
 def resolve_mainline_dataset_hparams(

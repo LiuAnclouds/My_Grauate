@@ -18,13 +18,13 @@
 
 - 三个数据集彼此隔离，不做跨数据集联合训练。
 - 各数据集可以有自己的原始清洗流程，但最终必须映射到同一套 UTPM 特征语义。
-- 主体模型必须是动态图 GNN，当前固定为 `m8_utgt`。
+- 主体模型必须是动态图 GNN，当前固定为 `DyRIFT-GNN`；backbone 为 `TRGT`，代码兼容入口名为 `m8_utgt`。
 - 数据集级超参数允许分别调，例如 `attr_proj_dim`、`hidden_dim`、`rel_dim`、`fanouts`、`attention_num_heads`、`dropout`。
 - 禁止训练集、验证集、测试池和外部集节点交叉，也禁止用验证/测试标签反哺训练。
 
 最终论文主线采用：
 
-`统一特征映射 + 纯 GNN UTGT 主干 + 单路部署推理`
+`统一特征映射 + DyRIFT-GNN 模型 + TRGT 主干 + 单路部署推理`
 
 ## 2. Final Architecture
 
@@ -32,11 +32,12 @@
 | --- | --- | --- |
 | Dataset preprocessing | dataset-local processors | 处理不同原始字段，但输出同一语义契约 |
 | Input contract family | UTPM schema with dataset-local subsets | 三个数据集共享同一输入语义 |
-| Primary GNN | `m8_utgt` | 多头时序关系注意力动态图主干 |
+| Primary GNN | `DyRIFT-GNN` | 动态风险感知反欺诈图神经网络 |
+| Backbone | `TRGT` | Temporal-Relational Graph Transformer，多头时序关系注意力动态图主干 |
 | GNN modules | temporal-normality bridge, drift-expert adaptation, prototype memory, pseudo-contrastive temporal mining, internal causal risk fusion, context-conditioned cold-start residual | 论文主要创新模块 |
-| Final decision | single pure-GNN probability | 训练和推理都只走 `m8_utgt` |
+| Final decision | single pure-GNN probability | 训练和推理都只走 `DyRIFT-GNN` |
 
-这不是三个数据集三套模型，因为 `m8_utgt` 主干、输入语义、训练协议和推理路径都固定一致。不同数据集只在合理超参数上分别调优。
+这不是三个数据集三套模型，因为 `DyRIFT-GNN` 模型、`TRGT` 主干、输入语义、训练协议和推理路径都固定一致。不同数据集只在合理超参数上分别调优。
 
 ## 3. Base Features And Prior Bridge
 
@@ -56,7 +57,7 @@
 
 ## 4. Why This Is Still Pure GNN
 
-最终训练和推理都只有一条 `m8_utgt` 路径：
+最终训练和推理都只有一条 `DyRIFT-GNN / TRGT` 路径：
 
 - 没有外部 XGBoost 分类头参与最终输出。
 - 没有 residual 分支参与推理。
@@ -68,7 +69,7 @@
 
 | Innovation Group | Evidence | Current Reading |
 | --- | --- | --- |
-| Temporal relation attention backbone | `m7_utpm -> m8_utgt` 完成主干现代化 | 解决统一动态图关系建模问题 |
+| Temporal relation attention backbone | `m7_utpm -> TRGT` 完成主干现代化 | 解决统一动态图关系建模问题 |
 | Temporal-normality bridge | pure-GNN 主线显式使用 | 在目标节点级别融合时序上下文先验 |
 | Drift-expert adaptation | `drift_expert` adapter | 适配不同时间段的分布漂移 |
 | Prototype memory | 共享模块消融 | 更偏结构正则与类别稳定器 |
@@ -90,9 +91,9 @@
 补充说明：
 
 - XinYe 和 ET 直接采用当前各自最优 pure-GNN run。
-- EPP 在保持同一 `m8_utgt` 架构前提下，启用了 `cold_start_residual_strength=0.35` 的上下文冷启动残差专家。
+- EPP 在保持同一 `DyRIFT-GNN / TRGT` 架构前提下，启用了 `cold_start_residual_strength=0.35` 的上下文冷启动残差专家。
 - EPP run name 中的 `hybrid120` 仅表示内部邻居采样策略是 mixed recent/random sampler，不代表外部 hybrid 模型。
-- 这不是换第二个模型，而是同一 UTGT 主干中的数据集级超参数开关。
+- 这不是换第二个模型，而是同一 DyRIFT-GNN / TRGT 主干中的数据集级超参数开关。
 
 ## 7. Hard-Leakage Guardrails
 

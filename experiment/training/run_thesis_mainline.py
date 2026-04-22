@@ -37,6 +37,8 @@ from experiment.training.thesis_contract import (
     OFFICIAL_MAINLINE_HIDDEN_DIM,
     OFFICIAL_MAINLINE_REL_DIM,
     OFFICIAL_TARGET_CONTEXT_GROUPS,
+    DYRIFT_MODEL_SHORT_NAME,
+    TRGT_BACKBONE_SHORT_NAME,
     TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_PRESET,
     TRANSFORMER_BACKBONE_TEACHER_PRESET,
@@ -159,7 +161,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "`m5_temporal_graphsage` is the unified baseline; "
             "`m7_utpm` is the legacy stable GraphSAGE thesis backbone; "
-            "`m8_utgt` is the transformer-style thesis backbone and the primary pure-GNN thesis family."
+            f"`m8_utgt` is the {DYRIFT_MODEL_SHORT_NAME} method with the {TRGT_BACKBONE_SHORT_NAME} backbone."
         ),
     )
     train_parser.add_argument(
@@ -358,7 +360,10 @@ def _mainline_metadata(model_name: str, graph_config: GraphModelConfig | None = 
         if graph_config is not None and bool(graph_config.pseudo_contrastive_time_balanced):
             aux_regularizer = "time-balanced pseudo-contrastive test-pool consistency"
         if str(model_name) == "m8_utgt":
-            main_innovation = "UTGT unified temporal-relation graph transformer"
+            main_innovation = (
+                f"{DYRIFT_MODEL_SHORT_NAME} with {TRGT_BACKBONE_SHORT_NAME} "
+                "temporal-relation graph transformer"
+            )
         else:
             main_innovation = "UTPM unified temporal-relation prototype encoder"
         if graph_config is not None and bool(graph_config.known_label_feature):

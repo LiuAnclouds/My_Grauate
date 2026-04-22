@@ -21,6 +21,8 @@ from experiment.training.thesis_hparam_profiles import (
     resolve_mainline_dataset_hparams,
 )
 from experiment.training.thesis_contract import (
+    DYRIFT_MODEL_DISPLAY_NAME,
+    DYRIFT_MODEL_SHORT_NAME,
     OFFICIAL_BACKBONE_FEATURE_PROFILE,
     OFFICIAL_BACKBONE_MODEL,
     OFFICIAL_BACKBONE_PRESET,
@@ -34,6 +36,8 @@ from experiment.training.thesis_contract import (
     OFFICIAL_MAINLINE_REL_DIM,
     OFFICIAL_SUITE_EPOCHS,
     OFFICIAL_SUITE_SEEDS,
+    TRGT_BACKBONE_DISPLAY_NAME,
+    TRGT_BACKBONE_SHORT_NAME,
     TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_DEPLOY_PRESET,
     TRANSFORMER_BACKBONE_PRESET,
@@ -72,7 +76,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Unified thesis-mainline model family. "
             "`m7_utpm` is the legacy stable backbone; "
-            "`m8_utgt` is the transformer-style backbone family used by the primary pure-GNN thesis result."
+            f"`m8_utgt` is {DYRIFT_MODEL_SHORT_NAME} with the {TRGT_BACKBONE_SHORT_NAME} backbone."
         ),
     )
     parser.add_argument(
@@ -573,6 +577,18 @@ def main() -> None:
     payload = {
         "suite_name": args.suite_name,
         "model": args.model,
+        "method_display_name": (
+            DYRIFT_MODEL_DISPLAY_NAME if str(args.model) == TRANSFORMER_BACKBONE_MODEL else args.model
+        ),
+        "method_short_name": (
+            DYRIFT_MODEL_SHORT_NAME if str(args.model) == TRANSFORMER_BACKBONE_MODEL else args.model
+        ),
+        "backbone_display_name": (
+            TRGT_BACKBONE_DISPLAY_NAME if str(args.model) == TRANSFORMER_BACKBONE_MODEL else args.model
+        ),
+        "backbone_short_name": (
+            TRGT_BACKBONE_SHORT_NAME if str(args.model) == TRANSFORMER_BACKBONE_MODEL else args.model
+        ),
         "preset": args.preset,
         "feature_profile": args.feature_profile,
         "feature_dir": None if args.feature_dir is None else str(args.feature_dir),

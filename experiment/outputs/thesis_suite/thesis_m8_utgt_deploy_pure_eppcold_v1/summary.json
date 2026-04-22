@@ -1,6 +1,10 @@
 {
   "suite_name": "thesis_m8_utgt_deploy_pure_eppcold_v1",
   "model": "m8_utgt",
+  "method_display_name": "Dynamic Risk-Informed Fraud Graph Neural Network",
+  "method_short_name": "DyRIFT-GNN",
+  "backbone_display_name": "Temporal-Relational Graph Transformer",
+  "backbone_short_name": "TRGT",
   "preset": "utgt_temporal_shift_deploy_v1",
   "feature_profile": "utpm_shift_enhanced",
   "feature_dir": null,

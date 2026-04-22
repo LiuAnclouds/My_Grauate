@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "notes": "Pure-GNN UTGT suite with the same single-model architecture across datasets. XinYe and ET keep their official pure-GNN best runs; EPP enables the context-conditioned cold-start residual to address late-day cold-start collapse without any external teacher or secondary classifier.",
+  "schema_version": 2,
+  "notes": "DyRIFT-GNN final pure-GNN thesis suite. Shared defaults live here; dataset-local hyperparameters are split into independent files and referenced through mainline.dataset_files.",
   "mainline": {
     "defaults": {
       "run_name_template": "{suite_name}_{dataset_short}",
@@ -17,71 +17,10 @@
       "rel_dim": 32,
       "fanouts": [15, 10]
     },
-    "datasets": {
-      "xinye_dgraph": {
-        "run_name_template": "probe_xy_m8_pure_enhbase_smallctx_v1",
-        "feature_profile": "utpm_shift_enhanced",
-        "feature_subdir": "features_ap32",
-        "attr_proj_dim": 32,
-        "hidden_dim": 128,
-        "rel_dim": 32,
-        "fanouts": [15, 10],
-        "dropout": 0.12
-      },
-      "elliptic_transactions": {
-        "run_name_template": "probe_et_m8_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
-        "feature_profile": "utpm_shift_compact",
-        "target_context_groups": [
-          "graph_time_detrend",
-          "neighbor_similarity",
-          "activation_early"
-        ],
-        "feature_subdir": "features_ap64",
-        "attr_proj_dim": 64,
-        "epochs": 6,
-        "hidden_dim": 160,
-        "rel_dim": 48,
-        "fanouts": [20, 15],
-        "dropout": 0.15,
-        "graph_config_overrides": {
-          "attention_num_heads": 4,
-          "internal_risk_fusion": "none",
-          "message_risk_strength": 0.0,
-          "pseudo_contrastive_start_epoch": 5,
-          "pseudo_contrastive_weight": 0.01,
-          "prototype_start_epoch": 3,
-          "prototype_loss_weight": 0.03,
-          "target_time_weight_half_life_days": 20,
-          "target_time_weight_floor": 0.35
-        }
-      },
-      "ellipticpp_transactions": {
-        "run_name_template": "probe_epp_m8_pure_ap96_hybrid120_timew_hl20_f035_coldctx_v1",
-        "feature_profile": "utpm_shift_enhanced",
-        "target_context_groups": [
-          "graph_stats",
-          "graph_time_detrend",
-          "neighbor_similarity",
-          "activation_early"
-        ],
-        "feature_subdir": "features_ap96",
-        "attr_proj_dim": 96,
-        "epochs": 10,
-        "hidden_dim": 192,
-        "rel_dim": 64,
-        "fanouts": [20, 15],
-        "dropout": 0.10,
-        "graph_config_overrides": {
-          "attention_num_heads": 16,
-          "neighbor_sampler": "hybrid",
-          "recent_window": 120,
-          "recent_ratio": 0.45,
-          "time_decay_strength": 2.0,
-          "target_time_weight_half_life_days": 20,
-          "target_time_weight_floor": 0.35,
-          "cold_start_residual_strength": 0.35
-        }
-      }
+    "dataset_files": {
+      "xinye_dgraph": "dyrift_gnn/xinye_dgraph.json",
+      "elliptic_transactions": "dyrift_gnn/elliptic_transactions.json",
+      "ellipticpp_transactions": "dyrift_gnn/ellipticpp_transactions.json"
     }
   }
 }
