@@ -21,6 +21,7 @@ from experiment.training.gnn_models import (
     TemporalRelationGraphSAGEExperiment,
 )
 from experiment.training.sampling_profiles import load_or_build_raw_consistency_profile
+from experiment.training.thesis_contract import DYRIFT_GNN_MODEL
 
 
 GRAPH_EXPERIMENTS = {
@@ -28,7 +29,7 @@ GRAPH_EXPERIMENTS = {
     "m5_temporal_graphsage": TemporalRelationGraphSAGEExperiment,
     "m6_temporal_gat": TemporalRelationGATExperiment,
     "m7_utpm": TemporalRelationGraphSAGEExperiment,
-    "m8_utgt": DyRIFTGNNExperiment,
+    DYRIFT_GNN_MODEL: DyRIFTGNNExperiment,
 }
 
 

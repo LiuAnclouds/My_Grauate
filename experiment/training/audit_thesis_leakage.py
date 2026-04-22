@@ -53,7 +53,6 @@ def _load_prediction_ids(run_dir: Path, split_name: str) -> np.ndarray:
     candidates = (
         run_dir / f"{split_name}_avg_predictions.npz",
         run_dir / f"{split_name}_predictions.npz",
-        run_dir / f"{split_name}_blend_predictions.npz",
     )
     for candidate in candidates:
         if candidate.exists():
@@ -68,25 +67,6 @@ def _assert(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def _assert_scoped_dir(*, dataset_name: str, run_dir: Path, training_root: Path, label: str) -> None:
-    _assert(
-        str(run_dir).startswith(str(training_root)),
-        f"{dataset_name}: {label} escaped dataset root: {run_dir}",
-    )
-
-
-def _prediction_bundle_name(run_dir: Path, split_name: str) -> str | None:
-    candidates = (
-        run_dir / f"{split_name}_avg_predictions.npz",
-        run_dir / f"{split_name}_predictions.npz",
-        run_dir / f"{split_name}_blend_predictions.npz",
-    )
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate.name
-    return None
-
-
 def _pairwise_disjoint(split_ids: dict[str, np.ndarray]) -> dict[str, int]:
     names = ["train", "val", "test_pool", "external"]
     overlaps: dict[str, int] = {}
@@ -97,114 +77,6 @@ def _pairwise_disjoint(split_ids: dict[str, np.ndarray]) -> dict[str, int]:
             overlap = int(np.intersect1d(left, right).size)
             overlaps[f"{left_name}__{right_name}"] = overlap
     return overlaps
-
-
-def _audit_dataset(
-    *,
-    dataset_name: str,
-    base_run_dir: Path,
-    secondary_run_dir: Path,
-    hybrid_run_dir: Path,
-) -> dict[str, Any]:
-    eda_root, training_root = _dataset_output_roots(dataset_name)
-    split_ids = _load_split_ids(eda_root)
-    overlaps = _pairwise_disjoint(split_ids)
-    for pair_name, overlap in overlaps.items():
-        _assert(overlap == 0, f"{dataset_name}: split overlap detected for {pair_name}: {overlap}")
-
-    _assert(str(base_run_dir).startswith(str(training_root)), f"{dataset_name}: base_run_dir escaped dataset root")
-    _assert(
-        str(secondary_run_dir).startswith(str(training_root)),
-        f"{dataset_name}: secondary_run_dir escaped dataset root",
-    )
-    _assert(str(hybrid_run_dir).startswith(str(training_root)), f"{dataset_name}: hybrid_run_dir escaped dataset root")
-
-    base_train_ids = _load_prediction_ids(base_run_dir, "phase1_train")
-    base_val_ids = _load_prediction_ids(base_run_dir, "phase1_val")
-    secondary_train_ids = _load_prediction_ids(secondary_run_dir, "phase1_train")
-    secondary_val_ids = _load_prediction_ids(secondary_run_dir, "phase1_val")
-    hybrid_val_ids = _load_prediction_ids(hybrid_run_dir, "phase1_val")
-
-    _assert(
-        np.array_equal(base_train_ids, split_ids["train"]),
-        f"{dataset_name}: backbone phase1_train ids do not match recommended split train ids",
-    )
-    _assert(
-        np.array_equal(base_val_ids, split_ids["val"]),
-        f"{dataset_name}: backbone phase1_val ids do not match recommended split val ids",
-    )
-    _assert(
-        np.array_equal(secondary_val_ids, split_ids["val"]),
-        f"{dataset_name}: secondary phase1_val ids do not match recommended split val ids",
-    )
-    _assert(
-        np.array_equal(hybrid_val_ids, split_ids["val"]),
-        f"{dataset_name}: hybrid phase1_val ids do not match recommended split val ids",
-    )
-    _assert(
-        np.intersect1d(secondary_train_ids, split_ids["val"]).size == 0,
-        f"{dataset_name}: secondary train ids overlap validation ids",
-    )
-    _assert(
-        np.intersect1d(secondary_train_ids, split_ids["test_pool"]).size == 0,
-        f"{dataset_name}: secondary train ids overlap test_pool ids",
-    )
-    _assert(
-        np.intersect1d(secondary_train_ids, split_ids["external"]).size == 0,
-        f"{dataset_name}: secondary train ids overlap external ids",
-    )
-    _assert(
-        np.all(np.isin(secondary_train_ids, split_ids["train"])),
-        f"{dataset_name}: secondary train ids are not a subset of split-train ids",
-    )
-
-    secondary_summary = _read_json(secondary_run_dir / "summary.json")
-    hybrid_summary = _read_json(hybrid_run_dir / "summary.json")
-
-    return {
-        "dataset": dataset_name,
-        "eda_root": str(eda_root.relative_to(REPO_ROOT)),
-        "training_root": str(training_root.relative_to(REPO_ROOT)),
-        "split_sizes": {name: int(np.asarray(ids).size) for name, ids in split_ids.items()},
-        "split_overlaps": overlaps,
-        "base_run_dir": str(base_run_dir.relative_to(REPO_ROOT)),
-        "secondary_run_dir": str(secondary_run_dir.relative_to(REPO_ROOT)),
-        "hybrid_run_dir": str(hybrid_run_dir.relative_to(REPO_ROOT)),
-        "secondary_train_size": int(secondary_train_ids.size),
-        "secondary_selection_mode": str(secondary_summary.get("historical_selection_mode")),
-        "secondary_min_train_first_active_day": int(secondary_summary.get("min_train_first_active_day", 0)),
-        "checks": {
-            "split_pairwise_disjoint": True,
-            "base_train_matches_split_train": True,
-            "base_val_matches_split_val": True,
-            "secondary_val_matches_split_val": True,
-            "hybrid_val_matches_split_val": True,
-            "secondary_train_subset_of_split_train": True,
-            "secondary_train_has_no_val_overlap": True,
-            "secondary_train_has_no_test_pool_overlap": True,
-            "secondary_train_has_no_external_overlap": True,
-            "dataset_scoped_paths_only": True,
-            "suite_declares_dataset_isolation": bool(hybrid_summary.get("dataset_isolation", False)),
-            "suite_declares_no_cross_dataset_training": not bool(hybrid_summary.get("cross_dataset_training", True)),
-        },
-    }
-
-
-def _teacher_prediction_dirs(run_summary: dict[str, Any]) -> list[Path]:
-    teacher_guidance = run_summary.get("teacher_guidance") or {}
-    ordered: list[Path] = []
-    seen: set[str] = set()
-    for key in ("target_context_prediction_dir", "teacher_distill_prediction_dir"):
-        rel_path = teacher_guidance.get(key)
-        if not rel_path:
-            continue
-        resolved = (REPO_ROOT / str(rel_path)).resolve()
-        marker = str(resolved)
-        if marker in seen:
-            continue
-        seen.add(marker)
-        ordered.append(resolved)
-    return ordered
 
 
 def _audit_mainline_dataset(
@@ -218,66 +90,33 @@ def _audit_mainline_dataset(
     for pair_name, overlap in overlaps.items():
         _assert(overlap == 0, f"{dataset_name}: split overlap detected for {pair_name}: {overlap}")
 
-    _assert_scoped_dir(dataset_name=dataset_name, run_dir=run_dir, training_root=training_root, label="run_dir")
+    _assert(
+        str(run_dir).startswith(str(training_root)),
+        f"{dataset_name}: run_dir escaped dataset root: {run_dir}",
+    )
 
-    backbone_train_ids = _load_prediction_ids(run_dir, "phase1_train")
-    backbone_val_ids = _load_prediction_ids(run_dir, "phase1_val")
-    backbone_test_pool_ids = _load_prediction_ids(run_dir, "test_pool")
+    train_ids = _load_prediction_ids(run_dir, "phase1_train")
+    val_ids = _load_prediction_ids(run_dir, "phase1_val")
+    test_pool_ids = _load_prediction_ids(run_dir, "test_pool")
 
     _assert(
-        np.array_equal(backbone_train_ids, split_ids["train"]),
-        f"{dataset_name}: backbone phase1_train ids do not match recommended split train ids",
+        np.array_equal(train_ids, split_ids["train"]),
+        f"{dataset_name}: phase1_train ids do not match recommended split train ids",
     )
     _assert(
-        np.array_equal(backbone_val_ids, split_ids["val"]),
-        f"{dataset_name}: backbone phase1_val ids do not match recommended split val ids",
+        np.array_equal(val_ids, split_ids["val"]),
+        f"{dataset_name}: phase1_val ids do not match recommended split val ids",
     )
     _assert(
-        np.array_equal(backbone_test_pool_ids, split_ids["test_pool"]),
-        f"{dataset_name}: backbone test_pool ids do not match recommended split test_pool ids",
+        np.array_equal(test_pool_ids, split_ids["test_pool"]),
+        f"{dataset_name}: test_pool ids do not match recommended split test_pool ids",
     )
 
     run_summary = _read_json(run_dir / "summary.json")
-    teacher_dirs = _teacher_prediction_dirs(run_summary)
-    teacher_rows: list[dict[str, Any]] = []
-    for teacher_dir in teacher_dirs:
-        _assert_scoped_dir(
-            dataset_name=dataset_name,
-            run_dir=teacher_dir,
-            training_root=training_root,
-            label="teacher_dir",
-        )
-        teacher_train_ids = _load_prediction_ids(teacher_dir, "phase1_train")
-        teacher_val_ids = _load_prediction_ids(teacher_dir, "phase1_val")
-        _assert(
-            np.array_equal(teacher_val_ids, split_ids["val"]),
-            f"{dataset_name}: teacher phase1_val ids do not match recommended split val ids",
-        )
-        _assert(
-            np.intersect1d(teacher_train_ids, split_ids["val"]).size == 0,
-            f"{dataset_name}: teacher train ids overlap validation ids",
-        )
-        _assert(
-            np.intersect1d(teacher_train_ids, split_ids["test_pool"]).size == 0,
-            f"{dataset_name}: teacher train ids overlap test_pool ids",
-        )
-        _assert(
-            np.intersect1d(teacher_train_ids, split_ids["external"]).size == 0,
-            f"{dataset_name}: teacher train ids overlap external ids",
-        )
-        _assert(
-            np.all(np.isin(teacher_train_ids, split_ids["train"])),
-            f"{dataset_name}: teacher train ids are not a subset of split-train ids",
-        )
-        teacher_rows.append(
-            {
-                "dir": str(teacher_dir.relative_to(REPO_ROOT)),
-                "train_size": int(teacher_train_ids.size),
-                "val_bundle": _prediction_bundle_name(teacher_dir, "phase1_val"),
-            }
-        )
-
-    teacher_guidance = run_summary.get("teacher_guidance") or {}
+    _assert(
+        str(run_summary.get("deployment_path", "single_gnn_end_to_end")) == "single_gnn_end_to_end",
+        f"{dataset_name}: run summary is not marked as a single-GNN deployment path",
+    )
     return {
         "dataset": dataset_name,
         "eda_root": str(eda_root.relative_to(REPO_ROOT)),
@@ -285,22 +124,15 @@ def _audit_mainline_dataset(
         "split_sizes": {name: int(np.asarray(ids).size) for name, ids in split_ids.items()},
         "split_overlaps": overlaps,
         "run_dir": str(run_dir.relative_to(REPO_ROOT)),
-        "teacher_guidance_enabled": bool(teacher_guidance.get("enabled", False)),
-        "teacher_prediction_dirs": teacher_rows,
         "checks": {
             "split_pairwise_disjoint": True,
-            "backbone_train_matches_split_train": True,
-            "backbone_val_matches_split_val": True,
-            "backbone_test_pool_matches_split_test_pool": True,
+            "phase1_train_matches_split_train": True,
+            "phase1_val_matches_split_val": True,
+            "test_pool_matches_split_test_pool": True,
             "dataset_scoped_paths_only": True,
             "suite_declares_dataset_isolation": bool(run_summary.get("dataset_isolation", False)),
             "suite_declares_no_cross_dataset_training": not bool(run_summary.get("cross_dataset_training", True)),
-            "teacher_dirs_dataset_scoped_only": True,
-            "teacher_train_subset_of_split_train": True,
-            "teacher_train_has_no_val_overlap": True,
-            "teacher_train_has_no_test_pool_overlap": True,
-            "teacher_train_has_no_external_overlap": True,
-            "teacher_val_matches_split_val": True,
+            "single_gnn_deployment_path": True,
         },
     }
 
@@ -310,82 +142,40 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
         "# Thesis Leakage Audit",
         "",
         f"- Suite: `{payload['suite_name']}`",
-        f"- Mode: `{payload['suite_type']}`",
+        "- Mode: `pure_gnn_mainline`",
         "- Scope: direct train/val/test/external overlap and cross-dataset isolation.",
         "- Conclusion: no hard leakage was detected in the audited thesis suite.",
         "",
+        "| Dataset | Train | Val | Test Pool | External | Result |",
+        "| --- | ---: | ---: | ---: | ---: | --- |",
     ]
-    if payload["suite_type"] == "mainline":
-        has_teacher_dirs = any(row["teacher_prediction_dirs"] for row in payload["datasets"])
-        lines.extend(
-            [
-                "| Dataset | Train | Val | Test Pool | External | Teacher Dirs | Result |",
-                "| --- | ---: | ---: | ---: | ---: | ---: | --- |",
-            ]
-        )
-        for row in payload["datasets"]:
-            split_sizes = row["split_sizes"]
-            lines.append(
-                "| {dataset} | {train} | {val} | {test_pool} | {external} | {teacher_dirs} | pass |".format(
-                    dataset=row["dataset"],
-                    train=split_sizes["train"],
-                    val=split_sizes["val"],
-                    test_pool=split_sizes["test_pool"],
-                    external=split_sizes["external"],
-                    teacher_dirs=len(row["teacher_prediction_dirs"]),
-                )
+    for row in payload["datasets"]:
+        split_sizes = row["split_sizes"]
+        lines.append(
+            "| {dataset} | {train} | {val} | {test_pool} | {external} | pass |".format(
+                dataset=row["dataset"],
+                train=split_sizes["train"],
+                val=split_sizes["val"],
+                test_pool=split_sizes["test_pool"],
+                external=split_sizes["external"],
             )
-        lines.extend(
-            [
-                "",
-                "## Hard-Leakage Checklist",
-                "",
-                "- `train`, `val`, `test_pool`, and `external` id sets are pairwise disjoint for every dataset.",
-                "- Backbone `phase1_train`, `phase1_val`, and `test_pool` prediction bundles exactly match the official split ids.",
-                (
-                    "- Teacher prediction directories stay inside dataset-scoped output namespaces and only use `phase1_train` rows for fitting."
-                    if has_teacher_dirs
-                    else "- No teacher prediction directory is configured for the audited pure-GNN deployment suite."
-                ),
-                "- No cross-dataset prediction path is reused by the audited pure GNN mainline.",
-            ]
         )
-    else:
-        lines.extend(
-            [
-                "| Dataset | Train | Val | Test Pool | External | Secondary Train | Selection Mode | Result |",
-                "| --- | ---: | ---: | ---: | ---: | ---: | --- | --- |",
-            ]
-        )
-        for row in payload["datasets"]:
-            split_sizes = row["split_sizes"]
-            lines.append(
-                "| {dataset} | {train} | {val} | {test_pool} | {external} | {secondary_train} | {mode} | pass |".format(
-                    dataset=row["dataset"],
-                    train=split_sizes["train"],
-                    val=split_sizes["val"],
-                    test_pool=split_sizes["test_pool"],
-                    external=split_sizes["external"],
-                    secondary_train=row["secondary_train_size"],
-                    mode=row["secondary_selection_mode"],
-                )
-            )
-        lines.extend(
-            [
-                "",
-                "## Hard-Leakage Checklist",
-                "",
-                "- `train`, `val`, `test_pool`, and `external` id sets are pairwise disjoint for every dataset.",
-                "- Every secondary training row is a subset of the dataset's `phase1_train` split.",
-                "- Secondary and hybrid validation bundles exactly match the official validation ids.",
-                "- Run directories stay inside dataset-scoped output namespaces; no cross-dataset prediction path is reused.",
-            ]
-        )
+    lines.extend(
+        [
+            "",
+            "## Hard-Leakage Checklist",
+            "",
+            "- `train`, `val`, `test_pool`, and `external` id sets are pairwise disjoint for every dataset.",
+            "- DyRIFT-GNN `phase1_train`, `phase1_val`, and `test_pool` prediction bundles exactly match the official split ids.",
+            "- Every run directory stays inside its dataset-scoped output namespace.",
+            "- No cross-dataset prediction path, external classifier, or second-stage model is used by the audited pure-GNN mainline.",
+        ]
+    )
     return "\n".join(lines) + "\n"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Audit a thesis suite for hard leakage.")
+    parser = argparse.ArgumentParser(description="Audit a pure DyRIFT-GNN thesis suite for hard leakage.")
     parser.add_argument(
         "--suite-summary",
         type=Path,
@@ -399,36 +189,17 @@ def main() -> None:
     suite_summary_path = Path(args.suite_summary).resolve()
     suite_payload = _read_json(suite_summary_path)
     suite_rows = list(suite_payload["results"])
-    first_row = suite_rows[0] if suite_rows else {}
-    if "secondary_run_dir" in first_row and "base_run_dir" in first_row:
-        suite_type = "hybrid"
-        dataset_rows = [
-            _audit_dataset(
-                dataset_name=str(row["dataset"]),
-                base_run_dir=(REPO_ROOT / str(row["base_run_dir"])).resolve(),
-                secondary_run_dir=(REPO_ROOT / str(row["secondary_run_dir"])).resolve(),
-                hybrid_run_dir=(REPO_ROOT / str(row["summary_path"])).resolve().parent,
-            )
-            for row in suite_rows
-        ]
-    elif "summary_path" in first_row:
-        suite_type = "mainline"
-        dataset_rows = [
-            _audit_mainline_dataset(
-                dataset_name=str(row["dataset"]),
-                run_dir=(REPO_ROOT / str(row["summary_path"])).resolve().parent,
-            )
-            for row in suite_rows
-        ]
-    else:
-        raise ValueError(
-            "Unsupported suite summary format. Expected either a pure mainline suite "
-            "with `summary_path` rows or a hybrid suite with `base_run_dir` / `secondary_run_dir` rows."
+    dataset_rows = [
+        _audit_mainline_dataset(
+            dataset_name=str(row["dataset"]),
+            run_dir=(REPO_ROOT / str(row["summary_path"])).resolve().parent,
         )
+        for row in suite_rows
+    ]
 
     report_payload = {
         "suite_name": str(suite_payload["suite_name"]),
-        "suite_type": suite_type,
+        "suite_type": "pure_gnn_mainline",
         "hard_leakage_detected": False,
         "datasets": dataset_rows,
     }

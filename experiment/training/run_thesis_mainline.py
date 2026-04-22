@@ -30,6 +30,7 @@ from experiment.training.features import build_feature_artifacts
 from experiment.training.graph_runtime import resolve_graph_experiment_class
 from experiment.training.gnn_models import GraphModelConfig
 from experiment.training.thesis_contract import (
+    DYRIFT_GNN_MODEL,
     OFFICIAL_BACKBONE_FEATURE_PROFILE,
     OFFICIAL_BACKBONE_MODEL,
     OFFICIAL_MAINLINE_BATCH_SIZE,
@@ -40,8 +41,8 @@ from experiment.training.thesis_contract import (
     DYRIFT_MODEL_SHORT_NAME,
     TRGT_BACKBONE_SHORT_NAME,
     TRANSFORMER_BACKBONE_MODEL,
+    TRANSFORMER_BACKBONE_DEPLOY_PRESET,
     TRANSFORMER_BACKBONE_PRESET,
-    TRANSFORMER_BACKBONE_TEACHER_PRESET,
 )
 from experiment.training.thesis_runtime import prepare_thesis_runtime
 from experiment.training.thesis_presets import (
@@ -60,15 +61,6 @@ def _path_repr(path: Path) -> str:
         return str(path.relative_to(REPO_ROOT))
     except ValueError:
         return str(path)
-
-
-def _coerce_optional_path(value: Path | str | None) -> Path | None:
-    if value is None:
-        return None
-    path = Path(value)
-    if not path.is_absolute():
-        path = REPO_ROOT / path
-    return path
 
 
 def _metric_mean(metrics: list[dict[str, Any]], key: str) -> float | None:
@@ -156,12 +148,13 @@ def parse_args() -> argparse.Namespace:
     )
     train_parser.add_argument(
         "--model",
-        choices=("m5_temporal_graphsage", "m7_utpm", "m8_utgt"),
-        default=OFFICIAL_BACKBONE_MODEL,
+        choices=("m5_temporal_graphsage", "m7_utpm", DYRIFT_GNN_MODEL),
+        default=TRANSFORMER_BACKBONE_MODEL,
         help=(
             "`m5_temporal_graphsage` is the unified baseline; "
             "`m7_utpm` is the legacy stable GraphSAGE thesis backbone; "
-            f"`m8_utgt` is the {DYRIFT_MODEL_SHORT_NAME} method with the {TRGT_BACKBONE_SHORT_NAME} backbone."
+            f"`{DYRIFT_GNN_MODEL}` is the {DYRIFT_MODEL_SHORT_NAME} method with the "
+            f"{TRGT_BACKBONE_SHORT_NAME} backbone."
         ),
     )
     train_parser.add_argument(
@@ -171,8 +164,8 @@ def parse_args() -> argparse.Namespace:
             "Named thesis preset. "
             "`m5_temporal_graphsage`: unified_baseline. "
             "`m7_utpm`: utpm_temporal_shift_v4 (legacy stable backbone). "
-            f"`{TRANSFORMER_BACKBONE_MODEL}`: {TRANSFORMER_BACKBONE_PRESET} (pure TRGT) or "
-            f"`{TRANSFORMER_BACKBONE_TEACHER_PRESET}` (legacy teacher-guided TRGT)."
+            f"`{TRANSFORMER_BACKBONE_MODEL}`: {TRANSFORMER_BACKBONE_PRESET} (TRGT base) or "
+            f"`{TRANSFORMER_BACKBONE_DEPLOY_PRESET}` (deployable DyRIFT-GNN/TRGT)."
         ),
     )
     train_parser.add_argument(
@@ -191,24 +184,6 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=FEATURE_OUTPUT_ROOT,
         help="Feature cache directory from build_features.",
-    )
-    train_parser.add_argument(
-        "--target-context-prediction-dir",
-        type=Path,
-        default=None,
-        help="Optional dataset-local prediction directory used as auxiliary target-context teacher features.",
-    )
-    train_parser.add_argument(
-        "--target-context-prediction-transform",
-        choices=("raw", "logit"),
-        default="raw",
-        help="Transform applied to target-context teacher predictions before fusion.",
-    )
-    train_parser.add_argument(
-        "--teacher-distill-prediction-dir",
-        type=Path,
-        default=None,
-        help="Optional dataset-local prediction directory used as fixed teacher distillation targets.",
     )
     train_parser.add_argument(
         "--target-context-groups",
@@ -355,11 +330,11 @@ def _build_graph_config(args: argparse.Namespace) -> GraphModelConfig:
 
 
 def _mainline_metadata(model_name: str, graph_config: GraphModelConfig | None = None) -> dict[str, Any]:
-    if str(model_name) in {"m7_utpm", "m8_utgt"}:
+    if str(model_name) in {"m7_utpm", DYRIFT_GNN_MODEL}:
         aux_regularizer = "pseudo-contrastive test-pool consistency"
         if graph_config is not None and bool(graph_config.pseudo_contrastive_time_balanced):
             aux_regularizer = "time-balanced pseudo-contrastive test-pool consistency"
-        if str(model_name) == "m8_utgt":
+        if str(model_name) == DYRIFT_GNN_MODEL:
             main_innovation = (
                 f"{DYRIFT_MODEL_SHORT_NAME} with {TRGT_BACKBONE_SHORT_NAME} "
                 "temporal-relation graph transformer"
@@ -407,29 +382,11 @@ def run_train(args: argparse.Namespace) -> None:
         raise NotImplementedError("The thesis mainline requires train/val to come from the same graph.")
 
     graph_config = _build_graph_config(args)
-    target_context_prediction_dir = _coerce_optional_path(args.target_context_prediction_dir)
-    teacher_distill_prediction_dir = _coerce_optional_path(args.teacher_distill_prediction_dir)
-    teacher_guidance_requested = (
-        target_context_prediction_dir is not None
-        or teacher_distill_prediction_dir is not None
-        or float(graph_config.teacher_distill_weight) > 0.0
-    )
-    if str(args.model) == OFFICIAL_BACKBONE_MODEL and teacher_guidance_requested:
-        raise ValueError(
-            "The legacy `m7_utpm` backbone is kept teacher-free. "
-            "Use `m8_utgt` for DyRIFT-GNN/TRGT thesis runs."
-        )
-    if float(graph_config.teacher_distill_weight) > 0.0 and teacher_distill_prediction_dir is None:
-        raise ValueError(
-            "teacher_distill_weight > 0 requires --teacher-distill-prediction-dir "
-            "so the thesis runtime can load fixed teacher targets."
-        )
     if args.target_context_groups is None:
         target_context_groups = list(OFFICIAL_TARGET_CONTEXT_GROUPS)
         if (
             str(graph_config.target_context_fusion) == "none"
             and float(graph_config.target_time_adapter_strength) <= 0.0
-            and target_context_prediction_dir is None
         ):
             target_context_groups = []
     else:
@@ -449,9 +406,6 @@ def run_train(args: argparse.Namespace) -> None:
         graph_config=graph_config,
         feature_profile=args.feature_profile,
         target_context_groups=target_context_groups,
-        target_context_prediction_dir=target_context_prediction_dir,
-        target_context_prediction_transform=args.target_context_prediction_transform,
-        teacher_distill_prediction_dir=teacher_distill_prediction_dir,
     )
     graph_config = runtime.graph_config
     phase1_context = runtime.phase1_context
@@ -651,11 +605,6 @@ def run_train(args: argparse.Namespace) -> None:
         "Each dataset is trained in isolation under its own dataset-scoped cache and output directory.",
         "The target-context bridge reuses only dataset-local feature caches and train-fit normalizers.",
     ]
-    if teacher_guidance_requested:
-        leakage_safeguards.append(
-            "Teacher predictions are fixed dataset-local inference outputs from phase1-train-fitted models; "
-            "they are loaded read-only and never refit on validation labels inside the GNN run."
-        )
     summary = {
         "model_name": args.model,
         "run_name": args.run_name,
@@ -679,29 +628,7 @@ def run_train(args: argparse.Namespace) -> None:
             if runtime.target_context_feature_groups
             else "none"
         ),
-        "teacher_guidance": {
-            "enabled": bool(teacher_guidance_requested),
-            "preset_teacher_candidate": bool(
-                getattr(args, "resolved_preset", None) == TRANSFORMER_BACKBONE_TEACHER_PRESET
-            ),
-            "target_context_prediction_dir": (
-                None if target_context_prediction_dir is None else _path_repr(target_context_prediction_dir)
-            ),
-            "target_context_prediction_transform": str(args.target_context_prediction_transform),
-            "teacher_distill_prediction_dir": (
-                None if teacher_distill_prediction_dir is None else _path_repr(teacher_distill_prediction_dir)
-            ),
-            "teacher_distill_weight": float(graph_config.teacher_distill_weight),
-            "hard_negative_teacher_blend": float(graph_config.hard_negative_teacher_blend),
-            "target_aux_feature_count": (
-                0 if phase1_context.target_aux_feature_names is None else len(phase1_context.target_aux_feature_names)
-            ),
-            "distill_train_coverage": (
-                None
-                if phase1_context.distill_target_mask is None or train_ids.size == 0
-                else float(np.mean(np.asarray(phase1_context.distill_target_mask[train_ids], dtype=np.float32)))
-            ),
-        },
+        "deployment_path": "single_gnn_end_to_end",
         "split_style": split.split_style,
         "train_phase": split.train_phase,
         "val_phase": split.val_phase,

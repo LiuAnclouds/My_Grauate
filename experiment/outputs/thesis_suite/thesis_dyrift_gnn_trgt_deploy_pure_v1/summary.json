@@ -1,25 +1,21 @@
 {
-  "suite_name": "thesis_m8_utgt_deploy_pure_eppcold_v1",
-  "model": "m8_utgt",
+  "suite_name": "thesis_dyrift_gnn_trgt_deploy_pure_v1",
+  "model": "dyrift_gnn",
   "method_display_name": "Dynamic Risk-Informed Fraud Graph Neural Network",
   "method_short_name": "DyRIFT-GNN",
   "backbone_display_name": "Temporal-Relational Graph Transformer",
   "backbone_short_name": "TRGT",
-  "preset": "utgt_temporal_shift_deploy_v1",
+  "preset": "dyrift_trgt_deploy_v1",
   "feature_profile": "utpm_shift_enhanced",
   "feature_dir": null,
   "feature_subdir": null,
-  "dataset_hparams_path": "experiment/training/configs/thesis_dataset_hparams.pure_gnn_eppcold_v1.json",
+  "dataset_hparams_path": "experiment/training/configs/thesis_dataset_hparams.dyrift_gnn_trgt_deploy_pure_v1.json",
   "feature_env_overrides": {
     "GRADPROJ_UTPM_ATTR_PROJ_DIM": null
   },
   "graph_config_overrides": [],
-  "teacher_guidance_enabled": false,
-  "teacher_signal_model_family": null,
+  "deployment_path": "single_gnn_end_to_end",
   "run_name_template": "{suite_name}_{dataset_short}",
-  "target_context_prediction_run_name_template": null,
-  "target_context_prediction_transform": "raw",
-  "teacher_distill_prediction_run_name_template": null,
   "target_context_groups": null,
   "dataset_isolation": true,
   "cross_dataset_training": false,
@@ -46,7 +42,7 @@
   ],
   "dataset_hparams": {
     "xinye_dgraph": {
-      "run_name_template": "probe_xy_m8_pure_enhbase_smallctx_v1",
+      "run_name_template": "probe_xy_dyrift_pure_enhbase_smallctx_v1",
       "feature_profile": "utpm_shift_enhanced",
       "feature_dir": null,
       "feature_subdir": "features_ap32",
@@ -74,7 +70,7 @@
       "graph_config_overrides": []
     },
     "elliptic_transactions": {
-      "run_name_template": "probe_et_m8_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
+      "run_name_template": "probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
       "feature_profile": "utpm_shift_compact",
       "feature_dir": null,
       "feature_subdir": "features_ap64",
@@ -111,7 +107,7 @@
       ]
     },
     "ellipticpp_transactions": {
-      "run_name_template": "probe_epp_m8_pure_ap96_hybrid120_timew_hl20_f035_coldctx_v1",
+      "run_name_template": "probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1",
       "feature_profile": "utpm_shift_enhanced",
       "feature_dir": null,
       "feature_subdir": "features_ap96",
@@ -151,13 +147,13 @@
   "results": [
     {
       "dataset": "xinye_dgraph",
-      "run_name": "probe_xy_m8_pure_enhbase_smallctx_v1",
-      "summary_path": "experiment/outputs/training/models/m8_utgt/probe_xy_m8_pure_enhbase_smallctx_v1/summary.json",
+      "run_name": "probe_xy_dyrift_pure_enhbase_smallctx_v1",
+      "summary_path": "experiment/outputs/training/models/dyrift_gnn/probe_xy_dyrift_pure_enhbase_smallctx_v1/summary.json",
       "val_auc_mean": 0.7904545115949035,
       "test_auc_mean": null,
       "external_auc_mean": null,
       "hparams": {
-        "run_name_template": "probe_xy_m8_pure_enhbase_smallctx_v1",
+        "run_name_template": "probe_xy_dyrift_pure_enhbase_smallctx_v1",
         "feature_profile": "utpm_shift_enhanced",
         "feature_dir": null,
         "feature_subdir": "features_ap32",
@@ -187,13 +183,13 @@
     },
     {
       "dataset": "elliptic_transactions",
-      "run_name": "probe_et_m8_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
-      "summary_path": "experiment/outputs/elliptic_transactions/training/models/m8_utgt/probe_et_m8_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1/summary.json",
+      "run_name": "probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
+      "summary_path": "experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1/summary.json",
       "val_auc_mean": 0.821329087693758,
       "test_auc_mean": null,
       "external_auc_mean": null,
       "hparams": {
-        "run_name_template": "probe_et_m8_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
+        "run_name_template": "probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
         "feature_profile": "utpm_shift_compact",
         "feature_dir": null,
         "feature_subdir": "features_ap64",
@@ -232,13 +228,13 @@
     },
     {
       "dataset": "ellipticpp_transactions",
-      "run_name": "probe_epp_m8_pure_ap96_hybrid120_timew_hl20_f035_coldctx_v1",
-      "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/m8_utgt/probe_epp_m8_pure_ap96_hybrid120_timew_hl20_f035_coldctx_v1/summary.json",
+      "run_name": "probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1",
+      "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1/summary.json",
       "val_auc_mean": 0.821953270227715,
       "test_auc_mean": null,
       "external_auc_mean": null,
       "hparams": {
-        "run_name_template": "probe_epp_m8_pure_ap96_hybrid120_timew_hl20_f035_coldctx_v1",
+        "run_name_template": "probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1",
         "feature_profile": "utpm_shift_enhanced",
         "feature_dir": null,
         "feature_subdir": "features_ap96",

@@ -5,10 +5,11 @@ from typing import Any
 
 from experiment.training.gnn_models import GraphModelConfig
 from experiment.training.thesis_contract import (
+    DYRIFT_GNN_MODEL,
     OFFICIAL_BACKBONE_PRESET,
+    TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_PRESET,
     TRANSFORMER_BACKBONE_DEPLOY_PRESET,
-    TRANSFORMER_BACKBONE_TEACHER_PRESET,
 )
 
 
@@ -89,16 +90,27 @@ _DYRIFT_TRGT_CONTEXT_BRIDGE: dict[str, Any] = {
     "target_time_expert_entropy_weight": 0.05,
 }
 
-_DYRIFT_TRGT_TRAIN_ONLY_TEACHER: dict[str, Any] = {
-    "hard_negative_teacher_blend": 0.15,
-    "teacher_distill_weight": 0.08,
-    "teacher_distill_loss": "rank",
-    "teacher_distill_start_epoch": 2,
-    "teacher_distill_ramp_epochs": 6,
-    "teacher_distill_agreement_floor": 0.65,
-    "teacher_distill_rank_gap": 0.20,
+_DYRIFT_PUBLIC_PRESETS: dict[str, dict[str, Any]] = {
+    TRANSFORMER_BACKBONE_PRESET: {
+        **_DYRIFT_TRGT_SHARED,
+        "target_context_fusion": "none",
+        "target_time_adapter_strength": 0.0,
+        "internal_risk_fusion": "residual",
+        "internal_risk_short_time_scale": 0.12,
+        "internal_risk_long_time_scale": 0.45,
+    },
+    TRANSFORMER_BACKBONE_DEPLOY_PRESET: {
+        **_DYRIFT_TRGT_SHARED,
+        **_DYRIFT_TRGT_CONTEXT_BRIDGE,
+        "dropout": 0.12,
+        "attention_num_heads": 8,
+        "message_risk_strength": 0.15,
+        "internal_risk_fusion": "residual",
+        "internal_risk_residual_scale": 0.35,
+        "internal_risk_short_time_scale": 0.12,
+        "internal_risk_long_time_scale": 0.45,
+    },
 }
-
 
 _PRESET_UPDATES: dict[str, dict[str, dict[str, Any]]] = {
     "m5_temporal_graphsage": {
@@ -152,39 +164,14 @@ _PRESET_UPDATES: dict[str, dict[str, dict[str, Any]]] = {
             "context_residual_budget_release_delay_epochs": 3,
         },
     },
-    "m8_utgt": {
-        "utgt_temporal_shift_v1": {
-            **_DYRIFT_TRGT_SHARED,
-            "target_context_fusion": "none",
-            "target_time_adapter_strength": 0.0,
-            "internal_risk_fusion": "residual",
-            "internal_risk_short_time_scale": 0.12,
-            "internal_risk_long_time_scale": 0.45,
-        },
-        "utgt_temporal_shift_teacher_v1": {
-            **_DYRIFT_TRGT_SHARED,
-            **_DYRIFT_TRGT_CONTEXT_BRIDGE,
-            **_DYRIFT_TRGT_TRAIN_ONLY_TEACHER,
-        },
-        TRANSFORMER_BACKBONE_DEPLOY_PRESET: {
-            **_DYRIFT_TRGT_SHARED,
-            **_DYRIFT_TRGT_CONTEXT_BRIDGE,
-            "dropout": 0.12,
-            "attention_num_heads": 8,
-            "message_risk_strength": 0.15,
-            "internal_risk_fusion": "residual",
-            "internal_risk_residual_scale": 0.35,
-            "internal_risk_short_time_scale": 0.12,
-            "internal_risk_long_time_scale": 0.45,
-        },
-    },
+    DYRIFT_GNN_MODEL: _DYRIFT_PUBLIC_PRESETS,
 }
 
 
 _DEFAULT_PRESET_BY_MODEL = {
     "m5_temporal_graphsage": "unified_baseline",
     "m7_utpm": OFFICIAL_BACKBONE_PRESET,
-    "m8_utgt": TRANSFORMER_BACKBONE_PRESET,
+    TRANSFORMER_BACKBONE_MODEL: TRANSFORMER_BACKBONE_PRESET,
 }
 
 

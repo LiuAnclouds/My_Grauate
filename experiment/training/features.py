@@ -2842,7 +2842,7 @@ def default_feature_groups(model_name: str) -> list[str]:
         ]
     if model_name == "m3_neighbor":
         return default_feature_groups("m2_hybrid") + ["neighbor"]
-    if model_name in {"m7_utpm", "m8_utgt"}:
+    if model_name in {"m7_utpm", "dyrift_gnn"}:
         return utpm_unified_feature_groups()
     if model_name in {"m4_graphsage", "m5_temporal_graphsage", "m6_temporal_gat"}:
         return default_feature_groups("m2_hybrid")

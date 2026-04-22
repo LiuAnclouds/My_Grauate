@@ -1,6 +1,6 @@
 {
-  "suite_name": "thesis_m8_utgt_deploy_pure_eppcold_v1",
-  "suite_type": "mainline",
+  "suite_name": "thesis_dyrift_gnn_trgt_deploy_pure_v1",
+  "suite_type": "pure_gnn_mainline",
   "hard_leakage_detected": false,
   "datasets": [
     {
@@ -21,23 +21,16 @@
         "val__external": 0,
         "test_pool__external": 0
       },
-      "run_dir": "experiment/outputs/training/models/m8_utgt/probe_xy_m8_pure_enhbase_smallctx_v1",
-      "teacher_guidance_enabled": false,
-      "teacher_prediction_dirs": [],
+      "run_dir": "experiment/outputs/training/models/dyrift_gnn/probe_xy_dyrift_pure_enhbase_smallctx_v1",
       "checks": {
         "split_pairwise_disjoint": true,
-        "backbone_train_matches_split_train": true,
-        "backbone_val_matches_split_val": true,
-        "backbone_test_pool_matches_split_test_pool": true,
+        "phase1_train_matches_split_train": true,
+        "phase1_val_matches_split_val": true,
+        "test_pool_matches_split_test_pool": true,
         "dataset_scoped_paths_only": true,
         "suite_declares_dataset_isolation": true,
         "suite_declares_no_cross_dataset_training": true,
-        "teacher_dirs_dataset_scoped_only": true,
-        "teacher_train_subset_of_split_train": true,
-        "teacher_train_has_no_val_overlap": true,
-        "teacher_train_has_no_test_pool_overlap": true,
-        "teacher_train_has_no_external_overlap": true,
-        "teacher_val_matches_split_val": true
+        "single_gnn_deployment_path": true
       }
     },
     {
@@ -58,23 +51,16 @@
         "val__external": 0,
         "test_pool__external": 0
       },
-      "run_dir": "experiment/outputs/elliptic_transactions/training/models/m8_utgt/probe_et_m8_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
-      "teacher_guidance_enabled": false,
-      "teacher_prediction_dirs": [],
+      "run_dir": "experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
       "checks": {
         "split_pairwise_disjoint": true,
-        "backbone_train_matches_split_train": true,
-        "backbone_val_matches_split_val": true,
-        "backbone_test_pool_matches_split_test_pool": true,
+        "phase1_train_matches_split_train": true,
+        "phase1_val_matches_split_val": true,
+        "test_pool_matches_split_test_pool": true,
         "dataset_scoped_paths_only": true,
         "suite_declares_dataset_isolation": true,
         "suite_declares_no_cross_dataset_training": true,
-        "teacher_dirs_dataset_scoped_only": true,
-        "teacher_train_subset_of_split_train": true,
-        "teacher_train_has_no_val_overlap": true,
-        "teacher_train_has_no_test_pool_overlap": true,
-        "teacher_train_has_no_external_overlap": true,
-        "teacher_val_matches_split_val": true
+        "single_gnn_deployment_path": true
       }
     },
     {
@@ -95,23 +81,16 @@
         "val__external": 0,
         "test_pool__external": 0
       },
-      "run_dir": "experiment/outputs/ellipticpp_transactions/training/models/m8_utgt/probe_epp_m8_pure_ap96_hybrid120_timew_hl20_f035_coldctx_v1",
-      "teacher_guidance_enabled": false,
-      "teacher_prediction_dirs": [],
+      "run_dir": "experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1",
       "checks": {
         "split_pairwise_disjoint": true,
-        "backbone_train_matches_split_train": true,
-        "backbone_val_matches_split_val": true,
-        "backbone_test_pool_matches_split_test_pool": true,
+        "phase1_train_matches_split_train": true,
+        "phase1_val_matches_split_val": true,
+        "test_pool_matches_split_test_pool": true,
         "dataset_scoped_paths_only": true,
         "suite_declares_dataset_isolation": true,
         "suite_declares_no_cross_dataset_training": true,
-        "teacher_dirs_dataset_scoped_only": true,
-        "teacher_train_subset_of_split_train": true,
-        "teacher_train_has_no_val_overlap": true,
-        "teacher_train_has_no_test_pool_overlap": true,
-        "teacher_train_has_no_external_overlap": true,
-        "teacher_val_matches_split_val": true
+        "single_gnn_deployment_path": true
       }
     }
   ]

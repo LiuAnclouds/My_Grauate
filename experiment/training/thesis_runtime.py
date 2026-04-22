@@ -9,10 +9,6 @@ from experiment.training.common import ExperimentSplit
 from experiment.training.features import build_hybrid_feature_normalizer, resolve_feature_groups
 from experiment.training.gnn_models import GraphModelConfig, GraphPhaseContext
 from experiment.training.graph_runtime import build_graph_label_artifacts, make_graph_contexts
-from experiment.training.prediction_signal_utils import (
-    load_target_context_prediction_features,
-    load_teacher_distill_targets,
-)
 from experiment.training.thesis_contract import OFFICIAL_TARGET_CONTEXT_GROUPS
 
 
@@ -40,9 +36,6 @@ def prepare_thesis_runtime(
     graph_config: GraphModelConfig,
     feature_profile: str = "utpm_unified",
     target_context_groups: list[str] | tuple[str, ...] | None = None,
-    target_context_prediction_dir: Path | None = None,
-    target_context_prediction_transform: str = "raw",
-    teacher_distill_prediction_dir: Path | None = None,
 ) -> ThesisPreparedRuntime:
     feature_groups = resolve_feature_groups(model_name, feature_profile=feature_profile)
     resolved_target_context_groups = list(
@@ -97,52 +90,11 @@ def prepare_thesis_runtime(
         build_sampling_profile=graph_config.neighbor_sampler
         in {"consistency_recent", "risk_consistency_recent"},
     )
-    if target_context_prediction_dir is not None:
-        (
-            phase1_prediction_features,
-            phase2_prediction_features,
-            target_context_prediction_feature_names,
-        ) = load_target_context_prediction_features(
-            prediction_dir=target_context_prediction_dir,
-            prediction_transform=target_context_prediction_transform,
-            train_ids=train_ids,
-            val_ids=np.asarray(split.val_ids, dtype=np.int32),
-            external_ids=np.asarray(split.external_ids, dtype=np.int32),
-            phase1_num_nodes=phase1_context.labels.shape[0],
-            phase2_num_nodes=phase2_context.labels.shape[0],
-        )
-        phase1_context = replace(
-            phase1_context,
-            target_aux_features=phase1_prediction_features,
-            target_aux_feature_names=tuple(target_context_prediction_feature_names),
-        )
-        phase2_context = replace(
-            phase2_context,
-            target_aux_features=phase2_prediction_features,
-            target_aux_feature_names=tuple(target_context_prediction_feature_names),
-        )
-    if teacher_distill_prediction_dir is not None and float(graph_config.teacher_distill_weight) > 0.0:
-        phase1_distill_targets, phase1_distill_mask = load_teacher_distill_targets(
-            prediction_dir=teacher_distill_prediction_dir,
-            train_ids=train_ids,
-            phase1_num_nodes=phase1_context.labels.shape[0],
-        )
-        phase1_context = replace(
-            phase1_context,
-            distill_targets=phase1_distill_targets,
-            distill_target_mask=phase1_distill_mask,
-        )
     label_feature_dim = graph_config.known_label_feature_dim if graph_config.known_label_feature else 0
     input_dim = int(phase1_context.feature_store.input_dim) + int(label_feature_dim)
     target_context_input_dim = 0
     if phase1_context.target_context_store is not None:
         target_context_input_dim += int(phase1_context.target_context_store.input_dim)
-    if phase1_context.target_aux_features is not None:
-        target_context_input_dim += (
-            int(phase1_context.target_aux_features.shape[1])
-            if phase1_context.target_aux_features.ndim == 2
-            else 1
-        )
     if target_context_input_dim <= 0:
         target_context_input_dim = int(input_dim)
     graph_config = replace(graph_config, target_context_input_dim=int(target_context_input_dim))

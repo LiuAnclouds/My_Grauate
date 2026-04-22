@@ -2,7 +2,7 @@
   "dataset": "elliptic_transactions",
   "notes": "DyRIFT-GNN Elliptic Transactions profile.",
   "hparams": {
-    "run_name_template": "probe_et_m8_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
+    "run_name_template": "probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
     "feature_profile": "utpm_shift_compact",
     "target_context_groups": [
       "graph_time_detrend",

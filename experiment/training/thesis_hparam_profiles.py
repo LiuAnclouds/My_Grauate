@@ -29,12 +29,6 @@ _MAINLINE_ALLOWED_KEYS = {
     "target_context_groups",
     "weight_decay",
 }
-_HYBRID_ALLOWED_KEYS = {
-    "base_run_name_template",
-    "blend_alpha",
-    "run_name_template",
-    "secondary_run_name_template",
-}
 
 
 @dataclass(frozen=True)
@@ -96,24 +90,6 @@ class MainlineDatasetHparams:
             "target_context_groups": None if self.target_context_groups is None else list(self.target_context_groups),
             "graph_config_overrides": list(self.graph_config_overrides),
         }
-
-
-@dataclass(frozen=True)
-class HybridDatasetHparams:
-    dataset_name: str
-    blend_alpha: float
-    base_run_name_template: str | None
-    secondary_run_name_template: str | None
-    run_name_template: str | None
-
-    def to_summary_payload(self) -> dict[str, Any]:
-        return {
-            "blend_alpha": float(self.blend_alpha),
-            "base_run_name_template": self.base_run_name_template,
-            "secondary_run_name_template": self.secondary_run_name_template,
-            "run_name_template": self.run_name_template,
-        }
-
 
 def load_thesis_hparam_profile(path: Path | str | None) -> LoadedThesisHparamProfile | None:
     if path is None:
@@ -303,66 +279,6 @@ def resolve_mainline_dataset_hparams(
         target_context_groups=resolved["target_context_groups"],
         graph_config_overrides=_graph_override_map_to_list(resolved["graph_config_overrides"]),
     )
-
-
-def resolve_hybrid_dataset_hparams(
-    *,
-    args: Any,
-    dataset_name: str,
-    profile: LoadedThesisHparamProfile | None,
-) -> HybridDatasetHparams:
-    resolved_blend_alpha = float(getattr(args, "blend_alpha"))
-    resolved_base_run_name_template = str(getattr(args, "base_run_name_template"))
-    resolved_secondary_run_name_template = str(getattr(args, "secondary_run_name_template"))
-    resolved_run_name_template = str(getattr(args, "run_name_template"))
-    if profile is not None:
-        hybrid_section = profile.section("hybrid")
-        dataset_section = _coerce_dataset_mapping(
-            hybrid_section.get("datasets"),
-            location=f"{profile.path}:hybrid.datasets",
-        )
-        defaults = _coerce_section_mapping(
-            hybrid_section.get("defaults"),
-            location=f"{profile.path}:hybrid.defaults",
-        )
-        dataset_overrides = _coerce_section_mapping(
-            dataset_section.get(dataset_name),
-            location=f"{profile.path}:hybrid.datasets.{dataset_name}",
-        )
-        _validate_allowed_keys(
-            defaults,
-            allowed_keys=_HYBRID_ALLOWED_KEYS,
-            location=f"{profile.path}:hybrid.defaults",
-        )
-        _validate_allowed_keys(
-            dataset_overrides,
-            allowed_keys=_HYBRID_ALLOWED_KEYS,
-            location=f"{profile.path}:hybrid.datasets.{dataset_name}",
-        )
-        if "blend_alpha" in defaults:
-            resolved_blend_alpha = float(defaults["blend_alpha"])
-        if "blend_alpha" in dataset_overrides:
-            resolved_blend_alpha = float(dataset_overrides["blend_alpha"])
-        if "base_run_name_template" in defaults:
-            resolved_base_run_name_template = str(defaults["base_run_name_template"])
-        if "base_run_name_template" in dataset_overrides:
-            resolved_base_run_name_template = str(dataset_overrides["base_run_name_template"])
-        if "secondary_run_name_template" in defaults:
-            resolved_secondary_run_name_template = str(defaults["secondary_run_name_template"])
-        if "secondary_run_name_template" in dataset_overrides:
-            resolved_secondary_run_name_template = str(dataset_overrides["secondary_run_name_template"])
-        if "run_name_template" in defaults:
-            resolved_run_name_template = str(defaults["run_name_template"])
-        if "run_name_template" in dataset_overrides:
-            resolved_run_name_template = str(dataset_overrides["run_name_template"])
-    return HybridDatasetHparams(
-        dataset_name=str(dataset_name),
-        blend_alpha=float(resolved_blend_alpha),
-        base_run_name_template=resolved_base_run_name_template,
-        secondary_run_name_template=resolved_secondary_run_name_template,
-        run_name_template=resolved_run_name_template,
-    )
-
 
 def _merge_mainline_section(
     *,

@@ -1,105 +1,134 @@
-# Graduation Project
+# DyRIFT-GNN
 
-基于动态图异常检测的金融反欺诈毕业设计项目。
+Dynamic Risk-Informed Fraud Graph Neural Network for dynamic-graph financial fraud detection.
 
-当前仓库已经收口为一条统一、可审计、三数据集可复现的主线：三个数据集先经过各自的数据清洗与统一特征映射，再进入同一套纯 GNN 主架构 `DyRIFT-GNN`。它的 backbone 命名为 `TRGT`，代码入口仍兼容保留为 `m8_utgt`。最终结果不依赖外部 residual、XGBoost 或 teacher 推理分支，部署路径就是单路纯 GNN。
+`DyRIFT-GNN` 是本项目的最终毕业设计方法。模型以 `TRGT` (`Temporal-Relational Graph Transformer`) 为动态图主干，在统一 UTPM 特征契约下完成 XinYe DGraph、Elliptic Transactions、Elliptic++ Transactions 三个数据集的训练、验证和复现实验。
 
-## Quick Links
+最终路线是单路纯 GNN：
 
-| Card | What It Opens |
+`dataset-local preprocessing -> UTPM feature contract -> TRGT backbone -> DyRIFT-GNN risk modules -> fraud probability`
+
+训练和推理不依赖外部分类头或二阶段融合器。
+
+## Project Cards
+
+| Card | Description |
 | --- | --- |
-| [Method Overview](docs/thesis_method.md) | 统一纯 GNN 方法定义、模块说明、部署口径 |
-| [Experiment Results](docs/thesis_experiments.md) | 主结果、GNN 对比、消融与说明 |
-| [Mainline Guide](experiment/training/README_thesis_mainline.md) | 复现实验命令、套件入口、指标读取方式 |
-| [Final Pure-GNN Summary](experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/summary.json) | 当前统一纯 GNN 三数据集结果 |
-| [Final Leakage Audit](experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/leakage_audit.md) | 最终 pure-GNN 套件硬泄露审计 |
-| [Final Metrics CSV](docs/results/thesis_m8_utgt_deploy_pure_eppcold_v1_metrics.csv) | 三数据集最终指标汇总 |
-| [Epoch Metrics CSV](docs/results/thesis_m8_utgt_deploy_pure_eppcold_v1_epoch_metrics.csv) | 三数据集逐 epoch 训练日志合并表 |
-| [Dataset Hparams Manifest](experiment/training/configs/thesis_dataset_hparams.pure_gnn_eppcold_v1.json) | 数据集级超参数总入口 |
-| [XinYe Hparams](experiment/training/configs/dyrift_gnn/xinye_dgraph.json) | XinYe 独立超参数文件 |
-| [ET Hparams](experiment/training/configs/dyrift_gnn/elliptic_transactions.json) | ET 独立超参数文件 |
-| [EPP Hparams](experiment/training/configs/dyrift_gnn/ellipticpp_transactions.json) | EPP 独立超参数文件 |
-| [Shared-module Ablation](experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md) | 共享模块消融报告 |
+| [Method Overview](docs/dyrift_gnn_method.md) | DyRIFT-GNN 的整体方法、输入输出、部署路径 |
+| [TRGT Backbone](docs/trgt_backbone.md) | Temporal-Relational Graph Transformer 主干说明 |
+| [Model Modules](docs/dyrift_modules.md) | bridge、drift expert、prototype、pseudo-contrastive、risk fusion、cold-start residual |
+| [Code Reference](docs/code_reference.md) | 关键文件、类、函数和调用关系 |
+| [Training And Configs](docs/training_and_configs.md) | 复现实验命令、三数据集参数文件、输出路径 |
+| [Experiment Results](docs/thesis_experiments.md) | 最终指标、GNN 对比、消融表 |
+| [Leakage Audit](experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md) | 最终 hard-leakage 审计报告 |
+| [Final Summary JSON](experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json) | 最终三数据集 suite summary |
+| [Metrics CSV](docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv) | 三数据集最终指标汇总 |
+| [Epoch Metrics CSV](docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv) | 三数据集逐 epoch 训练日志 |
 
-## Final Thesis Route
+## Final Results
 
-最终采用的主线不是三套策略，而是一套统一架构在三个数据集上分别训练：
+| Dataset | Val AUC | Val PR-AUC | Val AP |
+| --- | ---: | ---: | ---: |
+| XinYe DGraph | 0.790455 | 0.045843 | 0.045998 |
+| Elliptic Transactions | 0.821329 | 0.432221 | 0.396340 |
+| Elliptic++ Transactions | 0.821953 | 0.471452 | 0.438596 |
+| Macro Average | 0.811246 | 0.316505 | 0.293645 |
 
-| Item | Choice |
+All numbers are from the final pure-GNN suite:
+
+`thesis_dyrift_gnn_trgt_deploy_pure_v1`
+
+The official runtime model id is `dyrift_gnn`. The paper-facing method name is `DyRIFT-GNN`, and the backbone name is `TRGT`.
+
+## Architecture
+
+| Layer | Name | Role |
+| --- | --- | --- |
+| Input contract | UTPM | Unified feature schema for all datasets |
+| Backbone | TRGT | Temporal-relation multi-head attention over sampled dynamic subgraphs |
+| Full model | DyRIFT-GNN | TRGT plus risk-aware fraud modules |
+| Output | single GNN probability | Binary fraud probability for target nodes |
+
+Core modules:
+
+- `TRGTTemporalRelationAttentionBlock`: relation-aware temporal attention message passing.
+- `TRGTInternalRiskEncoder`: internal multi-scale risk representation from sampled subgraphs.
+- `TargetContextFusionHead`: target-level temporal-normality bridge.
+- `TargetTimeDriftExpertAdapter`: time-drift expert adaptation.
+- `PrototypeMemoryBank`: prototype memory regularization.
+- `pseudo-contrastive temporal mining`: time-balanced hard sample mining during training.
+- `context-conditioned cold-start residual`: cold-start correction inside the pure-GNN path.
+
+## Code Layout
+
+| Path | Role |
 | --- | --- |
-| Unified method family | `DyRIFT-GNN` |
-| Unified backbone family | `TRGT` |
-| Unified preset family | `utgt_temporal_shift_deploy_v1` |
-| Unified deployment path | single pure-GNN path |
-| Unified feature schema family | UTPM contract with dataset-local subsets |
-| Core innovation modules | temporal-relation attention, temporal-normality bridge, drift-expert adaptation, prototype memory, pseudo-contrastive temporal mining, internal causal risk fusion, context-conditioned cold-start residual |
-| Final suite | [thesis_m8_utgt_deploy_pure_eppcold_v1](experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/summary.json) |
-| Leakage audit | [leakage_audit.md](experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/leakage_audit.md) |
+| [experiment/training/trgt_backbone.py](experiment/training/trgt_backbone.py) | TRGT backbone blocks and risk encoder |
+| [experiment/training/dyrift_model.py](experiment/training/dyrift_model.py) | DyRIFT-GNN model facade and factory |
+| [experiment/training/dyrift_training.py](experiment/training/dyrift_training.py) | Final DyRIFT-GNN training wrapper |
+| [experiment/training/gnn_models.py](experiment/training/gnn_models.py) | Shared graph training runtime, losses, sampling, metrics |
+| [experiment/training/run_thesis_mainline.py](experiment/training/run_thesis_mainline.py) | Single-dataset build/train entry |
+| [experiment/training/run_thesis_suite.py](experiment/training/run_thesis_suite.py) | Three-dataset suite runner |
+| [experiment/training/audit_thesis_leakage.py](experiment/training/audit_thesis_leakage.py) | Hard-leakage audit |
 
-这里不再做外部融合。训练与推理都是同一条 `DyRIFT-GNN` 路径，数据集之间只允许合理的超参数差异，不允许改成三套不同模型。
+## Dataset Hyperparameters
 
-注意：最终 EPP run name 中的 `hybrid120` 只表示内部邻居采样器使用 recent/random 混合采样窗口，不表示外部 hybrid 模型、XGBoost 分支或二阶段分类器。
+The architecture is shared. Dataset-level tuning is isolated into three small JSON files:
 
-## Result Snapshot
-
-| Dataset | Final Pure GNN Val AUC |
-| --- | ---: |
-| XinYe DGraph | 0.790455 |
-| Elliptic | 0.821329 |
-| Elliptic++ | 0.821953 |
-| Macro Val AUC | 0.811246 |
-
-读取方式：
-
-- 这四个数都来自同一套纯 GNN 架构。
-- 三个数据集没有混训，也没有第二个模型参与最终推理。
-- 数据集之间只做输入容量、上下文特征组和图超参数的合理调优。
-
-## GNN Comparison Snapshot
-
-| Model | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Role |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Historical strong GNN `m5_temporal_graphsage` | 0.794628 | 0.793990 | 0.782830 | 0.790483 | 历史强 GNN 参考线 |
-| Legacy thesis GNN `m7_utpm` | 0.776439 | 0.812635 | 0.777611 | 0.788895 | 旧主干 |
-| Early pure TRGT `m8_utgt` | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 初始纯 TRGT 基线 |
-| Final `DyRIFT-GNN` / `TRGT` | 0.790455 | 0.821329 | 0.821953 | 0.811246 | 当前论文主结果 |
-
-## Why ET And EPP Are Lower Than The Historical 0.9+ Runs
-
-如果你记得之前 ET / EPP 有过 `0.9+`，那批结果不是当前这条纯 GNN 路线的同口径结果。
-
-- 之前的高分主要来自 `graphprop + tree/residual` 或 teacher-guided 的双路径方案。
-- 当前最终路线锁成了单模型 pure GNN，可部署但更严格。
-- ET / EPP 这两个数据集上，图传播式结构信号本来就特别强；最终版本通过纯 GNN 内部的时间上下文桥接和冷启动残差专家把 EPP 从旧版纯 GNN 的 `0.783441` 提升到 `0.821953`。
-- 现在这版结果更适合答辩时讲成“统一单模型动态图 GNN 方法”，而不是“两模型融合系统”。
-
-## Innovation Groups
-
-| Group | Evidence |
+| Dataset | Config |
 | --- | --- |
-| Temporal relation attention backbone | `m7_utpm -> TRGT` 完成统一动态图主干现代化 |
-| Temporal-normality bridge | 目标节点级上下文桥接，保留纯 GNN 单路推理 |
-| Drift-expert adaptation | 用时间漂移专家调节不同时间段的上下文融合 |
-| Prototype memory | 共享模块消融保留，作为结构正则与类别稳定器 |
-| Pseudo-contrastive temporal mining | 去掉后宏平均下降 `0.006182`，是最稳定有效的共享模块 |
-| Internal causal risk fusion | 在纯 GNN 内部显式建模多尺度风险差分，不依赖外部 teacher 推理 |
-| Context-conditioned cold-start residual | 修复 EPP 晚期冷启动节点消息不足问题，EPP `43-49` 天段 AUC 从 `0.5000` 提升到 `0.6088` |
+| XinYe DGraph | [xinye_dgraph.json](experiment/training/configs/dyrift_gnn/xinye_dgraph.json) |
+| Elliptic Transactions | [elliptic_transactions.json](experiment/training/configs/dyrift_gnn/elliptic_transactions.json) |
+| Elliptic++ Transactions | [ellipticpp_transactions.json](experiment/training/configs/dyrift_gnn/ellipticpp_transactions.json) |
 
-## Leakage Guardrails
+The suite-level manifest is:
 
-最终套件已经通过硬泄露审计：
+[thesis_dataset_hparams.dyrift_gnn_trgt_deploy_pure_v1.json](experiment/training/configs/thesis_dataset_hparams.dyrift_gnn_trgt_deploy_pure_v1.json)
 
-- [Final Pure-GNN Audit](experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/leakage_audit.md)
-- [Final Pure-GNN Audit JSON](experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/leakage_audit.json)
+## Reproduce
 
-审计结论：
+Build unified features:
 
-- 未发现 `train / val / test_pool / external` 交叉。
-- 验证集节点与官方 `phase1_val` 对齐。
-- 未发现跨数据集混训、跨数据集缓存复用或验证/测试标签回流训练。
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_mainline.py \
+  build_features \
+  --phase both
+```
 
-## Main Entry
+Run the final suite:
 
-- 主训练入口：[run_thesis_mainline.py](experiment/training/run_thesis_mainline.py)
-- 纯 GNN 套件：[run_thesis_suite.py](experiment/training/run_thesis_suite.py)
-- 泄露审计脚本：[audit_thesis_leakage.py](experiment/training/audit_thesis_leakage.py)
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py \
+  --suite-name thesis_dyrift_gnn_trgt_deploy_pure_v1 \
+  --model dyrift_gnn \
+  --preset dyrift_trgt_deploy_v1 \
+  --feature-profile utpm_shift_enhanced \
+  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.dyrift_gnn_trgt_deploy_pure_v1.json \
+  --seeds 42 \
+  --skip-existing
+```
+
+Run hard-leakage audit:
+
+```bash
+conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_leakage.py \
+  --suite-summary experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
+```
+
+## Integrity
+
+The final suite declares:
+
+- `deployment_path=single_gnn_end_to_end`
+- `dataset_isolation=true`
+- `cross_dataset_training=false`
+- `same_architecture_across_datasets=true`
+
+The hard-leakage audit reports `hard_leakage_detected=false`.
+
+## Citation Name
+
+Use this naming in the thesis and slides:
+
+- Full model: `Dynamic Risk-Informed Fraud Graph Neural Network (DyRIFT-GNN)`
+- Backbone: `Temporal-Relational Graph Transformer (TRGT)`

@@ -2,7 +2,7 @@
   "dataset": "ellipticpp_transactions",
   "notes": "DyRIFT-GNN Elliptic++ profile with context-conditioned cold-start residual.",
   "hparams": {
-    "run_name_template": "probe_epp_m8_pure_ap96_hybrid120_timew_hl20_f035_coldctx_v1",
+    "run_name_template": "probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1",
     "feature_profile": "utpm_shift_enhanced",
     "target_context_groups": [
       "graph_stats",

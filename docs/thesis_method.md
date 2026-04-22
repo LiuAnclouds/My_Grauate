@@ -5,10 +5,10 @@
 - [Back to README](../README.md)
 - [Experiment Table](thesis_experiments.md)
 - [Mainline Guide](../experiment/training/README_thesis_mainline.md)
-- [Final Pure-GNN Summary](../experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/summary.json)
-- [Final Pure-GNN Audit](../experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/leakage_audit.md)
-- [Final Metrics CSV](results/thesis_m8_utgt_deploy_pure_eppcold_v1_metrics.csv)
-- [Epoch Metrics CSV](results/thesis_m8_utgt_deploy_pure_eppcold_v1_epoch_metrics.csv)
+- [Final Pure-GNN Summary](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json)
+- [Final Pure-GNN Audit](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
+- [Final Metrics CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv)
+- [Epoch Metrics CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv)
 
 ## 1. Problem Setting
 
@@ -18,7 +18,7 @@
 
 - 三个数据集彼此隔离，不做跨数据集联合训练。
 - 各数据集可以有自己的原始清洗流程，但最终必须映射到同一套 UTPM 特征语义。
-- 主体模型必须是动态图 GNN，当前固定为 `DyRIFT-GNN`；backbone 为 `TRGT`，代码兼容入口名为 `m8_utgt`。
+- 主体模型必须是动态图 GNN，当前固定为 `DyRIFT-GNN`；backbone 为 `TRGT`，运行入口名为 `dyrift_gnn`。
 - 数据集级超参数允许分别调，例如 `attr_proj_dim`、`hidden_dim`、`rel_dim`、`fanouts`、`attention_num_heads`、`dropout`。
 - 禁止训练集、验证集、测试池和外部集节点交叉，也禁止用验证/测试标签反哺训练。
 
@@ -46,7 +46,7 @@
 - `base`：所有节点共享的主干输入，是统一后的节点属性、图结构统计、时间统计和关系统计。
 - `bridge context`：目标节点级别的辅助上下文，是从同一份统一特征里抽取出来的目标上下文组，再经过模型内 bridge 编码器融合到目标表示。
 
-这里的 bridge context 不是外部 teacher 预测，也不是标签泄露特征。它本质上仍然来自当前节点及其局部时间图结构的无标签统计，例如：
+这里的 bridge context 不是外部模型预测，也不是标签泄露特征。它本质上仍然来自当前节点及其局部时间图结构的无标签统计，例如：
 
 - `graph_stats`
 - `graph_time_detrend`
@@ -59,9 +59,9 @@
 
 最终训练和推理都只有一条 `DyRIFT-GNN / TRGT` 路径：
 
-- 没有外部 XGBoost 分类头参与最终输出。
+- 没有独立外部分类头参与最终输出。
 - 没有 residual 分支参与推理。
-- 没有 teacher 预测在验证或测试时作为输入特征注入。
+- 没有外部模型预测在验证或测试时作为输入特征注入。
 
 因此这条路线是可部署的单模型纯 GNN。
 
@@ -92,15 +92,15 @@
 
 - XinYe 和 ET 直接采用当前各自最优 pure-GNN run。
 - EPP 在保持同一 `DyRIFT-GNN / TRGT` 架构前提下，启用了 `cold_start_residual_strength=0.35` 的上下文冷启动残差专家。
-- EPP run name 中的 `hybrid120` 仅表示内部邻居采样策略是 mixed recent/random sampler，不代表外部 hybrid 模型。
+- EPP run name 中的 `mixed120` 仅表示内部邻居采样策略是 mixed recent/random sampler。
 - 这不是换第二个模型，而是同一 DyRIFT-GNN / TRGT 主干中的数据集级超参数开关。
 
 ## 7. Hard-Leakage Guardrails
 
 最终主结果已审计：
 
-- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/leakage_audit.md)
-- [leakage_audit.json](../experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/leakage_audit.json)
+- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
+- [leakage_audit.json](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json)
 
 审计结论：
 
@@ -122,11 +122,11 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_ma
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py \
-  --suite-name thesis_m8_utgt_deploy_pure_eppcold_v1 \
-  --model m8_utgt \
-  --preset utgt_temporal_shift_deploy_v1 \
+  --suite-name thesis_dyrift_gnn_trgt_deploy_pure_v1 \
+  --model dyrift_gnn \
+  --preset dyrift_trgt_deploy_v1 \
   --feature-profile utpm_shift_enhanced \
-  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.pure_gnn_eppcold_v1.json \
+  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.dyrift_gnn_trgt_deploy_pure_v1.json \
   --seeds 42 \
   --skip-existing
 ```
@@ -135,5 +135,5 @@ conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_su
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_leakage.py \
-  --suite-summary experiment/outputs/thesis_suite/thesis_m8_utgt_deploy_pure_eppcold_v1/summary.json
+  --suite-summary experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
 ```

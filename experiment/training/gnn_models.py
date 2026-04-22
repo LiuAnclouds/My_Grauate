@@ -64,10 +64,6 @@ class GraphPhaseContext:
     graph_cache: GraphCache
     labels: np.ndarray
     target_context_store: FeatureStore | None = None
-    target_aux_features: np.ndarray | None = None
-    target_aux_feature_names: tuple[str, ...] | None = None
-    distill_targets: np.ndarray | None = None
-    distill_target_mask: np.ndarray | None = None
     known_label_codes: np.ndarray | None = None
     reference_day: int | None = None
     historical_background_ids: np.ndarray | None = None
@@ -97,7 +93,6 @@ class GraphModelConfig:
     hard_negative_candidate_cap: int = 100000
     hard_negative_candidate_multiplier: float = 4.0
     hard_negative_pool_multiplier: float = 2.0
-    hard_negative_teacher_blend: float = 0.0
     loss_type: str = "bce"
     focal_gamma: float = 2.0
     focal_alpha: float = -1.0
@@ -150,12 +145,6 @@ class GraphModelConfig:
     target_time_adapter_num_experts: int = 4
     target_time_expert_entropy_floor: float = 0.0
     target_time_expert_entropy_weight: float = 0.0
-    teacher_distill_weight: float = 0.0
-    teacher_distill_loss: str = "bce"
-    teacher_distill_start_epoch: int = 1
-    teacher_distill_ramp_epochs: int = 0
-    teacher_distill_agreement_floor: float = 0.0
-    teacher_distill_rank_gap: float = 0.0
     atm_gate_strength: float = 1.0
     context_residual_scale: float = 1.0
     context_residual_clip: float = 0.0
@@ -201,7 +190,6 @@ class GraphModelConfig:
             "hard_negative_candidate_cap": int(self.hard_negative_candidate_cap),
             "hard_negative_candidate_multiplier": float(self.hard_negative_candidate_multiplier),
             "hard_negative_pool_multiplier": float(self.hard_negative_pool_multiplier),
-            "hard_negative_teacher_blend": float(self.hard_negative_teacher_blend),
             "loss_type": self.loss_type,
             "focal_gamma": float(self.focal_gamma),
             "focal_alpha": float(self.focal_alpha),
@@ -256,12 +244,6 @@ class GraphModelConfig:
             "target_time_adapter_num_experts": int(self.target_time_adapter_num_experts),
             "target_time_expert_entropy_floor": float(self.target_time_expert_entropy_floor),
             "target_time_expert_entropy_weight": float(self.target_time_expert_entropy_weight),
-            "teacher_distill_weight": float(self.teacher_distill_weight),
-            "teacher_distill_loss": self.teacher_distill_loss,
-            "teacher_distill_start_epoch": int(self.teacher_distill_start_epoch),
-            "teacher_distill_ramp_epochs": int(self.teacher_distill_ramp_epochs),
-            "teacher_distill_agreement_floor": float(self.teacher_distill_agreement_floor),
-            "teacher_distill_rank_gap": float(self.teacher_distill_rank_gap),
             "atm_gate_strength": float(self.atm_gate_strength),
             "context_residual_scale": float(self.context_residual_scale),
             "context_residual_clip": float(self.context_residual_clip),
@@ -315,7 +297,6 @@ class GraphModelConfig:
             hard_negative_candidate_cap=int(payload.get("hard_negative_candidate_cap", 100000)),
             hard_negative_candidate_multiplier=float(payload.get("hard_negative_candidate_multiplier", 4.0)),
             hard_negative_pool_multiplier=float(payload.get("hard_negative_pool_multiplier", 2.0)),
-            hard_negative_teacher_blend=float(payload.get("hard_negative_teacher_blend", 0.0)),
             loss_type=str(payload.get("loss_type", "bce")),
             focal_gamma=float(payload.get("focal_gamma", 2.0)),
             focal_alpha=float(payload.get("focal_alpha", -1.0)),
@@ -378,12 +359,6 @@ class GraphModelConfig:
             target_time_expert_entropy_weight=float(
                 payload.get("target_time_expert_entropy_weight", 0.0)
             ),
-            teacher_distill_weight=float(payload.get("teacher_distill_weight", 0.0)),
-            teacher_distill_loss=str(payload.get("teacher_distill_loss", "bce")),
-            teacher_distill_start_epoch=int(payload.get("teacher_distill_start_epoch", 1)),
-            teacher_distill_ramp_epochs=int(payload.get("teacher_distill_ramp_epochs", 0)),
-            teacher_distill_agreement_floor=float(payload.get("teacher_distill_agreement_floor", 0.0)),
-            teacher_distill_rank_gap=float(payload.get("teacher_distill_rank_gap", 0.0)),
             atm_gate_strength=float(payload.get("atm_gate_strength", 1.0)),
             context_residual_scale=float(payload.get("context_residual_scale", 1.0)),
             context_residual_clip=float(payload.get("context_residual_clip", 0.0)),
@@ -1279,23 +1254,6 @@ def _pairwise_ranking_loss(
         return logits.new_tensor(0.0)
     margin_term = float(margin) - (pos_logits[:, None] - neg_logits[None, :])
     return F.softplus(margin_term).mean()
-
-
-def _teacher_pairwise_distill_loss(
-    student_logits: torch.Tensor,
-    teacher_scores: torch.Tensor,
-    gap_floor: float,
-) -> torch.Tensor:
-    if student_logits.numel() <= 1 or teacher_scores.numel() <= 1:
-        return student_logits.new_tensor(0.0)
-    teacher_delta = teacher_scores[:, None] - teacher_scores[None, :]
-    pair_mask = teacher_delta > max(float(gap_floor), 0.0)
-    if not torch.any(pair_mask):
-        return student_logits.new_tensor(0.0)
-    student_delta = student_logits[:, None] - student_logits[None, :]
-    pair_weight = teacher_delta[pair_mask]
-    pair_weight = pair_weight / pair_weight.mean().clamp_min(1e-6)
-    return (F.softplus(-student_delta[pair_mask]) * pair_weight).mean()
 
 
 def _dirichlet_energy(
@@ -2998,100 +2956,17 @@ class BaseGraphSAGEExperiment:
             and self.graph_config.negative_sampler in {"hard", "mixed"}
         )
 
-    def _hard_negative_teacher_blend(self) -> float:
-        return float(np.clip(self.graph_config.hard_negative_teacher_blend, 0.0, 1.0))
-
-    def _teacher_scores_for_nodes(
-        self,
-        context: GraphPhaseContext,
-        node_ids: np.ndarray,
-    ) -> tuple[np.ndarray | None, np.ndarray | None]:
-        if context.distill_targets is None or context.distill_target_mask is None:
-            return None, None
-        ids = np.asarray(node_ids, dtype=np.int32)
-        teacher_scores = np.asarray(context.distill_targets[ids], dtype=np.float32)
-        teacher_mask = np.asarray(context.distill_target_mask[ids], dtype=bool)
-        return teacher_scores, teacher_mask
-
     def _select_hard_negative_candidates(
         self,
-        context: GraphPhaseContext,
         neg_nodes: np.ndarray,
         candidate_count: int,
         rng: np.random.Generator,
-    ) -> tuple[np.ndarray, float]:
+    ) -> np.ndarray:
         neg_nodes = np.asarray(neg_nodes, dtype=np.int32)
         if candidate_count >= neg_nodes.size:
-            teacher_scores, teacher_mask = self._teacher_scores_for_nodes(context, neg_nodes)
-            coverage = float(np.mean(teacher_mask, dtype=np.float64)) if teacher_mask is not None and teacher_mask.size else 0.0
-            return neg_nodes.astype(np.int32, copy=False), coverage
-
-        teacher_blend = self._hard_negative_teacher_blend()
-        teacher_scores, teacher_mask = self._teacher_scores_for_nodes(context, neg_nodes)
-        if (
-            teacher_blend <= 0.0
-            or teacher_scores is None
-            or teacher_mask is None
-            or not np.any(teacher_mask)
-        ):
-            choice = rng.choice(neg_nodes.size, size=candidate_count, replace=False)
-            return neg_nodes[choice].astype(np.int32, copy=False), 0.0
-
-        teacher_take = min(candidate_count, max(1, int(round(candidate_count * teacher_blend))))
-        teacher_nodes = neg_nodes[teacher_mask]
-        teacher_values = teacher_scores[teacher_mask]
-        if teacher_take >= teacher_nodes.size:
-            teacher_selected = teacher_nodes.astype(np.int32, copy=False)
-        else:
-            teacher_top_idx = np.argpartition(teacher_values, -teacher_take)[-teacher_take:]
-            teacher_top_idx = teacher_top_idx[np.argsort(-teacher_values[teacher_top_idx], kind="stable")]
-            teacher_selected = teacher_nodes[teacher_top_idx].astype(np.int32, copy=False)
-
-        remaining_take = max(candidate_count - teacher_selected.size, 0)
-        if remaining_take <= 0:
-            return teacher_selected.astype(np.int32, copy=False), 1.0
-
-        available_mask = ~np.isin(neg_nodes, teacher_selected, assume_unique=False)
-        available_idx = np.flatnonzero(available_mask)
-        if available_idx.size <= remaining_take:
-            random_selected = neg_nodes[available_idx].astype(np.int32, copy=False)
-        else:
-            random_choice = rng.choice(available_idx.size, size=remaining_take, replace=False)
-            random_selected = neg_nodes[available_idx[random_choice]].astype(np.int32, copy=False)
-
-        candidate_nodes = np.concatenate([teacher_selected, random_selected]).astype(np.int32, copy=False)
-        teacher_scores_sel, teacher_mask_sel = self._teacher_scores_for_nodes(context, candidate_nodes)
-        coverage = (
-            float(np.mean(teacher_mask_sel, dtype=np.float64))
-            if teacher_mask_sel is not None and teacher_mask_sel.size
-            else 0.0
-        )
-        return candidate_nodes, coverage
-
-    def _blend_hard_negative_scores(
-        self,
-        context: GraphPhaseContext,
-        candidate_nodes: np.ndarray,
-        student_scores: np.ndarray,
-    ) -> tuple[np.ndarray, float]:
-        scores = np.asarray(student_scores, dtype=np.float32)
-        teacher_blend = self._hard_negative_teacher_blend()
-        teacher_scores, teacher_mask = self._teacher_scores_for_nodes(context, candidate_nodes)
-        if (
-            teacher_blend <= 0.0
-            or teacher_scores is None
-            or teacher_mask is None
-            or not np.any(teacher_mask)
-        ):
-            return scores, 0.0
-
-        blended = scores.copy()
-        blended[teacher_mask] = (
-            (1.0 - teacher_blend) * blended[teacher_mask]
-            + teacher_blend * teacher_scores[teacher_mask]
-        ).astype(np.float32, copy=False)
-        teacher_mean = float(np.mean(teacher_scores[teacher_mask], dtype=np.float64))
-        return blended, teacher_mean
+            return neg_nodes.astype(np.int32, copy=False)
+        choice = rng.choice(neg_nodes.size, size=candidate_count, replace=False)
+        return neg_nodes[choice].astype(np.int32, copy=False)
 
     def _relation_risk_sampler_enabled(self) -> bool:
         return _sampler_uses_relation_risk(self.graph_config.neighbor_sampler)
@@ -3556,29 +3431,6 @@ class BaseGraphSAGEExperiment:
         }
         return float(effective_weight)
 
-    def _current_teacher_distill_weight(self, epoch: int) -> float:
-        base_weight = max(float(self.graph_config.teacher_distill_weight), 0.0)
-        start_epoch = max(int(self.graph_config.teacher_distill_start_epoch), 1)
-        ramp_epochs = max(int(self.graph_config.teacher_distill_ramp_epochs), 0)
-        if base_weight <= 0.0 or epoch < start_epoch:
-            self._teacher_distill_schedule_state = {
-                "active": 0.0,
-                "progress": 0.0,
-            }
-            return 0.0
-        if ramp_epochs <= 0:
-            self._teacher_distill_schedule_state = {
-                "active": 1.0,
-                "progress": 1.0,
-            }
-            return base_weight
-        progress = min(max(epoch - start_epoch + 1, 0), ramp_epochs) / float(ramp_epochs)
-        self._teacher_distill_schedule_state = {
-            "active": 1.0,
-            "progress": float(progress),
-        }
-        return float(base_weight * progress)
-
     def _current_context_residual_budget_weight(self, epoch: int) -> float:
         base_weight = max(float(self.graph_config.context_residual_budget_weight), 0.0)
         if base_weight <= 0.0:
@@ -3664,14 +3516,6 @@ class BaseGraphSAGEExperiment:
             sum(int(stats.get("candidate_count", 0)) for stats in self._hard_negative_pool_stats.values())
         )
 
-    def _current_hard_negative_teacher_coverage(self) -> float:
-        coverages = [
-            float(stats.get("teacher_coverage", 0.0))
-            for stats in self._hard_negative_pool_stats.values()
-            if int(stats.get("candidate_count", 0)) > 0
-        ]
-        return float(np.mean(coverages, dtype=np.float64)) if coverages else 0.0
-
     def _maybe_refresh_hard_negative_pools(
         self,
         context: GraphPhaseContext,
@@ -3687,7 +3531,6 @@ class BaseGraphSAGEExperiment:
                 "pool_size": 0,
                 "candidate_count": 0,
                 "partition_count": 0,
-                "teacher_coverage": 0.0,
             }
 
         warmup_epochs = max(int(self.graph_config.hard_negative_warmup_epochs), 0)
@@ -3699,7 +3542,6 @@ class BaseGraphSAGEExperiment:
                 "pool_size": 0,
                 "candidate_count": 0,
                 "partition_count": 0,
-                "teacher_coverage": 0.0,
             }
 
         refresh_every = max(int(self.graph_config.hard_negative_refresh), 1)
@@ -3712,7 +3554,6 @@ class BaseGraphSAGEExperiment:
                 "pool_size": self._current_hard_negative_pool_size(),
                 "candidate_count": self._current_hard_negative_candidate_count(),
                 "partition_count": len(self._hard_negative_pools),
-                "teacher_coverage": self._current_hard_negative_teacher_coverage(),
             }
 
         negative_ratio = max(float(self.graph_config.train_negative_ratio), 0.0)
@@ -3743,8 +3584,7 @@ class BaseGraphSAGEExperiment:
             if candidate_count <= 0:
                 continue
 
-            candidate_nodes, teacher_coverage = self._select_hard_negative_candidates(
-                context=context,
+            candidate_nodes = self._select_hard_negative_candidates(
                 neg_nodes=neg_nodes,
                 candidate_count=candidate_count,
                 rng=rng,
@@ -3759,12 +3599,6 @@ class BaseGraphSAGEExperiment:
             )
             if candidate_scores.size == 0:
                 continue
-            candidate_scores, teacher_score_mean = self._blend_hard_negative_scores(
-                context=context,
-                candidate_nodes=candidate_nodes,
-                student_scores=candidate_scores,
-            )
-
             pool_count = min(
                 candidate_nodes.size,
                 max(1, int(math.ceil(sampled_negatives * pool_multiplier))),
@@ -3781,8 +3615,6 @@ class BaseGraphSAGEExperiment:
                 "candidate_count": int(candidate_nodes.size),
                 "pool_count": int(pool_nodes.size),
                 "sampled_negatives": int(sampled_negatives),
-                "teacher_coverage": float(teacher_coverage),
-                "teacher_score_mean": float(teacher_score_mean),
             }
 
         self._hard_negative_pools = hard_pools
@@ -3792,7 +3624,6 @@ class BaseGraphSAGEExperiment:
             "pool_size": self._current_hard_negative_pool_size(),
             "candidate_count": self._current_hard_negative_candidate_count(),
             "partition_count": len(self._hard_negative_pools),
-            "teacher_coverage": self._current_hard_negative_teacher_coverage(),
         }
 
     def _sample_negative_partition(
@@ -4305,11 +4136,6 @@ class BaseGraphSAGEExperiment:
             target_context_blocks: list[np.ndarray] = []
             if context.target_context_store is not None:
                 target_context_blocks.append(context.target_context_store.take_rows(target_global_ids))
-            if context.target_aux_features is not None:
-                aux_np = np.asarray(context.target_aux_features[target_global_ids], dtype=np.float32)
-                if aux_np.ndim == 1:
-                    aux_np = aux_np.reshape(-1, 1)
-                target_context_blocks.append(aux_np)
             if target_context_blocks:
                 target_context_np = (
                     target_context_blocks[0]
@@ -4437,7 +4263,6 @@ class BaseGraphSAGEExperiment:
                     f"{self.graph_config.historical_background_negative_warmup_epochs} "
                     f"historical_background_aux_only={self.graph_config.historical_background_aux_only} "
                     f"negative_sampler={self.graph_config.negative_sampler} "
-                    f"hard_negative_teacher_blend={self.graph_config.hard_negative_teacher_blend:.4f} "
                     f"loss_type={self.graph_config.loss_type} "
                     f"ranking_weight={self.graph_config.ranking_weight:.4f} "
                     f"ranking_margin={self.graph_config.ranking_margin:.4f} "
@@ -4480,12 +4305,6 @@ class BaseGraphSAGEExperiment:
                     f"{self.graph_config.target_time_expert_entropy_floor:.4f} "
                     f"target_time_expert_entropy_weight="
                     f"{self.graph_config.target_time_expert_entropy_weight:.4f} "
-                    f"teacher_distill_weight={self.graph_config.teacher_distill_weight:.4f} "
-                    f"teacher_distill_loss={self.graph_config.teacher_distill_loss} "
-                    f"teacher_distill_start_epoch={self.graph_config.teacher_distill_start_epoch} "
-                    f"teacher_distill_ramp_epochs={self.graph_config.teacher_distill_ramp_epochs} "
-                    f"teacher_distill_agreement_floor={self.graph_config.teacher_distill_agreement_floor:.4f} "
-                    f"teacher_distill_rank_gap={self.graph_config.teacher_distill_rank_gap:.4f} "
                     f"normal_bucket_adv_weight={self.graph_config.normal_bucket_adv_weight:.4f} "
                     f"aux_multiclass_num_classes={self.graph_config.aux_multiclass_num_classes} "
                     f"aux_multiclass_loss_weight={self.graph_config.aux_multiclass_loss_weight:.4f} "
@@ -4525,7 +4344,6 @@ class BaseGraphSAGEExperiment:
                 normal_bucket_adv_memory_bucket_ids = None
                 context_budget_weight = self._current_context_residual_budget_weight(epoch)
                 prototype_loss_weight = self._current_prototype_loss_weight(epoch)
-                teacher_distill_weight = self._current_teacher_distill_weight(epoch)
                 batch_losses: list[float] = []
                 batch_base_losses: list[float] = []
                 batch_ranking_losses: list[float] = []
@@ -4533,7 +4351,6 @@ class BaseGraphSAGEExperiment:
                 batch_normal_align_losses: list[float] = []
                 batch_normal_bucket_adv_losses: list[float] = []
                 batch_aux_losses: list[float] = []
-                batch_teacher_distill_losses: list[float] = []
                 batch_context_regularization_losses: list[float] = []
                 batch_adapter_regularization_losses: list[float] = []
                 batch_pseudo_contrastive_losses: list[float] = []
@@ -4554,8 +4371,7 @@ class BaseGraphSAGEExperiment:
                         f"[{self.model_name}] hard_negative_refresh epoch={epoch} "
                         f"partitions={hard_negative_refresh['partition_count']} "
                         f"candidates={hard_negative_refresh['candidate_count']} "
-                        f"pool_size={hard_negative_refresh['pool_size']} "
-                        f"teacher_coverage={float(hard_negative_refresh['teacher_coverage']):.4f}"
+                        f"pool_size={hard_negative_refresh['pool_size']}"
                     )
                     tqdm.write(refresh_line)
                     if log_path is not None:
@@ -4711,67 +4527,6 @@ class BaseGraphSAGEExperiment:
                             primary_class_weight=primary_class_weight,
                             aux_class_weight=aux_class_weight,
                         )
-                        teacher_distill_loss = forward_output.logits.new_tensor(0.0)
-                        if (
-                            teacher_distill_weight > 0.0
-                            and context.distill_targets is not None
-                            and context.distill_target_mask is not None
-                            and not self._primary_multiclass_enabled()
-                        ):
-                            distill_mask_np = np.asarray(context.distill_target_mask[batch_nodes], dtype=bool)
-                            if np.any(distill_mask_np):
-                                distill_mask = torch.as_tensor(
-                                    distill_mask_np,
-                                    dtype=torch.bool,
-                                    device=self.device,
-                                )
-                                teacher_target = torch.as_tensor(
-                                    np.asarray(context.distill_targets[batch_nodes], dtype=np.float32)[distill_mask_np],
-                                    dtype=torch.float32,
-                                    device=self.device,
-                                )
-                                student_logits = forward_output.logits[distill_mask]
-                                distill_sample_weight = sample_weight[distill_mask] if sample_weight is not None else None
-                                agreement_floor = max(
-                                    float(self.graph_config.teacher_distill_agreement_floor),
-                                    0.0,
-                                )
-                                if agreement_floor > 0.0:
-                                    student_targets = y_batch[distill_mask]
-                                    agreement_score = torch.where(
-                                        student_targets > 0.5,
-                                        teacher_target,
-                                        1.0 - teacher_target,
-                                    )
-                                    agreement_mask = agreement_score >= agreement_floor
-                                    teacher_target = teacher_target[agreement_mask]
-                                    student_logits = student_logits[agreement_mask]
-                                    if distill_sample_weight is not None:
-                                        distill_sample_weight = distill_sample_weight[agreement_mask]
-                                if teacher_target.numel() > 0:
-                                    distill_loss_name = str(self.graph_config.teacher_distill_loss).strip().lower()
-                                    if distill_loss_name == "mse":
-                                        teacher_distill_loss = F.mse_loss(
-                                            torch.sigmoid(student_logits),
-                                            teacher_target,
-                                            reduction="mean",
-                                        )
-                                    elif distill_loss_name == "rank":
-                                        teacher_distill_loss = _teacher_pairwise_distill_loss(
-                                            student_logits=student_logits,
-                                            teacher_scores=teacher_target,
-                                            gap_floor=float(self.graph_config.teacher_distill_rank_gap),
-                                        )
-                                    else:
-                                        distill_bce = F.binary_cross_entropy_with_logits(
-                                            student_logits,
-                                            teacher_target,
-                                            reduction="none",
-                                        )
-                                        if distill_sample_weight is not None:
-                                            distill_bce = distill_bce * distill_sample_weight
-                                        teacher_distill_loss = distill_bce.mean()
-                                    loss = loss + teacher_distill_weight * teacher_distill_loss
                         context_regularization_loss = (
                             forward_output.context_regularization_loss
                             if forward_output.context_regularization_loss is not None
@@ -4872,7 +4627,6 @@ class BaseGraphSAGEExperiment:
                         loss_parts["prototype_loss"] = float(prototype_loss.detach().item())
                         loss_parts["normal_align_loss"] = float(normal_align_loss.detach().item())
                         loss_parts["normal_bucket_adv_loss"] = float(normal_bucket_adv_loss.detach().item())
-                        loss_parts["teacher_distill_loss"] = float(teacher_distill_loss.detach().item())
                         loss_parts["context_regularization_loss"] = float(
                             context_regularization_loss.detach().item()
                         )
@@ -4903,7 +4657,6 @@ class BaseGraphSAGEExperiment:
                         batch_normal_align_losses.append(float(loss_parts["normal_align_loss"]))
                         batch_normal_bucket_adv_losses.append(float(loss_parts["normal_bucket_adv_loss"]))
                         batch_aux_losses.append(float(loss_parts["aux_loss"]))
-                        batch_teacher_distill_losses.append(float(loss_parts["teacher_distill_loss"]))
                         batch_context_regularization_losses.append(
                             float(loss_parts["context_regularization_loss"])
                         )
@@ -4965,7 +4718,6 @@ class BaseGraphSAGEExperiment:
                     "train_normal_align_loss": float(np.mean(batch_normal_align_losses)),
                     "train_normal_bucket_adv_loss": float(np.mean(batch_normal_bucket_adv_losses)),
                     "train_aux_loss": float(np.mean(batch_aux_losses)),
-                    "train_teacher_distill_loss": float(np.mean(batch_teacher_distill_losses)),
                     "train_context_regularization_loss": float(np.mean(batch_context_regularization_losses)),
                     "train_adapter_regularization_loss": float(
                         np.mean(batch_adapter_regularization_losses)
@@ -4976,10 +4728,6 @@ class BaseGraphSAGEExperiment:
                     "prototype_loss_weight_effective": float(prototype_loss_weight),
                     "prototype_trust_score": float(
                         self._prototype_weight_schedule_state.get("trust_score", 1.0)
-                    ),
-                    "teacher_distill_weight_effective": float(teacher_distill_weight),
-                    "teacher_distill_schedule_progress": float(
-                        self._teacher_distill_schedule_state.get("progress", 0.0)
                     ),
                     "context_residual_budget_weight_effective": float(context_budget_weight),
                     "context_residual_budget_release_progress": float(
@@ -5002,7 +4750,6 @@ class BaseGraphSAGEExperiment:
                     "train_pos_rate": float(train_batch_stats.positive_rate),
                     "hard_negative_pool_size": int(self._current_hard_negative_pool_size()),
                     "hard_negative_candidate_count": int(self._current_hard_negative_candidate_count()),
-                    "hard_negative_teacher_coverage": float(self._current_hard_negative_teacher_coverage()),
                     "avg_subgraph_nodes": float(np.mean(batch_subgraph_nodes)),
                     "avg_subgraph_edges": float(np.mean(batch_subgraph_edges)),
                     "emb_norm": float(np.mean(batch_emb_norm)),
@@ -5030,15 +4777,12 @@ class BaseGraphSAGEExperiment:
                     f"train_normal_align_loss={epoch_row['train_normal_align_loss']:.6f} "
                     f"train_normal_bucket_adv_loss={epoch_row['train_normal_bucket_adv_loss']:.6f} "
                     f"train_aux_loss={epoch_row['train_aux_loss']:.6f} "
-                    f"train_teacher_distill_loss={epoch_row['train_teacher_distill_loss']:.6f} "
                     f"train_context_regularization_loss={epoch_row['train_context_regularization_loss']:.6f} "
                     f"train_adapter_regularization_loss="
                     f"{epoch_row['train_adapter_regularization_loss']:.6f} "
                     f"train_pseudo_contrastive_loss={epoch_row['train_pseudo_contrastive_loss']:.6f} "
                     f"prototype_loss_weight_effective={epoch_row['prototype_loss_weight_effective']:.6f} "
                     f"prototype_trust_score={epoch_row['prototype_trust_score']:.6f} "
-                    f"teacher_distill_weight_effective={epoch_row['teacher_distill_weight_effective']:.6f} "
-                    f"teacher_distill_schedule_progress={epoch_row['teacher_distill_schedule_progress']:.6f} "
                     f"context_residual_budget_weight_effective="
                     f"{epoch_row['context_residual_budget_weight_effective']:.6f} "
                     f"context_residual_budget_release_progress="
@@ -5057,7 +4801,6 @@ class BaseGraphSAGEExperiment:
                     f"train_bg_neg={train_batch_stats.background_negative_count} "
                     f"train_pos_rate={train_batch_stats.positive_rate:.4f} "
                     f"hard_negative_pool_size={self._current_hard_negative_pool_size()} "
-                    f"hard_negative_teacher_coverage={self._current_hard_negative_teacher_coverage():.4f} "
                     f"avg_subgraph_nodes={np.mean(batch_subgraph_nodes):.2f} "
                     f"avg_subgraph_edges={np.mean(batch_subgraph_edges):.2f} "
                     f"emb_norm={np.mean(batch_emb_norm):.6f} "

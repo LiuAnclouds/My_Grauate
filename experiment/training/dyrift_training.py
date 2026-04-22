@@ -10,8 +10,8 @@ class DyRIFTGNNExperiment(TRGTExperiment):
     """Training wrapper for the final DyRIFT-GNN method.
 
     The legacy experiment base still owns batching, sampling, losses, metrics, and checkpointing.
-    This wrapper isolates the final thesis model construction so `m8_utgt` no longer needs to be
-    mentally decoded from the legacy `gnn_models.py` file.
+    This wrapper isolates the final thesis model construction from the shared `gnn_models.py`
+    runtime while exposing the public `dyrift_gnn` model id.
     """
 
     method_display_name = "DyRIFT-GNN"

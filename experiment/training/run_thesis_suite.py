@@ -21,15 +21,13 @@ from experiment.training.thesis_hparam_profiles import (
     resolve_mainline_dataset_hparams,
 )
 from experiment.training.thesis_contract import (
+    DYRIFT_GNN_MODEL,
     DYRIFT_MODEL_DISPLAY_NAME,
     DYRIFT_MODEL_SHORT_NAME,
     OFFICIAL_BACKBONE_FEATURE_PROFILE,
     OFFICIAL_BACKBONE_MODEL,
     OFFICIAL_BACKBONE_PRESET,
     OFFICIAL_DATASETS,
-    OFFICIAL_TEACHER_SIGNAL_MODEL_FAMILY,
-    OFFICIAL_TEACHER_SIGNAL_RUN_NAME_TEMPLATE,
-    OFFICIAL_TEACHER_SIGNAL_TRANSFORM,
     OFFICIAL_MAINLINE_BATCH_SIZE,
     OFFICIAL_MAINLINE_FANOUTS,
     OFFICIAL_MAINLINE_HIDDEN_DIM,
@@ -41,7 +39,6 @@ from experiment.training.thesis_contract import (
     TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_DEPLOY_PRESET,
     TRANSFORMER_BACKBONE_PRESET,
-    TRANSFORMER_BACKBONE_TEACHER_PRESET,
 )
 
 DEFAULT_DATASETS = OFFICIAL_DATASETS
@@ -71,12 +68,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        choices=("m5_temporal_graphsage", "m7_utpm", "m8_utgt"),
-        default=OFFICIAL_BACKBONE_MODEL,
+        choices=("m5_temporal_graphsage", "m7_utpm", DYRIFT_GNN_MODEL),
+        default=TRANSFORMER_BACKBONE_MODEL,
         help=(
             "Unified thesis-mainline model family. "
             "`m7_utpm` is the legacy stable backbone; "
-            f"`m8_utgt` is {DYRIFT_MODEL_SHORT_NAME} with the {TRGT_BACKBONE_SHORT_NAME} backbone."
+            f"`{DYRIFT_GNN_MODEL}` is {DYRIFT_MODEL_SHORT_NAME} with the {TRGT_BACKBONE_SHORT_NAME} backbone."
         ),
     )
     parser.add_argument(
@@ -87,7 +84,6 @@ def parse_args() -> argparse.Namespace:
             "Defaults: `m5_temporal_graphsage` -> `unified_baseline`, "
             f"`{OFFICIAL_BACKBONE_MODEL}` -> `{OFFICIAL_BACKBONE_PRESET}`, "
             f"`{TRANSFORMER_BACKBONE_MODEL}` -> `{TRANSFORMER_BACKBONE_PRESET}`. "
-            f"The teacher-guided primary backbone preset is `{TRANSFORMER_BACKBONE_TEACHER_PRESET}`. "
             f"The deployable pure-GNN preset is `{TRANSFORMER_BACKBONE_DEPLOY_PRESET}`."
         ),
     )
@@ -192,33 +188,6 @@ def parse_args() -> argparse.Namespace:
         help="Repeatable low-level GraphModelConfig override forwarded to the mainline trainer.",
     )
     parser.add_argument(
-        "--teacher-signal-model-family",
-        default=OFFICIAL_TEACHER_SIGNAL_MODEL_FAMILY,
-        help="Model-family directory that stores dataset-local teacher prediction runs.",
-    )
-    parser.add_argument(
-        "--target-context-prediction-run-name-template",
-        default=None,
-        help=(
-            "Optional dataset-templated run-name used as the auxiliary teacher-context source. "
-            "Available fields: {suite_name}, {dataset}, {dataset_short}, {model}, {preset}, {epochs}."
-        ),
-    )
-    parser.add_argument(
-        "--target-context-prediction-transform",
-        choices=("raw", "logit"),
-        default="raw",
-        help="Transform applied to teacher prediction features before target-context fusion.",
-    )
-    parser.add_argument(
-        "--teacher-distill-prediction-run-name-template",
-        default=None,
-        help=(
-            "Optional dataset-templated run-name used as the fixed teacher distillation source. "
-            "Available fields: {suite_name}, {dataset}, {dataset_short}, {model}, {preset}, {epochs}."
-        ),
-    )
-    parser.add_argument(
         "--target-context-groups",
         nargs="*",
         default=None,
@@ -276,34 +245,6 @@ def _run_name_for_dataset(
         preset=args.preset,
         epochs=settings.epochs,
     )
-
-
-def _format_dataset_template(
-    template: str,
-    args: argparse.Namespace,
-    dataset_name: str,
-    settings: MainlineDatasetHparams,
-) -> str:
-    dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
-    return str(template).format(
-        suite_name=args.suite_name,
-        dataset=dataset_name,
-        dataset_short=dataset_short,
-        model=args.model,
-        preset=args.preset,
-        epochs=settings.epochs,
-    )
-
-
-def _prediction_signal_run_dir(
-    *,
-    args: argparse.Namespace,
-    dataset_name: str,
-    settings: MainlineDatasetHparams,
-    run_name_template: str,
-) -> Path:
-    run_name = _format_dataset_template(run_name_template, args, dataset_name, settings)
-    return _dataset_training_root(dataset_name) / "models" / str(args.teacher_signal_model_family) / run_name
 
 
 def _feature_dir_for_dataset(dataset_name: str, settings: MainlineDatasetHparams) -> Path | None:
@@ -375,36 +316,6 @@ def _build_train_command(
         command.extend(["--weight-decay", str(settings.weight_decay)])
     if settings.dropout is not None:
         command.extend(["--dropout", str(settings.dropout)])
-    if args.target_context_prediction_run_name_template:
-        command.extend(
-            [
-                "--target-context-prediction-dir",
-                str(
-                    _prediction_signal_run_dir(
-                        args=args,
-                        dataset_name=dataset_name,
-                        settings=settings,
-                        run_name_template=args.target_context_prediction_run_name_template,
-                    )
-                ),
-                "--target-context-prediction-transform",
-                str(args.target_context_prediction_transform),
-            ]
-        )
-    if args.teacher_distill_prediction_run_name_template:
-        command.extend(
-            [
-                "--teacher-distill-prediction-dir",
-                str(
-                    _prediction_signal_run_dir(
-                        args=args,
-                        dataset_name=dataset_name,
-                        settings=settings,
-                        run_name_template=args.teacher_distill_prediction_run_name_template,
-                    )
-                ),
-            ]
-        )
     if settings.target_context_groups is not None:
         command.extend(["--target-context-groups", *[str(v) for v in settings.target_context_groups]])
     for override in settings.graph_config_overrides:
@@ -500,27 +411,14 @@ def main() -> None:
         and str(args.preset)
         not in {
             TRANSFORMER_BACKBONE_PRESET,
-            TRANSFORMER_BACKBONE_TEACHER_PRESET,
             TRANSFORMER_BACKBONE_DEPLOY_PRESET,
         }
     ):
         raise ValueError(
-            "The transformer-style thesis suite is locked to the unified m8 presets: "
+            "The DyRIFT-GNN/TRGT thesis suite is locked to the official presets: "
             f"`{TRANSFORMER_BACKBONE_PRESET}`, "
-            f"`{TRANSFORMER_BACKBONE_TEACHER_PRESET}`, or "
             f"`{TRANSFORMER_BACKBONE_DEPLOY_PRESET}`."
         )
-    if str(args.preset) == TRANSFORMER_BACKBONE_TEACHER_PRESET:
-        if args.target_context_prediction_run_name_template is None:
-            args.target_context_prediction_run_name_template = OFFICIAL_TEACHER_SIGNAL_RUN_NAME_TEMPLATE
-        if args.teacher_distill_prediction_run_name_template is None:
-            args.teacher_distill_prediction_run_name_template = OFFICIAL_TEACHER_SIGNAL_RUN_NAME_TEMPLATE
-        if str(args.target_context_prediction_transform) == "raw":
-            args.target_context_prediction_transform = OFFICIAL_TEACHER_SIGNAL_TRANSFORM
-    teacher_guidance_enabled = bool(
-        args.target_context_prediction_run_name_template
-        or args.teacher_distill_prediction_run_name_template
-    )
     results: list[dict[str, Any]] = []
     resolved_hparams_by_dataset: dict[str, dict[str, Any]] = {}
     for dataset_name in args.datasets:
@@ -596,27 +494,14 @@ def main() -> None:
         "dataset_hparams_path": None if profile is None else str(profile.path.relative_to(REPO_ROOT)),
         "feature_env_overrides": {"GRADPROJ_UTPM_ATTR_PROJ_DIM": os.environ.get("GRADPROJ_UTPM_ATTR_PROJ_DIM")},
         "graph_config_overrides": [str(v) for v in args.graph_config_override],
-        "teacher_guidance_enabled": teacher_guidance_enabled,
-        "teacher_signal_model_family": (
-            args.teacher_signal_model_family if teacher_guidance_enabled else None
-        ),
         "run_name_template": args.run_name_template,
-        "target_context_prediction_run_name_template": args.target_context_prediction_run_name_template,
-        "target_context_prediction_transform": args.target_context_prediction_transform,
-        "teacher_distill_prediction_run_name_template": args.teacher_distill_prediction_run_name_template,
         "target_context_groups": None if args.target_context_groups is None else [str(v) for v in args.target_context_groups],
         "dataset_isolation": True,
         "cross_dataset_training": False,
         "same_architecture_across_datasets": True,
         "split_guardrails": [
             "Each dataset is trained separately under its own dataset env and output namespace.",
-            (
-                "All datasets share the same model family, feature contract family, and "
-                "single-GNN deployment path."
-                if not teacher_guidance_enabled
-                else "All datasets share the same model family, feature contract family, and "
-                "teacher-guided training protocol."
-            ),
+            "All datasets share the same model family, feature contract family, and single-GNN deployment path.",
             "Dataset-local tuning is limited to feature capacity, model capacity, optimization, and low-level regularization hyperparameters.",
             "No dataset contributes labels, predictions, or normalization statistics to another dataset.",
         ],
