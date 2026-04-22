@@ -2,7 +2,9 @@
 /.claude
 /.idea
 /experiment/dataset
+/experiment/*.zip
 /experiment/outputs
+/backups/
 /article_code/GeneralDyG-main/dataset
 /article_code/GeneralDyG-main/model
 /node_modules

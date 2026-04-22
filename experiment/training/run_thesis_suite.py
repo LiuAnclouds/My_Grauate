@@ -35,6 +35,7 @@ from experiment.training.thesis_contract import (
     OFFICIAL_SUITE_EPOCHS,
     OFFICIAL_SUITE_SEEDS,
     TRANSFORMER_BACKBONE_MODEL,
+    TRANSFORMER_BACKBONE_DEPLOY_PRESET,
     TRANSFORMER_BACKBONE_PRESET,
     TRANSFORMER_BACKBONE_TEACHER_PRESET,
 )
@@ -71,7 +72,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Unified thesis-mainline model family. "
             "`m7_utpm` is the legacy stable backbone; "
-            "`m8_utgt` is the transformer-style backbone family used by the recommended result."
+            "`m8_utgt` is the transformer-style backbone family used by the primary pure-GNN thesis result."
         ),
     )
     parser.add_argument(
@@ -82,7 +83,8 @@ def parse_args() -> argparse.Namespace:
             "Defaults: `m5_temporal_graphsage` -> `unified_baseline`, "
             f"`{OFFICIAL_BACKBONE_MODEL}` -> `{OFFICIAL_BACKBONE_PRESET}`, "
             f"`{TRANSFORMER_BACKBONE_MODEL}` -> `{TRANSFORMER_BACKBONE_PRESET}`. "
-            f"The teacher-guided recommended backbone preset is `{TRANSFORMER_BACKBONE_TEACHER_PRESET}`."
+            f"The teacher-guided primary backbone preset is `{TRANSFORMER_BACKBONE_TEACHER_PRESET}`. "
+            f"The deployable pure-GNN preset is `{TRANSFORMER_BACKBONE_DEPLOY_PRESET}`."
         ),
     )
     parser.add_argument(
@@ -213,6 +215,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--target-context-groups",
+        nargs="*",
+        default=None,
+        help=(
+            "Optional explicit target-context feature groups forwarded to the mainline trainer. "
+            "Pass `none` to disable the internal target-context feature branch."
+        ),
+    )
+    parser.add_argument(
         "--run-name-template",
         default="{suite_name}_{dataset_short}",
         help=(
@@ -334,7 +345,7 @@ def _build_train_command(
         "--preset",
         args.preset,
         "--feature-profile",
-        args.feature_profile,
+        settings.feature_profile,
         "--run-name",
         run_name,
         "--device",
@@ -390,6 +401,8 @@ def _build_train_command(
                 ),
             ]
         )
+    if settings.target_context_groups is not None:
+        command.extend(["--target-context-groups", *[str(v) for v in settings.target_context_groups]])
     for override in settings.graph_config_overrides:
         command.extend(["--graph-config-override", str(override)])
     return command
@@ -480,11 +493,18 @@ def main() -> None:
         )
     if (
         str(args.model) == TRANSFORMER_BACKBONE_MODEL
-        and str(args.preset) not in {TRANSFORMER_BACKBONE_PRESET, TRANSFORMER_BACKBONE_TEACHER_PRESET}
+        and str(args.preset)
+        not in {
+            TRANSFORMER_BACKBONE_PRESET,
+            TRANSFORMER_BACKBONE_TEACHER_PRESET,
+            TRANSFORMER_BACKBONE_DEPLOY_PRESET,
+        }
     ):
         raise ValueError(
             "The transformer-style thesis suite is locked to the unified m8 presets: "
-            f"`{TRANSFORMER_BACKBONE_PRESET}` or `{TRANSFORMER_BACKBONE_TEACHER_PRESET}`."
+            f"`{TRANSFORMER_BACKBONE_PRESET}`, "
+            f"`{TRANSFORMER_BACKBONE_TEACHER_PRESET}`, or "
+            f"`{TRANSFORMER_BACKBONE_DEPLOY_PRESET}`."
         )
     if str(args.preset) == TRANSFORMER_BACKBONE_TEACHER_PRESET:
         if args.target_context_prediction_run_name_template is None:
@@ -493,7 +513,10 @@ def main() -> None:
             args.teacher_distill_prediction_run_name_template = OFFICIAL_TEACHER_SIGNAL_RUN_NAME_TEMPLATE
         if str(args.target_context_prediction_transform) == "raw":
             args.target_context_prediction_transform = OFFICIAL_TEACHER_SIGNAL_TRANSFORM
-
+    teacher_guidance_enabled = bool(
+        args.target_context_prediction_run_name_template
+        or args.teacher_distill_prediction_run_name_template
+    )
     results: list[dict[str, Any]] = []
     resolved_hparams_by_dataset: dict[str, dict[str, Any]] = {}
     for dataset_name in args.datasets:
@@ -557,17 +580,27 @@ def main() -> None:
         "dataset_hparams_path": None if profile is None else str(profile.path.relative_to(REPO_ROOT)),
         "feature_env_overrides": {"GRADPROJ_UTPM_ATTR_PROJ_DIM": os.environ.get("GRADPROJ_UTPM_ATTR_PROJ_DIM")},
         "graph_config_overrides": [str(v) for v in args.graph_config_override],
-        "teacher_signal_model_family": args.teacher_signal_model_family,
+        "teacher_guidance_enabled": teacher_guidance_enabled,
+        "teacher_signal_model_family": (
+            args.teacher_signal_model_family if teacher_guidance_enabled else None
+        ),
         "run_name_template": args.run_name_template,
         "target_context_prediction_run_name_template": args.target_context_prediction_run_name_template,
         "target_context_prediction_transform": args.target_context_prediction_transform,
         "teacher_distill_prediction_run_name_template": args.teacher_distill_prediction_run_name_template,
+        "target_context_groups": None if args.target_context_groups is None else [str(v) for v in args.target_context_groups],
         "dataset_isolation": True,
         "cross_dataset_training": False,
         "same_architecture_across_datasets": True,
         "split_guardrails": [
             "Each dataset is trained separately under its own dataset env and output namespace.",
-            "All datasets share the same model family, feature contract, and teacher/decision protocol.",
+            (
+                "All datasets share the same model family, feature contract family, and "
+                "single-GNN deployment path."
+                if not teacher_guidance_enabled
+                else "All datasets share the same model family, feature contract family, and "
+                "teacher-guided training protocol."
+            ),
             "Dataset-local tuning is limited to feature capacity, model capacity, optimization, and low-level regularization hyperparameters.",
             "No dataset contributes labels, predictions, or normalization statistics to another dataset.",
         ],

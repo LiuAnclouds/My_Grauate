@@ -112,6 +112,8 @@ class GraphModelConfig:
     known_label_feature_dim: int = 5
     target_context_fusion: str = "none"
     target_context_input_dim: int = 0
+    target_context_feature_gate_strength: float = 0.0
+    cold_start_residual_strength: float = 0.0
     primary_multiclass_num_classes: int = 0
     prototype_multiclass_num_classes: int = 0
     prototype_loss_weight: float = 0.0
@@ -166,6 +168,10 @@ class GraphModelConfig:
     aux_multiclass_num_classes: int = 4
     aux_multiclass_loss_weight: float = 0.0
     aux_inference_blend: float = 0.0
+    internal_risk_fusion: str = "none"
+    internal_risk_residual_scale: float = 1.0
+    internal_risk_short_time_scale: float = 0.12
+    internal_risk_long_time_scale: float = 0.45
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -210,6 +216,8 @@ class GraphModelConfig:
             "known_label_feature_dim": int(self.known_label_feature_dim),
             "target_context_fusion": self.target_context_fusion,
             "target_context_input_dim": int(self.target_context_input_dim),
+            "target_context_feature_gate_strength": float(self.target_context_feature_gate_strength),
+            "cold_start_residual_strength": float(self.cold_start_residual_strength),
             "primary_multiclass_num_classes": int(self.primary_multiclass_num_classes),
             "prototype_multiclass_num_classes": int(self.prototype_multiclass_num_classes),
             "prototype_loss_weight": float(self.prototype_loss_weight),
@@ -270,6 +278,10 @@ class GraphModelConfig:
             "aux_multiclass_num_classes": int(self.aux_multiclass_num_classes),
             "aux_multiclass_loss_weight": float(self.aux_multiclass_loss_weight),
             "aux_inference_blend": float(self.aux_inference_blend),
+            "internal_risk_fusion": self.internal_risk_fusion,
+            "internal_risk_residual_scale": float(self.internal_risk_residual_scale),
+            "internal_risk_short_time_scale": float(self.internal_risk_short_time_scale),
+            "internal_risk_long_time_scale": float(self.internal_risk_long_time_scale),
         }
 
     @classmethod
@@ -318,6 +330,10 @@ class GraphModelConfig:
             known_label_feature_dim=int(payload.get("known_label_feature_dim", 5)),
             target_context_fusion=str(payload.get("target_context_fusion", "none")),
             target_context_input_dim=int(payload.get("target_context_input_dim", 0)),
+            target_context_feature_gate_strength=float(
+                payload.get("target_context_feature_gate_strength", 0.0)
+            ),
+            cold_start_residual_strength=float(payload.get("cold_start_residual_strength", 0.0)),
             primary_multiclass_num_classes=int(payload.get("primary_multiclass_num_classes", 0)),
             prototype_multiclass_num_classes=int(payload.get("prototype_multiclass_num_classes", 0)),
             prototype_loss_weight=float(payload.get("prototype_loss_weight", 0.0)),
@@ -390,6 +406,10 @@ class GraphModelConfig:
             aux_multiclass_num_classes=int(payload.get("aux_multiclass_num_classes", 4)),
             aux_multiclass_loss_weight=float(payload.get("aux_multiclass_loss_weight", 0.0)),
             aux_inference_blend=float(payload.get("aux_inference_blend", 0.0)),
+            internal_risk_fusion=str(payload.get("internal_risk_fusion", "none")),
+            internal_risk_residual_scale=float(payload.get("internal_risk_residual_scale", 1.0)),
+            internal_risk_short_time_scale=float(payload.get("internal_risk_short_time_scale", 0.12)),
+            internal_risk_long_time_scale=float(payload.get("internal_risk_long_time_scale", 0.45)),
         )
 
     def use_legacy_path(self) -> bool:
@@ -423,6 +443,8 @@ class SampledSubgraph:
     target_local_idx: np.ndarray
     node_subgraph_id: np.ndarray | None = None
     edge_subgraph_id: np.ndarray | None = None
+    node_hop_depth: np.ndarray | None = None
+    edge_hop_depth: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -866,12 +888,14 @@ def _sample_single_seed_subgraph(
 ) -> SampledSubgraph:
     seed = int(seed)
     ordered_nodes = [seed]
+    ordered_node_hops = [0]
     global_to_local = {seed: 0}
     frontier = np.asarray([seed], dtype=np.int32)
     edge_src: list[int] = []
     edge_dst: list[int] = []
     rel_ids: list[int] = []
     edge_timestamp: list[int] = []
+    edge_hop_depth: list[int] = []
 
     in_ptr = graph.in_ptr
     in_neighbors = graph.in_neighbors
@@ -883,7 +907,7 @@ def _sample_single_seed_subgraph(
     out_edge_timestamp = graph.out_edge_timestamp
     num_edge_types = graph.num_edge_types
 
-    for fanout in fanouts:
+    for hop_depth, fanout in enumerate(fanouts, start=1):
         if frontier.size == 0:
             break
         next_nodes: list[int] = []
@@ -926,11 +950,13 @@ def _sample_single_seed_subgraph(
                         src_local = len(ordered_nodes)
                         global_to_local[src] = src_local
                         ordered_nodes.append(src)
+                        ordered_node_hops.append(int(hop_depth))
                     next_nodes.append(src)
                     edge_src.append(src_local)
                     edge_dst.append(center_local)
                     rel_ids.append(int(edge_type - 1))
                     edge_timestamp.append(int(edge_time))
+                    edge_hop_depth.append(int(hop_depth))
 
             out_start = int(out_ptr[center])
             out_end = int(out_ptr[center + 1])
@@ -967,11 +993,13 @@ def _sample_single_seed_subgraph(
                         src_local = len(ordered_nodes)
                         global_to_local[src] = src_local
                         ordered_nodes.append(src)
+                        ordered_node_hops.append(int(hop_depth))
                     next_nodes.append(src)
                     edge_src.append(src_local)
                     edge_dst.append(center_local)
                     rel_ids.append(int(edge_type - 1 + num_edge_types))
                     edge_timestamp.append(int(edge_time))
+                    edge_hop_depth.append(int(hop_depth))
 
         if next_nodes:
             frontier = np.unique(np.asarray(next_nodes, dtype=np.int32))
@@ -985,6 +1013,8 @@ def _sample_single_seed_subgraph(
         rel_ids=np.asarray(rel_ids, dtype=np.int64),
         edge_timestamp=np.asarray(edge_timestamp, dtype=np.int64),
         target_local_idx=np.asarray([0], dtype=np.int64),
+        node_hop_depth=np.asarray(ordered_node_hops, dtype=np.int64),
+        edge_hop_depth=np.asarray(edge_hop_depth, dtype=np.int64),
     )
 
 
@@ -1013,6 +1043,8 @@ def sample_batched_relation_subgraphs(
             target_local_idx=np.empty(0, dtype=np.int64),
             node_subgraph_id=np.empty(0, dtype=np.int64),
             edge_subgraph_id=np.empty(0, dtype=np.int64),
+            node_hop_depth=np.empty(0, dtype=np.int64),
+            edge_hop_depth=np.empty(0, dtype=np.int64),
         )
 
     node_parts: list[np.ndarray] = []
@@ -1023,6 +1055,8 @@ def sample_batched_relation_subgraphs(
     target_parts: list[np.ndarray] = []
     node_group_parts: list[np.ndarray] = []
     edge_group_parts: list[np.ndarray] = []
+    node_hop_parts: list[np.ndarray] = []
+    edge_hop_parts: list[np.ndarray] = []
     node_offset = 0
 
     for subgraph_id, seed in enumerate(seeds.tolist()):
@@ -1052,6 +1086,16 @@ def sample_batched_relation_subgraphs(
         edge_group_parts.append(
             np.full(subgraph.edge_src.shape[0], subgraph_id, dtype=np.int64)
         )
+        node_hop_parts.append(
+            np.asarray(subgraph.node_hop_depth, dtype=np.int64)
+            if subgraph.node_hop_depth is not None
+            else np.zeros(subgraph.node_ids.shape[0], dtype=np.int64)
+        )
+        edge_hop_parts.append(
+            np.asarray(subgraph.edge_hop_depth, dtype=np.int64)
+            if subgraph.edge_hop_depth is not None
+            else np.zeros(subgraph.edge_src.shape[0], dtype=np.int64)
+        )
         node_offset += int(subgraph.node_ids.shape[0])
 
     return SampledSubgraph(
@@ -1063,6 +1107,8 @@ def sample_batched_relation_subgraphs(
         target_local_idx=np.concatenate(target_parts).astype(np.int64, copy=False),
         node_subgraph_id=np.concatenate(node_group_parts).astype(np.int64, copy=False),
         edge_subgraph_id=np.concatenate(edge_group_parts).astype(np.int64, copy=False),
+        node_hop_depth=np.concatenate(node_hop_parts).astype(np.int64, copy=False),
+        edge_hop_depth=np.concatenate(edge_hop_parts).astype(np.int64, copy=False),
     )
 
 
@@ -1320,6 +1366,27 @@ def _pool_mean_max(
     return pooled_mean, pooled_max
 
 
+def _segment_weighted_mean(
+    values: torch.Tensor,
+    group_ids: torch.Tensor,
+    num_groups: int,
+    weights: torch.Tensor | None = None,
+) -> torch.Tensor:
+    if values.dim() != 2:
+        raise ValueError("Expected a 2D tensor for segment pooling.")
+    pooled = values.new_zeros((num_groups, values.shape[1]))
+    if num_groups == 0 or values.shape[0] == 0:
+        return pooled
+    if weights is None:
+        weight_view = torch.ones((values.shape[0], 1), dtype=values.dtype, device=values.device)
+    else:
+        weight_view = weights.reshape(-1, 1).to(dtype=values.dtype)
+    pooled.index_add_(0, group_ids, values * weight_view)
+    denom = values.new_zeros((num_groups, 1))
+    denom.index_add_(0, group_ids, weight_view)
+    return pooled / denom.clamp_min(1e-6)
+
+
 def _segment_softmax(
     scores: torch.Tensor,
     group_ids: torch.Tensor,
@@ -1346,6 +1413,274 @@ def _segment_softmax(
     denom = scores.new_zeros((num_groups,))
     denom.index_add_(0, group_ids, exp_scores)
     return exp_scores / denom[group_ids].clamp_min(1e-12)
+
+
+class TargetInternalRiskEncoder(nn.Module):
+    """Learn target-level multi-scale causal risk signals directly from the sampled subgraph."""
+
+    def __init__(
+        self,
+        *,
+        hidden_dim: int,
+        num_edge_types: int,
+        dropout: float,
+        short_time_scale: float,
+        long_time_scale: float,
+    ) -> None:
+        super().__init__()
+        self.hidden_dim = int(hidden_dim)
+        self.num_edge_types = max(int(num_edge_types), 1)
+        self.short_time_scale = max(float(short_time_scale), 1e-3)
+        self.long_time_scale = max(float(long_time_scale), self.short_time_scale + 1e-3)
+        scalar_dim = max(self.hidden_dim // 4, 8)
+        self.scalar_proj = nn.Sequential(
+            nn.Linear(8, scalar_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+        self.fuse = nn.Sequential(
+            nn.Linear(self.hidden_dim * 8 + scalar_dim, self.hidden_dim * 2),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(self.hidden_dim * 2, self.hidden_dim),
+        )
+
+    def _time_weight(
+        self,
+        edge_relative_time: torch.Tensor | None,
+        scale: float,
+        size: int,
+        device: torch.device,
+        dtype: torch.dtype,
+    ) -> torch.Tensor:
+        if edge_relative_time is None or edge_relative_time.numel() == 0:
+            return torch.ones((size,), dtype=dtype, device=device)
+        relative_time = edge_relative_time.view(-1).to(dtype=dtype)
+        return torch.exp(-relative_time / max(float(scale), 1e-3))
+
+    def _count_by_group(
+        self,
+        mask: torch.Tensor,
+        group_ids: torch.Tensor,
+        num_groups: int,
+        dtype: torch.dtype,
+        device: torch.device,
+    ) -> torch.Tensor:
+        counts = torch.zeros((num_groups,), dtype=dtype, device=device)
+        if torch.any(mask):
+            counts.index_add_(
+                0,
+                group_ids[mask],
+                torch.ones(int(mask.sum().item()), dtype=dtype, device=device),
+            )
+        return counts
+
+    def forward(
+        self,
+        *,
+        node_repr: torch.Tensor,
+        edge_repr: torch.Tensor,
+        edge_src: torch.Tensor,
+        edge_dst: torch.Tensor,
+        rel_ids: torch.Tensor,
+        edge_relative_time: torch.Tensor | None,
+        target_local_idx: torch.Tensor,
+        node_subgraph_id: torch.Tensor | None,
+        edge_subgraph_id: torch.Tensor | None,
+        node_hop_depth: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, dict[str, float]]:
+        num_targets = int(target_local_idx.shape[0])
+        zero = node_repr.new_zeros((num_targets, self.hidden_dim))
+        if (
+            num_targets == 0
+            or edge_subgraph_id is None
+            or node_subgraph_id is None
+            or node_hop_depth is None
+            or edge_repr.shape[0] == 0
+        ):
+            return zero, {
+                "internal_risk_gate_mean": 0.0,
+                "internal_risk_hop_gap_norm": 0.0,
+                "internal_risk_short_long_gap_norm": 0.0,
+                "internal_risk_direction_gap_norm": 0.0,
+            }
+
+        device = node_repr.device
+        dtype = node_repr.dtype
+        short_weight = self._time_weight(
+            edge_relative_time,
+            self.short_time_scale,
+            edge_repr.shape[0],
+            device,
+            dtype,
+        )
+        long_weight = self._time_weight(
+            edge_relative_time,
+            self.long_time_scale,
+            edge_repr.shape[0],
+            device,
+            dtype,
+        )
+
+        target_edge_mask = edge_dst == target_local_idx[edge_subgraph_id]
+        inbound_mask = target_edge_mask & (rel_ids < self.num_edge_types)
+        outbound_mask = target_edge_mask & (rel_ids >= self.num_edge_types)
+
+        in_short = _segment_weighted_mean(
+            edge_repr[inbound_mask],
+            edge_subgraph_id[inbound_mask],
+            num_targets,
+            short_weight[inbound_mask],
+        )
+        out_short = _segment_weighted_mean(
+            edge_repr[outbound_mask],
+            edge_subgraph_id[outbound_mask],
+            num_targets,
+            short_weight[outbound_mask],
+        )
+        in_long = _segment_weighted_mean(
+            edge_repr[inbound_mask],
+            edge_subgraph_id[inbound_mask],
+            num_targets,
+            long_weight[inbound_mask],
+        )
+        out_long = _segment_weighted_mean(
+            edge_repr[outbound_mask],
+            edge_subgraph_id[outbound_mask],
+            num_targets,
+            long_weight[outbound_mask],
+        )
+
+        hop1_mask = node_hop_depth == 1
+        hop2_mask = node_hop_depth >= 2
+        hop1_mean = _segment_weighted_mean(
+            node_repr[hop1_mask],
+            node_subgraph_id[hop1_mask],
+            num_targets,
+        )
+        hop2_mean = _segment_weighted_mean(
+            node_repr[hop2_mask],
+            node_subgraph_id[hop2_mask],
+            num_targets,
+        )
+
+        hop1_from_target_edges_short = _segment_weighted_mean(
+            node_repr[edge_src[target_edge_mask]],
+            edge_subgraph_id[target_edge_mask],
+            num_targets,
+            short_weight[target_edge_mask],
+        )
+        hop1_from_target_edges_long = _segment_weighted_mean(
+            node_repr[edge_src[target_edge_mask]],
+            edge_subgraph_id[target_edge_mask],
+            num_targets,
+            long_weight[target_edge_mask],
+        )
+
+        burst_delta = (in_short + out_short) - (in_long + out_long)
+        direction_gap = out_long - in_long
+        hop_gap = hop1_mean - hop2_mean
+        short_long_gap = hop1_from_target_edges_short - hop1_from_target_edges_long
+        asymmetry = torch.abs(direction_gap)
+        burst_delta = F.layer_norm(burst_delta, (self.hidden_dim,))
+        direction_gap = F.layer_norm(direction_gap, (self.hidden_dim,))
+        hop_gap = F.layer_norm(hop_gap, (self.hidden_dim,))
+        short_long_gap = F.layer_norm(short_long_gap, (self.hidden_dim,))
+        asymmetry = F.layer_norm(asymmetry, (self.hidden_dim,))
+        hop1_mean = F.layer_norm(hop1_mean, (self.hidden_dim,))
+        hop2_mean = F.layer_norm(hop2_mean, (self.hidden_dim,))
+        risk_base = F.layer_norm(in_long + out_long, (self.hidden_dim,))
+
+        edge_time_mean = torch.zeros((num_targets,), dtype=dtype, device=device)
+        if edge_relative_time is not None and edge_relative_time.numel() and torch.any(target_edge_mask):
+            target_edge_time = edge_relative_time.view(-1)[target_edge_mask].to(dtype=dtype)
+            edge_time_mean.index_add_(0, edge_subgraph_id[target_edge_mask], target_edge_time)
+            target_edge_count = self._count_by_group(
+                target_edge_mask,
+                edge_subgraph_id,
+                num_targets,
+                dtype=dtype,
+                device=device,
+            )
+            edge_time_mean = edge_time_mean / target_edge_count.clamp_min(1e-6)
+        else:
+            target_edge_count = self._count_by_group(
+                target_edge_mask,
+                edge_subgraph_id,
+                num_targets,
+                dtype=dtype,
+                device=device,
+            )
+
+        inbound_count = self._count_by_group(
+            inbound_mask,
+            edge_subgraph_id,
+            num_targets,
+            dtype=dtype,
+            device=device,
+        )
+        outbound_count = self._count_by_group(
+            outbound_mask,
+            edge_subgraph_id,
+            num_targets,
+            dtype=dtype,
+            device=device,
+        )
+        hop1_count = self._count_by_group(
+            hop1_mask,
+            node_subgraph_id,
+            num_targets,
+            dtype=dtype,
+            device=device,
+        )
+        hop2_count = self._count_by_group(
+            hop2_mask,
+            node_subgraph_id,
+            num_targets,
+            dtype=dtype,
+            device=device,
+        )
+        short_mass = torch.zeros((num_targets,), dtype=dtype, device=device)
+        long_mass = torch.zeros((num_targets,), dtype=dtype, device=device)
+        if torch.any(target_edge_mask):
+            short_mass.index_add_(0, edge_subgraph_id[target_edge_mask], short_weight[target_edge_mask])
+            long_mass.index_add_(0, edge_subgraph_id[target_edge_mask], long_weight[target_edge_mask])
+
+        scalar_features = torch.stack(
+            [
+                torch.log1p(inbound_count),
+                torch.log1p(outbound_count),
+                torch.log1p(hop1_count),
+                torch.log1p(hop2_count),
+                edge_time_mean,
+                short_mass,
+                long_mass,
+                short_mass - long_mass,
+            ],
+            dim=-1,
+        )
+        scalar_embedding = self.scalar_proj(scalar_features)
+        fused_input = torch.cat(
+            [
+                burst_delta,
+                direction_gap,
+                hop_gap,
+                short_long_gap,
+                asymmetry,
+                hop1_mean,
+                hop2_mean,
+                risk_base,
+                scalar_embedding,
+            ],
+            dim=-1,
+        )
+        risk_embedding = 0.25 * torch.tanh(self.fuse(fused_input))
+        diagnostics = {
+            "internal_risk_hop_gap_norm": float(hop_gap.norm(dim=-1).mean().detach().item()),
+            "internal_risk_short_long_gap_norm": float(short_long_gap.norm(dim=-1).mean().detach().item()),
+            "internal_risk_direction_gap_norm": float(direction_gap.norm(dim=-1).mean().detach().item()),
+        }
+        return risk_embedding, diagnostics
 
 
 class RelationSAGELayer(nn.Module):
@@ -1628,6 +1963,8 @@ class RelationGraphSAGENetwork(nn.Module):
         self.use_legacy = aggregator_type == "sage" and model_config.use_legacy_path()
         self.target_context_fusion = str(model_config.target_context_fusion)
         self.target_time_adapter_type = str(model_config.target_time_adapter_type)
+        self.internal_risk_fusion = str(model_config.internal_risk_fusion)
+        self.internal_risk_residual_scale = float(model_config.internal_risk_residual_scale)
         self.message_risk_strength = float(model_config.message_risk_strength)
         self.message_risk_feature_slice: tuple[int, int] | None = None
         self.target_context_input_dim = (
@@ -1635,13 +1972,77 @@ class RelationGraphSAGENetwork(nn.Module):
             if int(model_config.target_context_input_dim) > 0
             else int(input_dim)
         )
+        self.target_context_feature_gate_strength = float(model_config.target_context_feature_gate_strength)
+        self.cold_start_residual_strength = float(model_config.cold_start_residual_strength)
+        target_context_gate_hidden_dim = int(
+            min(hidden_dim, max(32, self.target_context_input_dim // 2))
+        )
+        self.target_context_feature_gate = (
+            nn.Sequential(
+                nn.Linear(self.target_context_input_dim + 1, target_context_gate_hidden_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(target_context_gate_hidden_dim, self.target_context_input_dim),
+            )
+            if self.target_context_feature_gate_strength > 0.0 and self.target_context_input_dim > 0
+            else None
+        )
         self.primary_num_classes = max(int(model_config.primary_multiclass_num_classes), 0)
         self.aux_num_classes = max(int(model_config.aux_multiclass_num_classes), 0)
         primary_output_dim = self.primary_num_classes if self.primary_num_classes >= 3 else 1
+        cold_start_context_dim = max(int(self.target_context_input_dim), 0)
+        cold_start_feature_input_dim = int(input_dim + cold_start_context_dim)
+        cold_start_gate_hidden_dim = int(min(hidden_dim, 64))
+        self.cold_start_gate = (
+            nn.Sequential(
+                nn.Linear(3, cold_start_gate_hidden_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(cold_start_gate_hidden_dim, 1),
+            )
+            if self.cold_start_residual_strength > 0.0
+            else None
+        )
+        self.cold_start_feature_head = (
+            nn.Sequential(
+                nn.LayerNorm(cold_start_feature_input_dim),
+                nn.Linear(cold_start_feature_input_dim, hidden_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden_dim, primary_output_dim),
+            )
+            if self.cold_start_residual_strength > 0.0
+            else None
+        )
 
         self.input_proj = nn.Linear(input_dim, hidden_dim)
         self.input_dropout = nn.Dropout(dropout)
         self.time_encoder = TimeEncoder(rel_dim) if temporal else None
+        self.internal_risk_encoder = (
+            TargetInternalRiskEncoder(
+                hidden_dim=hidden_dim,
+                num_edge_types=self.num_edge_types,
+                dropout=dropout,
+                short_time_scale=float(model_config.internal_risk_short_time_scale),
+                long_time_scale=float(model_config.internal_risk_long_time_scale),
+            )
+            if self.internal_risk_fusion == "residual"
+            else None
+        )
+        self.internal_risk_gate = (
+            nn.Sequential(
+                nn.Linear(hidden_dim * 2, hidden_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.Sigmoid(),
+            )
+            if self.internal_risk_encoder is not None
+            else None
+        )
 
         if self.use_legacy:
             time_dim = rel_dim if temporal else 0
@@ -1866,7 +2267,18 @@ class RelationGraphSAGENetwork(nn.Module):
         if concentration_block.shape[1] == 0:
             return None, None
 
-        if concentration_block.shape[1] >= 6 and concentration_block.shape[1] % 6 == 0:
+        if concentration_block.shape[1] == 16:
+            bg_ratio_signal = concentration_block[:, 3:6].mean(dim=-1)
+            top_share_signal = concentration_block[:, 7:10].mean(dim=-1)
+            entropy_signal = concentration_block[:, 10:13].mean(dim=-1)
+            activity_peak_signal = concentration_block[:, 15]
+            risk_signal = (
+                0.35 * bg_ratio_signal
+                + 0.45 * top_share_signal
+                - 0.35 * entropy_signal
+                + 0.15 * activity_peak_signal
+            )
+        elif concentration_block.shape[1] >= 6 and concentration_block.shape[1] % 6 == 0:
             concentration_view = concentration_block.reshape(concentration_block.shape[0], -1, 6)
             top_share_signal = concentration_view[:, :, :3].mean(dim=(1, 2))
             entropy_signal = concentration_view[:, :, 3:].mean(dim=(1, 2))
@@ -2019,6 +2431,115 @@ class RelationGraphSAGENetwork(nn.Module):
             return None
         return self.aux_classifier(representation)
 
+    def _gate_target_context_features(
+        self,
+        target_features: torch.Tensor | None,
+        target_time_position: torch.Tensor | None,
+    ) -> tuple[torch.Tensor | None, dict[str, float] | None]:
+        if (
+            self.target_context_feature_gate is None
+            or target_features is None
+            or not target_features.numel()
+        ):
+            return target_features, None
+        if target_time_position is None or target_time_position.shape[0] != target_features.shape[0]:
+            target_time_position = target_features.new_zeros((target_features.shape[0], 1))
+        gate_input = torch.cat([target_features, target_time_position], dim=-1)
+        gate = torch.sigmoid(self.target_context_feature_gate(gate_input))
+        strength = float(np.clip(self.target_context_feature_gate_strength, 0.0, 1.0))
+        gated_features = target_features * ((1.0 - strength) + strength * gate)
+        diagnostics = {
+            "target_context_feature_gate_mean": float(gate.mean().detach().item()),
+            "target_context_feature_gate_min": float(gate.min().detach().item()),
+            "target_context_feature_gate_max": float(gate.max().detach().item()),
+        }
+        return gated_features, diagnostics
+
+    def _build_target_support_count(
+        self,
+        target_local_idx: torch.Tensor,
+        edge_subgraph_id: torch.Tensor | None,
+        edge_src: torch.Tensor,
+    ) -> torch.Tensor:
+        num_targets = int(target_local_idx.shape[0])
+        support_count = edge_src.new_zeros((num_targets,), dtype=torch.float32)
+        if num_targets == 0 or edge_src.numel() == 0:
+            return support_count
+        if edge_subgraph_id is not None and edge_subgraph_id.numel() == edge_src.numel():
+            support_count.index_add_(
+                0,
+                edge_subgraph_id,
+                torch.ones_like(edge_subgraph_id, dtype=torch.float32),
+            )
+            return support_count
+        support_count.fill_(float(edge_src.numel()))
+        return support_count
+
+    def _apply_cold_start_residual(
+        self,
+        *,
+        logits: torch.Tensor,
+        input_features: torch.Tensor,
+        target_context_features: torch.Tensor | None,
+        target_local_idx: torch.Tensor,
+        edge_src: torch.Tensor,
+        edge_subgraph_id: torch.Tensor | None,
+        target_time_position: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, dict[str, float] | None]:
+        if (
+            self.cold_start_feature_head is None
+            or self.cold_start_gate is None
+            or self.cold_start_residual_strength <= 0.0
+            or target_local_idx.numel() == 0
+        ):
+            return logits, None
+
+        target_features = input_features[target_local_idx]
+        if (
+            target_context_features is not None
+            and target_context_features.numel()
+            and target_context_features.shape[0] == target_features.shape[0]
+        ):
+            cold_context_features = target_context_features
+        else:
+            cold_context_features = target_features.new_zeros(
+                (target_features.shape[0], max(int(self.target_context_input_dim), 0))
+            )
+        cold_input = torch.cat([target_features, cold_context_features], dim=-1)
+        cold_logits = self.cold_start_feature_head(cold_input)
+        if cold_logits.dim() == 2 and cold_logits.shape[-1] == 1:
+            cold_logits = cold_logits.squeeze(-1)
+
+        support_count = self._build_target_support_count(
+            target_local_idx=target_local_idx,
+            edge_subgraph_id=edge_subgraph_id,
+            edge_src=edge_src,
+        )
+        support_prior = (1.0 / (1.0 + support_count)).unsqueeze(-1)
+        if target_time_position is None or target_time_position.shape[0] != target_features.shape[0]:
+            target_time_position = target_features.new_zeros((target_features.shape[0], 1))
+        context_signal = torch.log1p(cold_context_features.abs().mean(dim=-1, keepdim=True))
+        gate_input = torch.cat(
+            [torch.log1p(support_count).unsqueeze(-1), target_time_position, context_signal],
+            dim=-1,
+        )
+        learned_gate = torch.sigmoid(self.cold_start_gate(gate_input))
+        blend_gate = float(np.clip(self.cold_start_residual_strength, 0.0, 1.0)) * support_prior * learned_gate
+        if logits.dim() == 1:
+            logits = logits * (1.0 - blend_gate.squeeze(-1)) + cold_logits * blend_gate.squeeze(-1)
+        else:
+            logits = logits * (1.0 - blend_gate) + cold_logits * blend_gate
+
+        diagnostics = {
+            "cold_start_support_count_mean": float(support_count.mean().detach().item()),
+            "cold_start_zero_support_ratio": float((support_count <= 0.0).float().mean().detach().item()),
+            "cold_start_gate_mean": float(blend_gate.mean().detach().item()),
+            "cold_start_gate_max": float(blend_gate.max().detach().item()),
+            "cold_start_gate_min": float(blend_gate.min().detach().item()),
+            "cold_start_context_signal_mean": float(context_signal.mean().detach().item()),
+        }
+        return logits, diagnostics
+
     def forward_output(
         self,
         x: torch.Tensor,
@@ -2032,6 +2553,7 @@ class RelationGraphSAGENetwork(nn.Module):
         target_time_position: torch.Tensor | None = None,
         node_subgraph_id: torch.Tensor | None = None,
         edge_subgraph_id: torch.Tensor | None = None,
+        node_hop_depth: torch.Tensor | None = None,
         include_diagnostics: bool = False,
         include_embedding: bool = False,
         include_aux: bool = False,
@@ -2116,9 +2638,45 @@ class RelationGraphSAGENetwork(nn.Module):
                 )
 
         fusion_diagnostics = None
+        feature_gate_diagnostics = None
         adapter_diagnostics = None
+        internal_risk_diagnostics = None
+        cold_start_diagnostics = None
         context_regularization_loss = embedding.new_tensor(0.0)
         adapter_regularization_loss = embedding.new_tensor(0.0)
+        gated_target_context_features, feature_gate_diagnostics = self._gate_target_context_features(
+            target_context_features,
+            target_time_position,
+        )
+        if self.internal_risk_encoder is not None:
+            if self.internal_risk_gate is None:
+                raise RuntimeError("internal risk fusion requires an initialized gate.")
+            risk_embedding, internal_risk_diagnostics = self.internal_risk_encoder(
+                node_repr=node_repr,
+                edge_repr=last_edge_repr,
+                edge_src=edge_src,
+                edge_dst=edge_dst,
+                rel_ids=rel_ids,
+                edge_relative_time=edge_relative_time,
+                target_local_idx=target_local_idx,
+                node_subgraph_id=node_subgraph_id,
+                edge_subgraph_id=edge_subgraph_id,
+                node_hop_depth=node_hop_depth,
+            )
+            risk_gate = self.internal_risk_gate(torch.cat([embedding, risk_embedding], dim=-1))
+            risk_delta = self.internal_risk_residual_scale * risk_gate * risk_embedding
+            embedding = embedding + risk_delta
+            logits = active_classifier[3](embedding)
+            if logits.dim() == 2 and logits.shape[-1] == 1:
+                logits = logits.squeeze(-1)
+            if internal_risk_diagnostics is not None:
+                internal_risk_diagnostics = dict(internal_risk_diagnostics)
+                internal_risk_diagnostics["internal_risk_gate_mean"] = float(
+                    risk_gate.mean().detach().item()
+                )
+                internal_risk_diagnostics["internal_risk_delta_norm"] = float(
+                    risk_delta.norm(dim=-1).mean().detach().item()
+                )
         if target_embedding_shift is not None and target_embedding_shift.numel():
             embedding_norm = embedding.norm(dim=-1, keepdim=True).clamp_min(1e-6)
             embedding = embedding + embedding_norm * target_embedding_shift
@@ -2128,7 +2686,9 @@ class RelationGraphSAGENetwork(nn.Module):
         if self.target_time_adapter is not None and target_time_position is not None:
             if self.target_time_adapter_type == "drift_expert":
                 adapter_features = (
-                    target_context_features if target_context_features is not None else x[target_local_idx]
+                    gated_target_context_features
+                    if gated_target_context_features is not None
+                    else x[target_local_idx]
                 )
                 embedding, adapter_diagnostics, adapter_regularization_loss = self.target_time_adapter(
                     base_embedding=embedding,
@@ -2146,13 +2706,26 @@ class RelationGraphSAGENetwork(nn.Module):
             if logits.dim() == 2 and logits.shape[-1] == 1:
                 logits = logits.squeeze(-1)
         if self.context_fusion_head is not None:
-            fusion_features = target_context_features if target_context_features is not None else x[target_local_idx]
+            fusion_features = (
+                gated_target_context_features
+                if gated_target_context_features is not None
+                else x[target_local_idx]
+            )
             logits, embedding, fusion_diagnostics, context_regularization_loss = self.context_fusion_head(
                 base_embedding=embedding,
                 base_logits=logits,
                 target_features=fusion_features,
                 target_time_position=target_time_position,
             )
+        logits, cold_start_diagnostics = self._apply_cold_start_residual(
+            logits=logits,
+            input_features=x,
+            target_context_features=gated_target_context_features,
+            target_local_idx=target_local_idx,
+            edge_src=edge_src,
+            edge_subgraph_id=edge_subgraph_id,
+            target_time_position=target_time_position,
+        )
 
         diagnostics = None
         if include_diagnostics:
@@ -2174,10 +2747,16 @@ class RelationGraphSAGENetwork(nn.Module):
                 diagnostics["target_time_position_mean"] = float(
                     target_time_position.mean().detach().item()
                 )
+            if feature_gate_diagnostics is not None:
+                diagnostics.update(feature_gate_diagnostics)
             if adapter_diagnostics is not None:
                 diagnostics.update(adapter_diagnostics)
+            if internal_risk_diagnostics is not None:
+                diagnostics.update(internal_risk_diagnostics)
             if message_risk_diagnostics is not None:
                 diagnostics.update(message_risk_diagnostics)
+            if cold_start_diagnostics is not None:
+                diagnostics.update(cold_start_diagnostics)
         aux_logits = self._apply_aux_classifier(target_representation) if include_aux else None
         return GraphForwardOutput(
             logits=logits,
@@ -2199,6 +2778,7 @@ class RelationGraphSAGENetwork(nn.Module):
         target_context_features: torch.Tensor | None = None,
         node_subgraph_id: torch.Tensor | None = None,
         edge_subgraph_id: torch.Tensor | None = None,
+        node_hop_depth: torch.Tensor | None = None,
         return_details: bool = False,
         return_embedding: bool = False,
     ) -> (
@@ -2217,6 +2797,7 @@ class RelationGraphSAGENetwork(nn.Module):
             target_context_features=target_context_features,
             node_subgraph_id=node_subgraph_id,
             edge_subgraph_id=edge_subgraph_id,
+            node_hop_depth=node_hop_depth,
             include_diagnostics=return_details,
             include_embedding=return_embedding,
             include_aux=False,
@@ -2323,10 +2904,13 @@ class BaseGraphSAGEExperiment:
     ) -> None:
         feature_slice = None
         if float(self.graph_config.message_risk_strength) > 0.0:
-            feature_slice = self._resolve_local_feature_group_slice(
-                context=context,
-                group_name="temporal_counterparty_concentration",
-            )
+            for group_name in ("temporal_counterparty_concentration", "utpm_temporal_risk"):
+                feature_slice = self._resolve_local_feature_group_slice(
+                    context=context,
+                    group_name=group_name,
+                )
+                if feature_slice is not None:
+                    break
         self.network.set_message_risk_feature_slice(feature_slice)
 
     def _binary_train_labels(self, labels: np.ndarray) -> np.ndarray:
@@ -2626,6 +3210,7 @@ class BaseGraphSAGEExperiment:
             target_idx,
             node_subgraph_id,
             edge_subgraph_id,
+            node_hop_depth,
             target_context_x,
         ) = self._tensorize_subgraph(
             context=context,
@@ -2648,6 +3233,7 @@ class BaseGraphSAGEExperiment:
             target_time_position=target_time_position,
             node_subgraph_id=node_subgraph_id,
             edge_subgraph_id=edge_subgraph_id,
+            node_hop_depth=node_hop_depth,
             include_diagnostics=False,
             include_embedding=True,
             include_aux=False,
@@ -4156,6 +4742,7 @@ class BaseGraphSAGEExperiment:
         torch.Tensor | None,
         torch.Tensor | None,
         torch.Tensor | None,
+        torch.Tensor | None,
     ]:
         x_np = context.feature_store.take_rows(subgraph.node_ids)
         if self.graph_config.known_label_feature and context.known_label_codes is not None:
@@ -4216,6 +4803,14 @@ class BaseGraphSAGEExperiment:
                 device=self.device,
             )
 
+        node_hop_depth = None
+        if subgraph.node_hop_depth is not None:
+            node_hop_depth = torch.as_tensor(
+                subgraph.node_hop_depth,
+                dtype=torch.long,
+                device=self.device,
+            )
+
         target_context_x = None
         if subgraph.target_local_idx.size:
             target_global_ids = subgraph.node_ids[np.asarray(subgraph.target_local_idx, dtype=np.int64)]
@@ -4248,6 +4843,7 @@ class BaseGraphSAGEExperiment:
             target_idx,
             node_subgraph_id,
             edge_subgraph_id,
+            node_hop_depth,
             target_context_x,
         )
 
@@ -4508,6 +5104,7 @@ class BaseGraphSAGEExperiment:
                             target_idx,
                             node_subgraph_id,
                             edge_subgraph_id,
+                            node_hop_depth,
                             target_context_x,
                         ) = self._tensorize_subgraph(
                             context=context,
@@ -4607,6 +5204,7 @@ class BaseGraphSAGEExperiment:
                             target_time_position=target_time_position,
                             node_subgraph_id=node_subgraph_id,
                             edge_subgraph_id=edge_subgraph_id,
+                            node_hop_depth=node_hop_depth,
                             include_diagnostics=True,
                             include_embedding=(
                                 self._prototype_enabled()
@@ -5077,6 +5675,7 @@ class BaseGraphSAGEExperiment:
                     target_idx,
                     node_subgraph_id,
                     edge_subgraph_id,
+                    node_hop_depth,
                     target_context_x,
                 ) = self._tensorize_subgraph(
                     context=context,
@@ -5107,6 +5706,7 @@ class BaseGraphSAGEExperiment:
                     target_time_position=target_time_position,
                     node_subgraph_id=node_subgraph_id,
                     edge_subgraph_id=edge_subgraph_id,
+                    node_hop_depth=node_hop_depth,
                     include_embedding=return_embeddings,
                     include_aux=float(self.graph_config.aux_inference_blend) > 0.0,
                 )

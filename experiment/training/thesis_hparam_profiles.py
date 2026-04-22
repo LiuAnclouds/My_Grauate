@@ -16,6 +16,7 @@ _MAINLINE_ALLOWED_KEYS = {
     "batch_size",
     "dropout",
     "epochs",
+    "feature_profile",
     "fanouts",
     "feature_dir",
     "feature_env",
@@ -25,6 +26,7 @@ _MAINLINE_ALLOWED_KEYS = {
     "learning_rate",
     "rel_dim",
     "run_name_template",
+    "target_context_groups",
     "weight_decay",
 }
 _HYBRID_ALLOWED_KEYS = {
@@ -53,6 +55,7 @@ class LoadedThesisHparamProfile:
 class MainlineDatasetHparams:
     dataset_name: str
     run_name_template: str | None
+    feature_profile: str
     feature_dir: Path | None
     feature_subdir: str | None
     feature_env: dict[str, str]
@@ -64,6 +67,7 @@ class MainlineDatasetHparams:
     learning_rate: float | None
     weight_decay: float | None
     dropout: float | None
+    target_context_groups: list[str] | None
     graph_config_overrides: list[str]
 
     @property
@@ -76,6 +80,7 @@ class MainlineDatasetHparams:
     def to_summary_payload(self) -> dict[str, Any]:
         return {
             "run_name_template": self.run_name_template,
+            "feature_profile": self.feature_profile,
             "feature_dir": None if self.feature_dir is None else str(self.feature_dir),
             "feature_subdir": self.feature_subdir,
             "feature_env": dict(self.feature_env),
@@ -88,6 +93,7 @@ class MainlineDatasetHparams:
             "learning_rate": None if self.learning_rate is None else float(self.learning_rate),
             "weight_decay": None if self.weight_decay is None else float(self.weight_decay),
             "dropout": None if self.dropout is None else float(self.dropout),
+            "target_context_groups": None if self.target_context_groups is None else list(self.target_context_groups),
             "graph_config_overrides": list(self.graph_config_overrides),
         }
 
@@ -135,6 +141,7 @@ def resolve_mainline_dataset_hparams(
 
     resolved: dict[str, Any] = {
         "run_name_template": str(getattr(args, "run_name_template")),
+        "feature_profile": str(getattr(args, "feature_profile")),
         "feature_dir": _coerce_optional_path(getattr(args, "feature_dir", None)),
         "feature_subdir": _coerce_optional_str(getattr(args, "feature_subdir", None)),
         "feature_env": feature_env,
@@ -146,6 +153,10 @@ def resolve_mainline_dataset_hparams(
         "learning_rate": _coerce_optional_float(getattr(args, "learning_rate", None)),
         "weight_decay": _coerce_optional_float(getattr(args, "weight_decay", None)),
         "dropout": _coerce_optional_float(getattr(args, "dropout", None)),
+        "target_context_groups": _normalize_optional_str_list(
+            getattr(args, "target_context_groups", None),
+            location="cli target_context_groups",
+        ),
         "graph_config_overrides": _normalize_graph_config_overrides(
             list(getattr(args, "graph_config_override", [])),
             location="cli graph_config_override",
@@ -199,6 +210,7 @@ def resolve_mainline_dataset_hparams(
     return MainlineDatasetHparams(
         dataset_name=str(dataset_name),
         run_name_template=_coerce_optional_str(resolved["run_name_template"]),
+        feature_profile=str(resolved["feature_profile"]),
         feature_dir=resolved["feature_dir"],
         feature_subdir=resolved["feature_subdir"],
         feature_env=dict(resolved["feature_env"]),
@@ -210,6 +222,7 @@ def resolve_mainline_dataset_hparams(
         learning_rate=resolved["learning_rate"],
         weight_decay=resolved["weight_decay"],
         dropout=resolved["dropout"],
+        target_context_groups=resolved["target_context_groups"],
         graph_config_overrides=_graph_override_map_to_list(resolved["graph_config_overrides"]),
     )
 
@@ -282,6 +295,11 @@ def _merge_mainline_section(
     merged = dict(resolved)
     if "run_name_template" in section:
         merged["run_name_template"] = str(section["run_name_template"])
+    if "feature_profile" in section:
+        merged["feature_profile"] = _normalize_feature_profile(
+            section["feature_profile"],
+            location=f"{location}.feature_profile",
+        )
     if "feature_dir" in section:
         merged["feature_dir"] = _coerce_optional_path(section.get("feature_dir"))
     if "feature_subdir" in section:
@@ -318,6 +336,11 @@ def _merge_mainline_section(
         merged["weight_decay"] = _coerce_optional_float(section["weight_decay"])
     if "dropout" in section:
         merged["dropout"] = _coerce_optional_float(section["dropout"])
+    if "target_context_groups" in section:
+        merged["target_context_groups"] = _normalize_optional_str_list(
+            section["target_context_groups"],
+            location=f"{location}.target_context_groups",
+        )
     if "graph_config_overrides" in section:
         override_map = dict(merged["graph_config_overrides"])
         override_map.update(
@@ -336,6 +359,30 @@ def _normalize_int_list(values: Any, *, location: str) -> list[int]:
     normalized = [int(value) for value in values]
     if not normalized:
         raise ValueError(f"`{location}` cannot be empty.")
+    return normalized
+
+
+def _normalize_optional_str_list(values: Any, *, location: str) -> list[str] | None:
+    if values is None:
+        return None
+    if isinstance(values, str):
+        text = values.strip()
+        if not text:
+            return []
+        return [text]
+    if not isinstance(values, list):
+        raise ValueError(f"`{location}` must be null, a string, or a JSON array of strings.")
+    normalized = [str(value).strip() for value in values if str(value).strip()]
+    return normalized
+
+
+def _normalize_feature_profile(value: Any, *, location: str) -> str:
+    normalized = str(value).strip()
+    allowed = {"utpm_unified", "utpm_shift_compact", "utpm_shift_enhanced"}
+    if normalized not in allowed:
+        raise ValueError(
+            f"`{location}` must be one of {', '.join(sorted(allowed))}, got `{value}`."
+        )
     return normalized
 
 

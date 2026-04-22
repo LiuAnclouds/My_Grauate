@@ -159,7 +159,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "`m5_temporal_graphsage` is the unified baseline; "
             "`m7_utpm` is the legacy stable GraphSAGE thesis backbone; "
-            "`m8_utgt` is the transformer-style thesis backbone and the recommended final-result family."
+            "`m8_utgt` is the transformer-style thesis backbone and the primary pure-GNN thesis family."
         ),
     )
     train_parser.add_argument(
@@ -170,7 +170,7 @@ def parse_args() -> argparse.Namespace:
             "`m5_temporal_graphsage`: unified_baseline. "
             "`m7_utpm`: utpm_temporal_shift_v4 (legacy stable backbone). "
             f"`{TRANSFORMER_BACKBONE_MODEL}`: {TRANSFORMER_BACKBONE_PRESET} (pure UTGT) or "
-            f"`{TRANSFORMER_BACKBONE_TEACHER_PRESET}` (teacher-guided recommended backbone)."
+            f"`{TRANSFORMER_BACKBONE_TEACHER_PRESET}` (teacher-guided primary backbone)."
         ),
     )
     train_parser.add_argument(
@@ -207,6 +207,16 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional dataset-local prediction directory used as fixed teacher distillation targets.",
+    )
+    train_parser.add_argument(
+        "--target-context-groups",
+        nargs="*",
+        default=None,
+        help=(
+            "Optional explicit target-context feature groups for the internal prior bridge. "
+            "When omitted, the thesis default group set is used. "
+            "Pass `none` to disable the internal target-context feature branch."
+        ),
     )
     train_parser.add_argument(
         "--outdir",
@@ -361,6 +371,8 @@ def _mainline_metadata(model_name: str, graph_config: GraphModelConfig | None = 
             main_innovation = f"{main_innovation} with uncertainty-aware drift adaptation"
         if graph_config is not None and str(graph_config.target_context_fusion) != "none":
             main_innovation = f"{main_innovation} and temporal-normality bridge context"
+        if graph_config is not None and str(graph_config.internal_risk_fusion) == "residual":
+            main_innovation = f"{main_innovation} with internal multi-scale causal risk fusion"
         return {
             "thesis_mainline_enabled": True,
             "main_innovation": main_innovation,
@@ -407,6 +419,22 @@ def run_train(args: argparse.Namespace) -> None:
             "teacher_distill_weight > 0 requires --teacher-distill-prediction-dir "
             "so the thesis runtime can load fixed teacher targets."
         )
+    if args.target_context_groups is None:
+        target_context_groups = list(OFFICIAL_TARGET_CONTEXT_GROUPS)
+        if (
+            str(graph_config.target_context_fusion) == "none"
+            and float(graph_config.target_time_adapter_strength) <= 0.0
+            and target_context_prediction_dir is None
+        ):
+            target_context_groups = []
+    else:
+        normalized_target_context_groups = [
+            str(value).strip() for value in args.target_context_groups if str(value).strip()
+        ]
+        if len(normalized_target_context_groups) == 1 and normalized_target_context_groups[0].lower() == "none":
+            target_context_groups = []
+        else:
+            target_context_groups = normalized_target_context_groups
     metadata = _mainline_metadata(args.model, graph_config)
     runtime = prepare_thesis_runtime(
         feature_dir=args.feature_dir,
@@ -415,6 +443,7 @@ def run_train(args: argparse.Namespace) -> None:
         train_ids=train_ids,
         graph_config=graph_config,
         feature_profile=args.feature_profile,
+        target_context_groups=target_context_groups,
         target_context_prediction_dir=target_context_prediction_dir,
         target_context_prediction_transform=args.target_context_prediction_transform,
         teacher_distill_prediction_dir=teacher_distill_prediction_dir,
@@ -727,7 +756,7 @@ def run_train(args: argparse.Namespace) -> None:
             "aggregator_type": (
                 "attention" if str(args.model) == TRANSFORMER_BACKBONE_MODEL else "sage"
             ),
-            "official_target_context_groups": list(OFFICIAL_TARGET_CONTEXT_GROUPS),
+            "official_target_context_groups": list(runtime.target_context_feature_groups),
             **graph_config.to_dict(),
         },
     }

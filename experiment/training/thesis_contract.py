@@ -10,6 +10,7 @@ OFFICIAL_BACKBONE_FEATURE_PROFILE = "utpm_unified"
 TRANSFORMER_BACKBONE_MODEL = "m8_utgt"
 TRANSFORMER_BACKBONE_PRESET = "utgt_temporal_shift_v1"
 TRANSFORMER_BACKBONE_TEACHER_PRESET = "utgt_temporal_shift_teacher_v1"
+TRANSFORMER_BACKBONE_DEPLOY_PRESET = "utgt_temporal_shift_deploy_v1"
 OFFICIAL_TARGET_CONTEXT_GROUPS = (
     "graph_time_detrend",
     "neighbor_similarity",
@@ -30,7 +31,12 @@ OFFICIAL_MAINLINE_FANOUTS = (15, 10)
 OFFICIAL_SUITE_EPOCHS = 8
 OFFICIAL_SUITE_SEEDS = (42,)
 
-# Recommended thesis result: teacher-guided UTGT backbone with the strict
+# Primary thesis result: deployable pure UTGT with dataset-local tuning.
+OFFICIAL_PURE_SUITE_NAME = "thesis_m8_utgt_deploy_pure_eppcold_v1"
+OFFICIAL_DEPLOY_PURE_SUITE_NAME = OFFICIAL_PURE_SUITE_NAME
+LEGACY_TEACHER_PURE_SUITE_NAME = "thesis_m8_utgt_teacher_hpsearch2_e8_s42_v1"
+
+# Appendix robustness result: teacher-guided UTGT backbone with the strict
 # GNN-primary frontier blend. 0.4999 keeps the GNN branch fraction at 50.01%.
 OFFICIAL_HYBRID_SUITE_NAME = "thesis_m8_utgt_teacher_gnnprimary04999"
 OFFICIAL_HYBRID_BASE_MODEL = TRANSFORMER_BACKBONE_MODEL
