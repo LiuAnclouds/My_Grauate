@@ -11,7 +11,7 @@
     ],
     "feature_subdir": "features_ap64",
     "attr_proj_dim": 64,
-    "epochs": 6,
+    "epochs": 30,
     "hidden_dim": 160,
     "rel_dim": 48,
     "fanouts": [20, 15],

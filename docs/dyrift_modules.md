@@ -1,104 +1,107 @@
 # DyRIFT-GNN Modules
 
-This document explains the main modules used by the final `DyRIFT-GNN` route.
+This document explains the components used by the final `DyRIFT-GNN` route and, more importantly, separates real model modules from training-time methods.
 
-## 1. Module Map
+## 1. Module vs Method Map
 
-| Module | Code | Purpose |
-| --- | --- | --- |
-| TRGT backbone | [modules/backbone.py](../experiment/models/modules/backbone.py) | temporal-relation graph attention |
-| Internal risk encoder | [modules/backbone.py](../experiment/models/modules/backbone.py) | multi-scale risk fusion inside GNN |
-| Target-context bridge | [modules/bridge.py](../experiment/models/modules/bridge.py) | target-level temporal-normality fusion |
-| Drift expert | [core/engine.py](../experiment/models/engine.py) | temporal drift adaptation |
-| Prototype memory | [modules/memory.py](../experiment/models/modules/memory.py) | class-structure regularization |
-| Pseudo-contrastive mining | [core/engine.py](../experiment/models/engine.py) | time-balanced hard sample mining |
-| Cold-start residual | [core/engine.py](../experiment/models/engine.py) | late cold-start compensation |
+| Item | Type | Code | Final Scope | Evidence |
+| --- | --- | --- | --- | --- |
+| TRGT backbone | model backbone | [backbone.py](../experiment/models/modules/backbone.py) | all datasets | main architecture |
+| Target-Context Bridge | model module | [bridge.py](../experiment/models/modules/bridge.py) | all datasets | main ablation: `-0.020582` macro |
+| Drift Expert | model module | [engine.py](../experiment/models/engine.py) | all datasets | main ablation: `-0.018917` macro |
+| Prototype Memory | training-time method | [memory.py](../experiment/models/modules/memory.py) | all datasets | main ablation: `-0.001070` macro |
+| Pseudo-Contrastive Temporal Mining | training-time method | [engine.py](../experiment/models/engine.py) | all datasets | main ablation: `-0.011588` macro |
+| Internal Risk Fusion | model module | [backbone.py](../experiment/models/modules/backbone.py) | XinYe and EPP final profiles | dataset-conditional |
+| Cold-Start Residual | model module | [engine.py](../experiment/models/engine.py) | EPP final profile | dataset-conditional |
 
-## 2. Temporal-Relation Attention
+主消融只覆盖三个最终 profile 都共同启用的部分：
 
-The backbone attention module learns which neighbors should matter for a target node.
+- Target-Context Bridge
+- Drift Expert
+- Prototype Memory
+- Pseudo-Contrastive Temporal Mining
 
-It is relation-aware because every edge has a relation embedding.
+`Internal Risk Fusion` 和 `Cold-Start Residual` 不放进主消融表，是因为它们不是三数据集共同启用的统一组件。
 
-It is temporal because edge-relative time is encoded and can also affect message weights.
+## 2. TRGT Backbone
 
-It is target-specific because attention is normalized by destination node and head.
+`TRGT` 是 `DyRIFT-GNN` 的动态图主干：
 
-## 3. Temporal-Normality Bridge
+- relation-aware，因为边有关系嵌入
+- time-aware，因为边时间和目标时间位置参与编码
+- target-specific，因为注意力按目标节点聚合
 
-The bridge uses target-context feature groups to calibrate graph embeddings.
+关键类：
 
-Typical groups:
+- `TRGTTemporalRelationAttentionBlock`
+- `TRGTInternalRiskEncoder`
 
+## 3. Target-Context Bridge
+
+Bridge 把目标节点级上下文特征和主干 GNN 表示在模型内部融合。
+
+典型上下文组：
+
+- `graph_stats`
 - `graph_time_detrend`
 - `neighbor_similarity`
 - `activation_early`
 
-The bridge is a neural module inside the GNN prediction path.
+它属于推理期模型结构，而不是额外的第二模型。
 
-## 4. Drift-Expert Adaptation
+## 4. Drift Expert
 
-Financial graph behavior changes over time. The drift expert adjusts target embeddings according to target time position and context features.
+金融图的行为会随时间漂移。`Drift Expert` 根据目标时间位置和上下文特征做时间漂移适配。
 
-The model uses this to reduce time-distribution mismatch between train and validation windows.
+从消融结果看，它是宏平均掉点第二大的共享组件，尤其影响 ET 的时间泛化能力。
 
 ## 5. Prototype Memory
 
-Prototype memory stores class-level representation prototypes and adds auxiliary regularization during training.
+`Prototype Memory` 是训练期正则器：
 
-Its role is representation stability, not a second prediction head.
+- 保存类别原型
+- 拉近同类 embedding
+- 拉开异类 embedding
+
+它的作用是表示稳定化，不是推理期第二分类头。
 
 ## 6. Pseudo-Contrastive Temporal Mining
 
-Pseudo-contrastive mining selects confident high-risk and low-risk samples in a time-aware way.
+`Pseudo-Contrastive` 是训练期难样本挖掘方法：
 
-The goal is to improve separation between suspicious and normal patterns under temporal drift.
+- 从无标签池上用当前模型分数做高置信伪划分
+- 构造时间均衡的对比损失
+- 强化时间漂移下的异常和正常分离
 
-Important configuration fields:
+它不使用验证和测试标签。
 
-- `pseudo_contrastive_weight`
-- `pseudo_contrastive_temperature`
-- `pseudo_contrastive_time_balanced`
-- `pseudo_contrastive_start_epoch`
+## 7. Internal Risk Fusion
 
-## 7. Internal Causal Risk Fusion
+`Internal Risk Fusion` 在模型内部学习风险差分信号，例如：
 
-The internal risk encoder computes risk deltas from GNN states:
+- 入向和出向差异
+- 短窗和长窗差异
+- 一跳和二跳风险差异
+- 方向不对称
 
-- inbound vs outbound gap
-- short-window vs long-window gap
-- one-hop vs two-hop gap
-- direction asymmetry
-- temporal support mass
+这些信号以残差形式并回 GNN 表示，不需要外接第二个分类器。
 
-These signals are learned inside the GNN and fused as a residual representation update.
+## 8. Cold-Start Residual
 
-## 8. Context-Conditioned Cold-Start Residual
+`Cold-Start Residual` 只在最终 EPP profile 启用，用来补偿晚期低支持度节点的消息不足。
 
-Cold-start nodes may have too few informative messages, especially in late time windows.
-
-The cold-start residual uses:
-
-- support count
-- target time position
-- context signal
-- base target features
-- target-context features
-
-It produces a gated residual correction inside the GNN logits.
-
-For the final EPP profile, this is enabled by:
+对应超参数：
 
 ```json
 "cold_start_residual_strength": 0.35
 ```
 
-This is a module-level hyperparameter in the same architecture, not a different model.
+它仍然属于同一架构内部的模块开关，不是换模型。
 
 ## 9. Deployment Path
 
-At inference time, prediction still follows:
+推理时始终只有：
 
 `features + graph -> DyRIFT-GNN -> fraud probability`
 
-No module requires a separately trained external model.
+不会额外调用外部树模型或第二阶段融合器。 

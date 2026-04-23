@@ -6,6 +6,7 @@
     "feature_profile": "utpm_shift_enhanced",
     "feature_subdir": "features_ap32",
     "attr_proj_dim": 32,
+    "epochs": 30,
     "hidden_dim": 128,
     "rel_dim": 32,
     "fanouts": [15, 10],

@@ -4,102 +4,118 @@
 
 - [Back to README](../README.md)
 - [Method Overview](thesis_method.md)
-- [Mainline Guide](../experiment/README_pipeline.md)
-- [Final Pure-GNN Summary](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json)
-- [Final Pure-GNN Audit](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
-- [Final Metrics CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv)
-- [Epoch Metrics CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv)
-- [Shared-module Ablation Report](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md)
+- [Accepted Leakage Audit](leakage_audit.md)
+- [Mainline AUC CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv)
+- [Comparison AUC CSV](results/comparison_auc.csv)
+- [Ablation AUC CSV](results/ablation_auc.csv)
+- [Progressive AUC CSV](results/progressive_auc.csv)
+- [Supplementary AUC CSV](results/supplementary_auc.csv)
+- [Epoch Log Manifest](results/epoch_log_manifest.csv)
 
-## 1. Final Main Result
+## 1. Accepted Mainline Result
 
-当前论文主结果：
+当前论文正式主结果采用三条已经保存的 accepted run artifact：
 
-- [thesis_dyrift_gnn_trgt_deploy_pure_v1](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json)
+- XinYe: `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1`
+- ET: `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1`
+- EPP: `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1`
 
-| Dataset | Final Pure GNN |
-| --- | ---: |
-| XinYe DGraph | 0.790455 |
-| Elliptic | 0.821329 |
-| Elliptic++ | 0.821953 |
-| Macro Val AUC | 0.811246 |
+| Setting | XinYe | ET | EPP | Macro Val AUC |
+| --- | ---: | ---: | ---: | ---: |
+| Full DyRIFT-GNN | 0.792851 | 0.821329 | 0.821953 | 0.812044 |
 
-这张表的正确解释：
+这张表的含义：
 
-- 这四个数来自同一套纯 GNN `DyRIFT-GNN / TRGT` 主线。
-- 不存在第二个外部模型参与最终推理。
-- 三个数据集共享同一主架构，只在合理超参数上分开调优。
+- 三个数据集共享同一套 `DyRIFT-GNN / TRGT` 架构。
+- 最终推理只走单模型纯 GNN 路径。
+- 允许数据集级超参数不同，但不允许拆成三套模型策略。
 
-## 2. GNN-family Comparison
+## 2. Comparison Experiments
 
-这里放 GNN 同组对比，避免只拿非 GNN 模型上界当主比较。
+这里的输入统一指同一套 `build_features --phase both` 构建出的统一语义特征缓存。不同模型可以做自己的入口映射，但不是各自重做一套特征工程。
 
-| Model | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Type |
+| Setting | XinYe | ET | EPP | Macro Val AUC | Note |
 | --- | ---: | ---: | ---: | ---: | --- |
-| Historical strong GNN `m5_temporal_graphsage` | 0.794628 | 0.793990 | 0.782830 | 0.790483 | 历史强 GNN 参考 |
-| Legacy thesis GNN `m7_utpm` | 0.776439 | 0.812635 | 0.777611 | 0.788895 | 旧主干 |
-| Early pure TRGT reference | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 初始纯 TRGT 基线 |
-| Final `DyRIFT-GNN` / `TRGT` | 0.790455 | 0.821329 | 0.821953 | 0.811246 | 当前论文主结果 |
+| Full DyRIFT-GNN | 0.792851 | 0.821329 | 0.821953 | 0.812044 | 正式论文主结果 |
+| Plain TRGT Backbone | 0.790742 | 0.800629 | 0.784006 | 0.791792 | 不带 DyRIFT 增强模块的纯主干 |
+| TGAT-style Reference | 0.789445 | 0.800629 | 0.783644 | 0.791239 | 同组时序注意力 GNN 对比 |
+| Temporal GraphSAGE Reference | 0.788309 | 0.773516 | 0.780595 | 0.780807 | 同组动态图 GNN 对比 |
+| XGBoost Same Input | 0.745771 | 0.904028 | 0.941352 | 0.863717 | 非 GNN 同输入参考，不是最终部署路线 |
 
-历史强 GNN 参考线来源：
+解释方式：
 
-- XinYe: `experiment/outputs/training/models/m5_temporal_graphsage/plan69a_m5_tcc_driftexpert015_entreg090w005_xinye_v1/summary.json`
-- Elliptic: `experiment/outputs/elliptic_transactions/training/models/m5_temporal_graphsage/probe_proto_bucketadv_dpdisc_ctxadaptive_elliptic_v2/summary.json`
-- Elliptic++: 历史 `m5_temporal_graphsage` 最优参考 run
+- 正式主结果相对 `Plain TRGT Backbone` 的宏平均提升是 `+0.020252`。
+- 正式主结果相对 `TGAT-style Reference` 的宏平均提升是 `+0.020805`。
+- 正式主结果相对 `Temporal GraphSAGE Reference` 的宏平均提升是 `+0.031238`。
+- `XGBoost Same Input` 只作为同输入的非 GNN 参考线，不参与最终方法选型，因为它不是统一纯 GNN 部署路线。
 
-结论：
+## 3. Subtractive Ablation
 
-- 单纯换成早期 `TRGT` 不会自动赢，early pure TRGT reference 宏平均只有 `0.767140`。
-- 继续沿着纯 GNN 路线做统一输入重构、桥接、冷启动增强和容量调优后，宏平均提升到 `0.811246`。
-- 当前最终结果已经超过历史强 GNN 宏平均 `0.790483`。
+主消融表使用减法设计，直接验证最终共享模块是否有效。
 
-## 3. Mainline Ablation
-
-这部分回答“统一主线里的关键变化是否有效”。
-
-| Setting | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Interpretation |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Legacy `m7_utpm` | 0.776439 | 0.812635 | 0.777611 | 0.788895 | 旧 thesis 主干 |
-| Early pure `TRGT` | 0.772707 | 0.751369 | 0.777344 | 0.767140 | 只换 backbone 的初始版本 |
-| Final `DyRIFT-GNN` | 0.790455 | 0.821329 | 0.821953 | 0.811246 | 当前统一纯 GNN 主线 |
-
-从这张表能直接读出的结论：
-
-- `TRGT` 的价值不是“换个 Transformer 就天然变强”。
-- GNN 侧真正有效的是统一输入重构、temporal-normality bridge、drift-expert 适配、prototype/pseudo-contrastive 正则和内部风险分支的组合。
-- 这条单模型纯 GNN 路线已经把三数据集宏平均拉到 `0.811246`。
-
-## 4. Shared-module Ablation
-
-共享模块逐项消融保留在 legacy `m7` 主干上，因为 `prototype memory / pseudo-contrastive / drift bridge` 的实现仍然是共用模块。
-
-- [report.md](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/report.md)
-- [results_long.csv](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/results_long.csv)
-- [results_macro.csv](../experiment/outputs/thesis_ablation/thesis_m7_v4_backbone_module_ablation/results_macro.csv)
-
-| Setting | XinYe | Elliptic | Elliptic++ | Macro Val AUC | Delta vs Legacy `m7` |
+| Setting | XinYe | ET | EPP | Macro Val AUC | Delta vs Full |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| legacy `m7` backbone | 0.776439 | 0.812635 | 0.777611 | 0.788895 | +0.000000 |
-| no prototype memory | 0.777391 | 0.812275 | 0.778365 | 0.789344 | +0.000449 |
-| no pseudo-contrastive mining | 0.775860 | 0.794927 | 0.777350 | 0.782712 | -0.006182 |
-| no drift residual context | 0.777244 | 0.816354 | 0.779095 | 0.790898 | +0.002003 |
+| Full DyRIFT-GNN | 0.792851 | 0.821329 | 0.821953 | 0.812044 | +0.000000 |
+| w/o Target-Context Bridge | 0.790284 | 0.800629 | 0.783473 | 0.791462 | -0.020582 |
+| w/o Drift Expert | 0.790578 | 0.785032 | 0.803772 | 0.793127 | -0.018917 |
+| w/o Prototype Memory | 0.791456 | 0.821686 | 0.819782 | 0.810975 | -0.001070 |
+| w/o Pseudo-Contrastive Temporal Mining | 0.789999 | 0.821820 | 0.789550 | 0.800456 | -0.011588 |
 
-阅读方式：
+从主消融表能读出的结论：
 
-- `pseudo-contrastive temporal mining` 是当前最稳定有效的共享主干模块。
-- `prototype memory` 更适合作为结构正则，不应夸成主要 AUC 来源。
-- `drift bridge` 更偏稳健性与上下文校准，而不是单看验证 AUC 的增益模块。
+- `Target-Context Bridge` 和 `Drift Expert` 是宏平均掉点最大的两个共享组件。
+- `Pseudo-Contrastive` 对 EPP 的提升最明显，是训练期最有效的共享方法之一。
+- `Prototype Memory` 的宏平均增益较小，但在 EPP 上仍然是正贡献。
+- `Internal Risk Fusion` 和 `Cold-Start Residual` 没有进入主消融表，因为它们不是三个最终 profile 都共同启用的组件。
 
-## 5. Hard-Leakage Audit
+## 4. Progressive Method Table
 
-最终主结果已经重新审计：
+补充方法表使用递进设计，用来说明模型是如何一步步从 `TRGT` 长成 `DyRIFT-GNN` 的。
 
-- [Final Pure-GNN Audit](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
-- [Final Pure-GNN Audit JSON](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json)
+| Setting | XinYe | ET | EPP | Macro Val AUC |
+| --- | ---: | ---: | ---: | ---: |
+| Plain TRGT Backbone | 0.790742 | 0.800629 | 0.784006 | 0.791792 |
+| TRGT + Bridge | 0.788639 | 0.784225 | 0.783053 | 0.785306 |
+| TRGT + Bridge + Drift Expert | 0.788363 | 0.811953 | 0.783624 | 0.794647 |
+| TRGT + Bridge + Drift Expert + Prototype Memory | 0.789463 | 0.809195 | 0.783048 | 0.793902 |
+| TRGT + Bridge + Drift Expert + Prototype Memory + Pseudo-Contrastive | 0.790680 | 0.816581 | 0.783399 | 0.796886 |
+| Full DyRIFT-GNN | 0.792851 | 0.821329 | 0.821953 | 0.812044 |
 
-审计结论：
+说明：
 
-- `hard_leakage_detected = false`
-- 三个数据集都没有发现 `train / val / test_pool / external` 交叉。
-- GNN 验证 bundle 与官方 `phase1_val` 完全对齐。
-- 没有跨数据集缓存复用，也没有把验证/测试标签回流训练。
+- 前五行来自 `experiment/outputs/studies/progressive/` 的统一 study 输出。
+- 最后一行使用 accepted 主结果 artifact，因为它才是论文最终采用的 full model。
+
+## 5. Supplementary XinYe Phase1+Phase2 Joint Train
+
+补充实验不是 warmup，而是从头把 `phase1.train + phase2.train` 做成 disjoint-union joint graph 来训练，同时把验证集固定在官方 `phase1.val`。
+
+| Setting | Train Scope | Val Scope | XinYe Val AUC | Note |
+| --- | --- | --- | ---: | --- |
+| Official XinYe Mainline | `phase1.train` | `phase1.val` | 0.792851 | 正式无泄露论文主线 |
+| Joint Phase1+Phase2 Train | `phase1.train + phase2.train` | `phase1.val` | 0.791441 | 补充实验，不是正式主线 |
+
+补充实验的关键事实：
+
+- 它是 from-scratch joint training，不是 warmup 或 fine-tune。
+- 它保留 `phase1.val` 不变。
+- 它没有跨 phase 人工造边，只做 disjoint union。
+- 它使用了 `phase2` 的标注训练节点，因此不作为正式无泄露主结果。
+
+输出位置：
+
+- `experiment/outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/summary.json`
+- `experiment/outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/xinye_dgraph/summary.json`
+
+## 6. Saved Result Files
+
+后续画图和论文制表直接用下面这些文件：
+
+- [Mainline AUC CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv)
+- [Comparison AUC CSV](results/comparison_auc.csv)
+- [Ablation AUC CSV](results/ablation_auc.csv)
+- [Progressive AUC CSV](results/progressive_auc.csv)
+- [Supplementary AUC CSV](results/supplementary_auc.csv)
+- [Epoch Log Manifest](results/epoch_log_manifest.csv)
+- [Studies Workspace](../experiment/studies/README.md)
+- [Accepted Leakage Audit JSON](results/leakage_audit.json)

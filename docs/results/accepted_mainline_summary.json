@@ -1,0 +1,29 @@
+{
+  "suite_name": "dyrift_gnn_accepted_mainline",
+  "model": "dyrift_gnn",
+  "method_display_name": "Dynamic Risk-Informed Fraud Graph Neural Network",
+  "method_short_name": "DyRIFT-GNN",
+  "backbone_display_name": "Temporal-Relational Graph Transformer",
+  "backbone_short_name": "TRGT",
+  "deployment_path": "single_gnn_end_to_end",
+  "dataset_isolation": true,
+  "cross_dataset_training": false,
+  "same_architecture_across_datasets": true,
+  "results": [
+    {
+      "dataset": "xinye_dgraph",
+      "summary_path": "experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1/summary.json",
+      "val_auc_mean": 0.7928507856954765
+    },
+    {
+      "dataset": "elliptic_transactions",
+      "summary_path": "experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1/summary.json",
+      "val_auc_mean": 0.821329087693758
+    },
+    {
+      "dataset": "ellipticpp_transactions",
+      "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1/summary.json",
+      "val_auc_mean": 0.821953270227715
+    }
+  ]
+}

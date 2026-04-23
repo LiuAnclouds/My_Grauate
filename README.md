@@ -1,78 +1,74 @@
 # DyRIFT-GNN
 
-`DyRIFT-GNN` is the final thesis method in this repository. It uses `TRGT` (`Temporal-Relational Graph Transformer`) as the dynamic-graph backbone and keeps one unified training and inference route for XinYe DGraph, Elliptic Transactions, and Elliptic++ Transactions.
+English | [中文说明](README.zh-CN.md)
 
-Final pipeline:
+`DyRIFT-GNN` is the thesis mainline in this repository for dynamic-graph financial fraud detection. It uses `TRGT` (`Temporal-Relational Graph Transformer`) as the backbone and keeps one unified pure-GNN architecture across:
 
-`dataset-local preprocessing -> UTPM feature contract -> TRGT backbone -> DyRIFT-GNN modules -> fraud probability`
+- XinYe DGraph
+- Elliptic Transactions
+- Elliptic++ Transactions
 
-The deployed path is single-model pure GNN. No external tree model, teacher branch, or second-stage classifier is required at inference time.
+Main deployment path:
 
-## Project Cards
+`dataset-local preprocessing -> UTPM unified feature contract -> TRGT backbone -> DyRIFT modules -> fraud probability`
+
+The final inference route is single-model pure GNN. No external tree model, teacher branch, or second-stage fusion model is used at deployment.
+
+## Mainline Result
+
+| Dataset | Val AUC | Artifact |
+| --- | ---: | --- |
+| XinYe DGraph | 0.792851 | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1` |
+| Elliptic Transactions | 0.821329 | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1` |
+| Elliptic++ Transactions | 0.821953 | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1` |
+| Macro Average | 0.812044 | `docs/results/accepted_mainline_summary.json` |
+
+Runtime id: `dyrift_gnn`  
+Paper-facing method: `Dynamic Risk-Informed Fraud Graph Neural Network (DyRIFT-GNN)`  
+Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
+
+## Model Summary
+
+- Backbone: `TRGT`, a temporal-relation graph transformer for dynamic neighborhood message passing.
+- Inference-time modules: target-context bridge, drift expert, internal risk fusion, and dataset-conditional cold-start residual.
+- Training-time methods: prototype memory and pseudo-contrastive temporal mining.
+- Input contract: all datasets are mapped into the same `UTPM` semantic family; only raw preprocessing and hyperparameters remain dataset-local.
+
+## Documentation
 
 | Card | Description |
 | --- | --- |
-| [Method Overview](docs/dyrift_gnn_method.md) | DyRIFT-GNN method, input contract, deployment path |
-| [TRGT Backbone](docs/trgt_backbone.md) | backbone structure and message passing |
-| [Model Modules](docs/dyrift_modules.md) | bridge, drift expert, prototype, pseudo-contrastive, risk fusion, cold-start residual |
-| [Code Reference](docs/code_reference.md) | package layout, main classes, call chain |
-| [Training And Configs](docs/training_and_configs.md) | commands, config files, output layout |
-| [Experiment Results](docs/thesis_experiments.md) | final AUC table, GNN comparison, ablations |
-| [Experiment Workspace](experiment/README.md) | experiment-level folder layout and responsibility split |
-| [Dataset Workspace](experiment/datasets/README.md) | dataset registry, preparation scripts, and raw-data layout |
-| [Pipeline Guide](experiment/README_pipeline.md) | engineering-facing guide for the final experiment pipeline |
-| [Leakage Audit](experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md) | final hard-leakage audit |
-| [Suite Summary](experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json) | final tri-dataset suite summary |
-| [Metrics CSV](docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv) | final dataset-level metrics |
-| [Epoch Metrics CSV](docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv) | aggregated epoch logs |
-
-## Final Results
-
-| Dataset | Val AUC | Val PR-AUC | Val AP |
-| --- | ---: | ---: | ---: |
-| XinYe DGraph | 0.790455 | 0.045843 | 0.045998 |
-| Elliptic Transactions | 0.821329 | 0.432221 | 0.396340 |
-| Elliptic++ Transactions | 0.821953 | 0.471452 | 0.438596 |
-| Macro Average | 0.811246 | 0.316505 | 0.293645 |
-
-Official runtime id: `dyrift_gnn`  
-Paper-facing method: `Dynamic Risk-Informed Fraud Graph Neural Network (DyRIFT-GNN)`  
-Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
+| [Chinese README](README.zh-CN.md) | Chinese project overview |
+| [Thesis Method](docs/thesis_method.md) | thesis-facing method, constraints, and deployment path |
+| [DyRIFT Method Card](docs/dyrift_gnn_method.md) | compact model identity and method card |
+| [TRGT Backbone](docs/trgt_backbone.md) | backbone structure and temporal-relation attention |
+| [DyRIFT Modules](docs/dyrift_modules.md) | module vs method split and ablation evidence |
+| [Thesis Experiments](docs/thesis_experiments.md) | mainline, comparison, ablation, progressive, and supplementary tables |
+| [Training And Configs](docs/training_and_configs.md) | commands, config files, and output layout |
+| [Code Reference](docs/code_reference.md) | package layout and call chain |
+| [Studies Workspace](experiment/studies/README.md) | isolated comparison, ablation, progressive, and supplementary experiments |
+| [Leakage Audit](docs/leakage_audit.md) | accepted mainline hard-leakage audit |
+| [Mainline AUC CSV](docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv) | accepted three-dataset AUC table |
+| [Comparison AUC CSV](docs/results/comparison_auc.csv) | comparison-study AUC table |
+| [Ablation AUC CSV](docs/results/ablation_auc.csv) | subtractive ablation AUC table |
+| [Progressive AUC CSV](docs/results/progressive_auc.csv) | progressive method-building table |
+| [Supplementary AUC CSV](docs/results/supplementary_auc.csv) | XinYe `phase1+phase2` joint-train supplement |
+| [Epoch Log Manifest](docs/results/epoch_log_manifest.csv) | per-experiment epoch, log, and curve paths |
 
 ## Repository Layout
 
 | Path | Role |
 | --- | --- |
 | [experiment/mainline.py](experiment/mainline.py) | single-dataset feature build and train entry |
-| [experiment/suite.py](experiment/suite.py) | tri-dataset suite runner |
+| [experiment/suite.py](experiment/suite.py) | three-dataset mainline rerun entry |
 | [experiment/audit.py](experiment/audit.py) | hard-leakage audit |
-| [experiment/datasets/core/registry.py](experiment/datasets/core/registry.py) | active dataset registry and raw/prepared path contract |
-| [experiment/datasets/scripts/prepare_elliptic.py](experiment/datasets/scripts/prepare_elliptic.py) | Elliptic dataset preparation entry |
-| [experiment/datasets/scripts/prepare_ellipticpp.py](experiment/datasets/scripts/prepare_ellipticpp.py) | Elliptic++ dataset preparation entry |
-| [experiment/models/engine.py](experiment/models/engine.py) | shared graph engine, loss, sampling, evaluation |
-| [experiment/models/runtime.py](experiment/models/runtime.py) | runtime bundle builder |
-| [experiment/models/presets.py](experiment/models/presets.py) | official preset definitions |
-| [experiment/config_loader.py](experiment/config_loader.py) | suite and dataset hyperparameter loading |
-| [experiment/features/features.py](experiment/features/features.py) | UTPM feature cache and normalizer utilities |
-| [experiment/models/graph.py](experiment/models/graph.py) | experiment-class resolution and graph contexts |
-| [experiment/models/modules/backbone.py](experiment/models/modules/backbone.py) | TRGT backbone blocks and internal risk encoder |
-| [experiment/models/modules/model.py](experiment/models/modules/model.py) | DyRIFT-GNN model facade |
-| [experiment/models/modules/trainer.py](experiment/models/modules/trainer.py) | DyRIFT-GNN trainer wrapper |
-| [experiment/models/modules/bridge.py](experiment/models/modules/bridge.py) | target-context bridge |
-| [experiment/models/modules/memory.py](experiment/models/modules/memory.py) | prototype and normal-alignment memory |
-| [experiment/utils/common.py](experiment/utils/common.py) | paths, split loading, metrics, IO helpers |
-| [experiment/utils/sampling.py](experiment/utils/sampling.py) | sampling-profile helpers |
-
-## Config Files
-
-The model family is shared across all datasets. Dataset-local tuning lives in separate JSON files.
-
-| File | Role |
-| --- | --- |
-| [experiment/configs/dyrift_suite.json](experiment/configs/dyrift_suite.json) | suite manifest with shared defaults and dataset file references |
-| [experiment/configs/xinye_dgraph.json](experiment/configs/xinye_dgraph.json) | XinYe profile |
-| [experiment/configs/elliptic_transactions.json](experiment/configs/elliptic_transactions.json) | ET profile |
-| [experiment/configs/ellipticpp_transactions.json](experiment/configs/ellipticpp_transactions.json) | EPP profile |
+| [experiment/configs/](experiment/configs) | maintained per-dataset rerun configs |
+| [experiment/datasets/](experiment/datasets) | dataset registry, raw-data contract, and preparation scripts |
+| [experiment/features/](experiment/features) | unified feature cache and normalizer utilities |
+| [experiment/models/](experiment/models) | runtime, engine, backbone, model modules, and presets |
+| [experiment/studies/](experiment/studies) | isolated comparison, ablation, progressive, and supplementary studies |
+| [experiment/utils/](experiment/utils) | path, split, IO, and sampling helpers |
+| [docs/](docs) | thesis-facing method, experiment, and code documents |
 
 ## Reproduce
 
@@ -84,24 +80,30 @@ conda run -n Graph --no-capture-output python3 experiment/mainline.py \
   --phase both
 ```
 
-Run the final suite:
+Run the current maintained mainline config:
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/suite.py \
-  --suite-name thesis_dyrift_gnn_trgt_deploy_pure_v1 \
+  --suite-name dyrift_mainline_rerun \
   --model dyrift_gnn \
   --preset dyrift_trgt_deploy_v1 \
   --feature-profile utpm_shift_enhanced \
   --dataset-hparams experiment/configs/dyrift_suite.json \
-  --seeds 42 \
-  --skip-existing
+  --seeds 42
 ```
 
-Run hard-leakage audit:
+Run one isolated study:
+
+```bash
+conda run -n Graph --no-capture-output python3 \
+  experiment/studies/comparisons/tgat_style_reference/run.py
+```
+
+Regenerate the accepted-mainline leakage audit:
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/audit.py \
-  --suite-summary experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
+  --suite-summary experiment/outputs/reports/dyrift_gnn_accepted_mainline/summary.json
 ```
 
 ## Integrity
@@ -111,3 +113,4 @@ conda run -n Graph --no-capture-output python3 experiment/audit.py \
 - `cross_dataset_training=false`
 - `same_architecture_across_datasets=true`
 - `hard_leakage_detected=false`
+- Supplementary XinYe `phase1+phase2` joint training is stored separately and is explicitly not the official leakage-free thesis mainline.

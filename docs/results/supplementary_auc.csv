@@ -1,0 +1,2 @@
+group,setting,study_name,dataset,dataset_key,val_auc,summary_path
+supplementary,XinYe Joint Train on Phase1+Phase2 with Phase1 Validation,xinye_phase12_joint_train_phase1_val,XinYe DGraph,xinye_dgraph,0.7914408494499392,experiment/outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/xinye_dgraph/summary.json

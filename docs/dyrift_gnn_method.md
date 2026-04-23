@@ -1,6 +1,6 @@
 # DyRIFT-GNN Method
 
-## 1. Method Identity
+## 1. Identity
 
 Full model name:
 
@@ -16,137 +16,96 @@ Runtime id:
 
 - `dyrift_gnn`
 
-The runtime id is used by runners and checkpoints. The thesis-facing method name is `DyRIFT-GNN`.
+论文里的方法名是 `DyRIFT-GNN`，工程里的运行入口名是 `dyrift_gnn`。
 
 ## 2. End-to-End Route
 
-The deployed route is:
+正式部署路径：
 
 `raw dataset -> dataset-local preprocessing -> UTPM contract -> TRGT -> DyRIFT modules -> fraud probability`
 
-This final route is pure GNN:
+这条路线是纯 GNN：
 
-- no external classifier
-- no teacher branch at inference time
-- no second-stage fusion model
+- 推理期没有外部分类器
+- 推理期没有 teacher 分支
+- 推理期没有第二阶段融合模型
 
 ## 3. Unified Input Contract
 
-The three datasets have different raw schemas, but all are mapped to one semantic input family:
+三个数据集原始 schema 不同，但最终都被映射到同一语义输入族：
 
 - node attribute statistics
 - graph structural statistics
 - temporal activity statistics
 - relation-aware interaction statistics
-- target-context groups for the bridge branch
+- target-context groups for bridge fusion
 
-Supported UTPM profiles include:
+当前主线使用的 profile 主要是：
 
 - `utpm_shift_enhanced`
 - `utpm_shift_compact`
-- `utpm_unified`
 
-The goal is unified input semantics, not identical raw columns.
+统一的是语义，不是原始列名。
 
-## 4. Backbone
+## 4. Module And Method Split
 
-TRGT performs relation-aware, time-aware message passing over sampled dynamic subgraphs.
+| Item | Category | Inference Used | Role |
+| --- | --- | --- | --- |
+| `TRGT` backbone | backbone | yes | 时序关系消息传递 |
+| `Target-Context Bridge` | model module | yes | 目标级上下文融合 |
+| `Drift Expert` | model module | yes | 时间漂移适配 |
+| `Internal Risk Fusion` | model module | yes | 内部多尺度风险残差 |
+| `Cold-Start Residual` | model module | yes | 晚期冷启动补偿 |
+| `Prototype Memory` | training-time method | no | 表示空间稳定化 |
+| `Pseudo-Contrastive Temporal Mining` | training-time method | no | 时间均衡难样本挖掘 |
 
-Main code:
+这里最关键的区分是：
+
+- `Bridge / Drift / Internal Risk / Cold-Start` 属于模型结构。
+- `Prototype / Pseudo-Contrastive` 属于训练期方法，不会在推理时再额外走一条第二模型分支。
+
+## 5. Core Implementation
+
+主要代码：
 
 - [../experiment/models/modules/backbone.py](../experiment/models/modules/backbone.py)
+- [../experiment/models/modules/model.py](../experiment/models/modules/model.py)
 - [../experiment/models/modules/trainer.py](../experiment/models/modules/trainer.py)
+- [../experiment/models/modules/bridge.py](../experiment/models/modules/bridge.py)
+- [../experiment/models/modules/memory.py](../experiment/models/modules/memory.py)
 - [../experiment/models/engine.py](../experiment/models/engine.py)
 
-Key backbone class:
+关键类：
 
 - `TRGTTemporalRelationAttentionBlock`
-
-Trainer wrapper:
-
+- `TRGTInternalRiskEncoder`
+- `DyRIFTModel`
 - `DyRIFTTrainer`
 
-## 5. DyRIFT Modules
-
-DyRIFT-GNN adds several risk-oriented modules on top of the TRGT path.
-
-### 5.1 Temporal-Normality Bridge
-
-The target-context bridge injects target-level context features after graph encoding.
-
-Typical context groups:
-
-- `graph_time_detrend`
-- `neighbor_similarity`
-- `activation_early`
-
-Implementation:
-
-- [../experiment/models/modules/bridge.py](../experiment/models/modules/bridge.py)
-
-### 5.2 Drift-Expert Adaptation
-
-The drift adapter changes context fusion behavior across time buckets.
-
-Implementation:
-
-- `TargetTimeDriftExpertAdapter` in [../experiment/models/engine.py](../experiment/models/engine.py)
-
-### 5.3 Prototype Memory
-
-Prototype memory regularizes representation structure and stabilizes class centers.
-
-Implementation:
-
-- [../experiment/models/modules/memory.py](../experiment/models/modules/memory.py)
-
-### 5.4 Pseudo-Contrastive Temporal Mining
-
-Pseudo-contrastive mining selects high-confidence temporal hard cases during training.
-
-Implementation:
-
-- training logic in [../experiment/models/engine.py](../experiment/models/engine.py)
-
-### 5.5 Internal Causal Risk Fusion
-
-Internal multi-scale risk features are learned directly from the sampled subgraph.
-
-Implementation:
-
-- `TRGTInternalRiskEncoder` in [../experiment/models/modules/backbone.py](../experiment/models/modules/backbone.py)
-
-### 5.6 Context-Conditioned Cold-Start Residual
-
-This branch compensates message sparsity for late cold-start nodes inside the same GNN route.
-
-Implementation:
-
-- cold-start residual logic in [../experiment/models/engine.py](../experiment/models/engine.py)
-
-## 6. Final Results
-
-Final suite:
-
-- [../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json)
+## 6. Accepted Result
 
 Validation AUC:
 
-- XinYe DGraph: `0.790455`
+- XinYe DGraph: `0.792851`
 - Elliptic Transactions: `0.821329`
 - Elliptic++ Transactions: `0.821953`
-- Macro: `0.811246`
+- Macro: `0.812044`
 
-## 7. Leakage Rules
+对应结果表：
 
-The final route enforces:
+- [Mainline AUC CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv)
+- [Experiment Table](thesis_experiments.md)
 
-- datasets are trained separately
-- no cross-dataset label or prediction reuse
-- validation and test labels never flow back into training
-- no external model is required at deployment
+## 7. Leakage Guardrails
 
-Audit outputs:
+正式主线保证：
 
-- [../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
-- [../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json)
+- 各数据集独立训练
+- 不做跨数据集标签和预测复用
+- 验证和测试标签不回流训练
+- 推理期不依赖外部模型
+
+Accepted audit：
+
+- [leakage_audit.md](leakage_audit.md)
+- [results/leakage_audit.json](results/leakage_audit.json)

@@ -1,0 +1,5 @@
+group,setting,dataset,dataset_key,val_auc,summary_path
+mainline,Full DyRIFT-GNN,XinYe DGraph,xinye_dgraph,0.7928507856954765,experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1/summary.json
+mainline,Full DyRIFT-GNN,Elliptic Transactions,elliptic_transactions,0.821329087693758,experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1/summary.json
+mainline,Full DyRIFT-GNN,Elliptic++ Transactions,ellipticpp_transactions,0.821953270227715,experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1/summary.json
+mainline,Full DyRIFT-GNN,Macro Average,macro_average,0.8120443812056498,docs/results/accepted_mainline_summary.json

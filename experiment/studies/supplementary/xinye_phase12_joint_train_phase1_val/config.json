@@ -1,0 +1,17 @@
+{
+  "study_name": "xinye_phase12_joint_train_phase1_val",
+  "display_name": "XinYe Joint Train on Phase1+Phase2 with Phase1 Validation",
+  "study_type": "supplementary",
+  "runner": "phase12_joint_graph",
+  "description": "Supplementary XinYe-only study that builds a disjoint-union graph over official phase1 and phase2, trains DyRIFT-GNN from scratch on both train masks together, and keeps validation fixed on the official phase1 time-aware val split.",
+  "dataset_profile": "../../common/tri_dataset_profile.json",
+  "datasets": ["xinye_dgraph"],
+  "seeds": [42],
+  "phase12_joint_graph": {
+    "engine_target": "dyrift_gnn",
+    "model_display_name": "DyRIFT-GNN (XinYe Phase1+Phase2 Joint)",
+    "backbone_display_name": "TRGT",
+    "preset": "dyrift_trgt_deploy_v1",
+    "graph_config_overrides": []
+  }
+}

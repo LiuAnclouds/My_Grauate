@@ -4,136 +4,130 @@
 
 - [Back to README](../README.md)
 - [Experiment Table](thesis_experiments.md)
-- [Mainline Guide](../experiment/README_pipeline.md)
-- [Final Pure-GNN Summary](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json)
-- [Final Pure-GNN Audit](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
-- [Final Metrics CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv)
-- [Epoch Metrics CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv)
+- [DyRIFT Method Card](dyrift_gnn_method.md)
+- [TRGT Backbone](trgt_backbone.md)
+- [Accepted Leakage Audit](leakage_audit.md)
+- [Mainline AUC CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv)
 
 ## 1. Problem Setting
 
-目标不是给三个数据集各做一套“特供策略”，而是在严格数据隔离前提下，用一套统一动态图异常检测架构完成训练、验证和推理。
+目标不是给三个数据集各做一套特供模型，而是在严格数据隔离前提下，用一套统一的动态图异常检测架构完成训练、验证和推理。
 
-统一约束：
+主线约束：
 
 - 三个数据集彼此隔离，不做跨数据集联合训练。
-- 各数据集可以有自己的原始清洗流程，但最终必须映射到同一套 UTPM 特征语义。
-- 主体模型必须是动态图 GNN，当前固定为 `DyRIFT-GNN`；backbone 为 `TRGT`，运行入口名为 `dyrift_gnn`。
-- 数据集级超参数允许分别调，例如 `attr_proj_dim`、`hidden_dim`、`rel_dim`、`fanouts`、`attention_num_heads`、`dropout`。
-- 禁止训练集、验证集、测试池和外部集节点交叉，也禁止用验证/测试标签反哺训练。
+- 原始清洗可以数据集本地化，但最终必须映射到同一套 `UTPM` 语义输入契约。
+- 主体模型固定为动态图 GNN，当前正式主线为 `DyRIFT-GNN`，主干为 `TRGT`。
+- 数据集级超参数允许分别调优，例如 `attr_proj_dim`、`hidden_dim`、`rel_dim`、`fanouts`、`attention_num_heads`、`dropout`。
+- 禁止训练集、验证集、测试池和外部集节点交叉，也禁止验证和测试标签回流训练。
 
-最终论文主线采用：
+正式论文主线是：
 
-`统一特征映射 + DyRIFT-GNN 模型 + TRGT 主干 + 单路部署推理`
+`统一特征映射 + DyRIFT-GNN + TRGT + 单路纯 GNN 部署`
 
-## 2. Final Architecture
+## 2. Architecture Stack
 
 | Layer | Current Choice | Role |
 | --- | --- | --- |
-| Dataset preprocessing | dataset-local processors | 处理不同原始字段，但输出同一语义契约 |
-| Input contract family | UTPM schema with dataset-local subsets | 三个数据集共享同一输入语义 |
-| Primary GNN | `DyRIFT-GNN` | 动态风险感知反欺诈图神经网络 |
-| Backbone | `TRGT` | Temporal-Relational Graph Transformer，多头时序关系注意力动态图主干 |
-| GNN modules | temporal-normality bridge, drift-expert adaptation, prototype memory, pseudo-contrastive temporal mining, internal causal risk fusion, context-conditioned cold-start residual | 论文主要创新模块 |
-| Final decision | single pure-GNN probability | 训练和推理都只走 `DyRIFT-GNN` |
+| Dataset preprocessing | dataset-local processors | 处理不同原始字段，但输出同一语义家族 |
+| Unified input contract | `UTPM` | 三个数据集共享同一输入语义 |
+| Backbone | `TRGT` | 时序关系图 Transformer 主干 |
+| Full model | `DyRIFT-GNN` | 动态风险感知反欺诈图神经网络 |
+| Final decision | single pure-GNN probability | 训练和推理都只走一条 GNN 路径 |
 
-这不是三个数据集三套模型，因为 `DyRIFT-GNN` 模型、`TRGT` 主干、输入语义、训练协议和推理路径都固定一致。不同数据集只在合理超参数上分别调优。
+这不是三个数据集三套模型，因为主干、模块组织、训练协议和推理路径都固定一致。不同数据集只在合理超参数上分开调优。
 
-## 3. Base Features And Prior Bridge
+## 3. Base Features And Target Context
 
-当前方法里要区分两类输入角色：
+当前输入分成两个角色，但都来自同一份统一特征缓存：
 
-- `base`：所有节点共享的主干输入，是统一后的节点属性、图结构统计、时间统计和关系统计。
-- `bridge context`：目标节点级别的辅助上下文，是从同一份统一特征里抽取出来的目标上下文组，再经过模型内 bridge 编码器融合到目标表示。
+- `base features`：所有节点共享的主干输入，包括属性统计、图结构统计、时间统计和关系统计。
+- `target context groups`：目标节点级辅助上下文，包括 `graph_stats`、`graph_time_detrend`、`neighbor_similarity`、`activation_early` 这类目标上下文组。
 
-这里的 bridge context 不是外部模型预测，也不是标签泄露特征。它本质上仍然来自当前节点及其局部时间图结构的无标签统计，例如：
+它们的区别不是“一个人工一个自动”，而是：
 
-- `graph_stats`
-- `graph_time_detrend`
-- `neighbor_similarity`
-- `activation_early`
+- `base features` 直接进入 GNN 主干，服务所有节点。
+- `target context groups` 在目标节点级别进入 bridge 分支，和 GNN 表示再融合。
 
-这样做的目的，是把“统一主干表征”和“目标节点特异性时序上下文”解耦，避免把所有东西简单拼成一个大平面输入。
+这仍然是单模型纯 GNN，因为 bridge 输入不来自外部模型预测，也不依赖标签泄露特征。
 
-## 4. Why This Is Still Pure GNN
+## 4. What Is A Module And What Is A Method
 
-最终训练和推理都只有一条 `DyRIFT-GNN / TRGT` 路径：
+这是当前论文写法里最容易混淆的一点。
 
-- 没有独立外部分类头参与最终输出。
-- 没有 residual 分支参与推理。
-- 没有外部模型预测在验证或测试时作为输入特征注入。
+| Item | Type | Used At Inference | Final Scope | Role |
+| --- | --- | --- | --- | --- |
+| TRGT Backbone | 模型主干 | 是 | 全部数据集 | 时序关系消息传递 |
+| Target-Context Bridge | 模型模块 | 是 | 全部数据集 | 目标级上下文融合 |
+| Drift Expert | 模型模块 | 是 | 全部数据集 | 时间漂移适配 |
+| Internal Risk Fusion | 模型模块 | 是 | XinYe 与 EPP 最终 profile | 多尺度风险残差建模 |
+| Cold-Start Residual | 模型模块 | 是 | EPP 最终 profile | 晚期冷启动补偿 |
+| Prototype Memory | 训练期方法 | 否 | 全部数据集 | 表示空间正则与类别稳定 |
+| Pseudo-Contrastive Temporal Mining | 训练期方法 | 否 | 全部数据集 | 时间均衡难样本挖掘 |
 
-因此这条路线是可部署的单模型纯 GNN。
+更准确的表述是：
 
-## 5. Innovation Groups
+- `Bridge`、`Drift Expert`、`Internal Risk Fusion`、`Cold-Start Residual` 属于模型内部结构。
+- `Prototype Memory` 和 `Pseudo-Contrastive` 属于训练协议里的增强方法，不是推理期第二条模型分支。
 
-| Innovation Group | Evidence | Current Reading |
-| --- | --- | --- |
-| Temporal relation attention backbone | `m7_utpm -> TRGT` 完成主干现代化 | 解决统一动态图关系建模问题 |
-| Temporal-normality bridge | pure-GNN 主线显式使用 | 在目标节点级别融合时序上下文先验 |
-| Drift-expert adaptation | `drift_expert` adapter | 适配不同时间段的分布漂移 |
-| Prototype memory | 共享模块消融 | 更偏结构正则与类别稳定器 |
-| Pseudo-contrastive temporal mining | 去掉后宏平均下降 `0.006182` | 当前最稳定有效的共享模块 |
-| Internal causal risk fusion | pure-GNN 最优配置保留该分支 | 在模型内部做多尺度风险差分建模 |
-| Context-conditioned cold-start residual | EPP 最终版启用 | 只在纯 GNN 内部补偿晚期冷启动节点的消息缺失 |
+## 5. Why It Is Still Pure GNN
 
-论文里不要写成“attention 一换就全赢”。更准确的表述是：在统一动态图输入契约下，将时序关系注意力主干、temporal-normality bridge、drift-expert 适配、prototype memory、pseudo-contrastive mining 和 internal causal risk fusion 组合成一套可审计的动态图反欺诈框架。
+最终部署和推理只有一条 `DyRIFT-GNN / TRGT` 路径：
 
-## 6. Final Pure-GNN Results
+- 没有外部树模型参与最终预测。
+- 没有 teacher 分支参与最终推理。
+- 没有第二阶段分类器或加权融合器。
+
+因此正式主线是可部署的单模型纯 GNN。
+
+## 6. Innovation Summary
+
+当前可以稳定写进论文的创新点是：
+
+- 统一 `UTPM` 输入契约，让三个动态图数据集共享同一语义输入家族。
+- `TRGT` 时序关系主干，负责动态图邻域的关系感知和时间感知消息传递。
+- `Target-Context Bridge`，把目标节点级时序上下文与 GNN 主干表示在模型内融合。
+- `Drift Expert`，用时间位置和上下文去适配时间分布漂移。
+- `Internal Risk Fusion`，在模型内部学习多尺度风险差分，而不是外接第二个分类器。
+- `Prototype Memory` 与 `Pseudo-Contrastive Temporal Mining`，作为训练协议增强表示稳定性和时间漂移鲁棒性。
+
+不要把方法写成“换了个 Transformer 就变强”。更准确的说法是：在统一动态图输入契约下，`TRGT` 主干和 `DyRIFT` 风险模块共同构成了一套可审计、可部署的动态图反欺诈框架。
+
+## 7. Final Accepted Result
 
 | Dataset | Val AUC |
 | --- | ---: |
-| XinYe DGraph | 0.790455 |
-| Elliptic | 0.821329 |
-| Elliptic++ | 0.821953 |
-| Macro | 0.811246 |
+| XinYe DGraph | 0.792851 |
+| Elliptic Transactions | 0.821329 |
+| Elliptic++ Transactions | 0.821953 |
+| Macro | 0.812044 |
 
 补充说明：
 
-- XinYe 和 ET 直接采用当前各自最优 pure-GNN run。
-- EPP 在保持同一 `DyRIFT-GNN / TRGT` 架构前提下，启用了 `cold_start_residual_strength=0.35` 的上下文冷启动残差专家。
-- EPP run name 中的 `mixed120` 仅表示内部邻居采样策略是 mixed recent/random sampler。
-- 这不是换第二个模型，而是同一 DyRIFT-GNN / TRGT 主干中的数据集级超参数开关。
+- XinYe accepted run 使用 `full_xinye_repro_v1`。
+- ET final profile 关闭了 `internal_risk_fusion`，但仍然保持同一 `DyRIFT-GNN / TRGT` 架构。
+- EPP final profile 在同一架构内启用了 `cold_start_residual_strength=0.35`。
 
-## 7. Hard-Leakage Guardrails
+## 8. Leakage Guardrails
 
-最终主结果已审计：
+当前 accepted 主结果已经重新做过一致性审计：
 
-- [leakage_audit.md](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
-- [leakage_audit.json](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json)
+- [leakage_audit.md](leakage_audit.md)
+- [leakage_audit.json](results/leakage_audit.json)
 
-审计结论：
+结论：
 
 - `hard_leakage_detected = false`
-- `train / val / test_pool / external` 四个 split 两两不重叠。
-- GNN 的验证节点与官方 `phase1_val` 对齐。
-- 所有路径都在各自数据集作用域内，没有跨数据集缓存复用。
+- `train / val / test_pool / external` 两两不重叠
+- 预测 bundle 与官方 split 对齐
+- 没有跨数据集缓存复用，也没有验证和测试标签回流训练
 
-## 8. Repro Commands
+## 9. Supplementary XinYe Joint Training
 
-构建统一特征缓存：
+补充实验中，我额外做了一个 `phase1.train + phase2.train` 的 XinYe 联合训练版本：
 
-```bash
-conda run -n Graph --no-capture-output python3 experiment/mainline.py \
-  build_features --phase both
-```
+- 它是 from-scratch joint training，不是 warmup。
+- 验证集仍然固定在官方 `phase1.val`。
+- 它的 `val_auc = 0.791441`，低于正式 XinYe mainline 的 `0.792851`。
 
-运行 final pure-GNN suite：
-
-```bash
-conda run -n Graph --no-capture-output python3 experiment/suite.py \
-  --suite-name thesis_dyrift_gnn_trgt_deploy_pure_v1 \
-  --model dyrift_gnn \
-  --preset dyrift_trgt_deploy_v1 \
-  --feature-profile utpm_shift_enhanced \
-  --dataset-hparams experiment/configs/dyrift_suite.json \
-  --seeds 42 \
-  --skip-existing
-```
-
-生成硬泄露审计：
-
-```bash
-conda run -n Graph --no-capture-output python3 experiment/audit.py \
-  --suite-summary experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
-```
+因此它只作为补充实验保留，不替换正式主结果。

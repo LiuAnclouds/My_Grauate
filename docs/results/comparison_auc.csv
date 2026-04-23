@@ -1,0 +1,16 @@
+setting,dataset,dataset_key,val_auc,source
+Full DyRIFT-GNN,XinYe DGraph,xinye_dgraph,0.7928507856954765,accepted_mainline
+Full DyRIFT-GNN,Elliptic Transactions,elliptic_transactions,0.821329087693758,accepted_mainline
+Full DyRIFT-GNN,Elliptic++ Transactions,ellipticpp_transactions,0.821953270227715,accepted_mainline
+Plain TRGT Backbone,XinYe DGraph,xinye_dgraph,0.7907415142223859,study
+Plain TRGT Backbone,Elliptic Transactions,elliptic_transactions,0.8006292721310627,study
+Plain TRGT Backbone,Elliptic++ Transactions,ellipticpp_transactions,0.7840060824724777,study
+TGAT-style Reference,XinYe DGraph,xinye_dgraph,0.7894445965317504,study
+TGAT-style Reference,Elliptic Transactions,elliptic_transactions,0.8006292721310627,study
+TGAT-style Reference,Elliptic++ Transactions,ellipticpp_transactions,0.7836444585193797,study
+Temporal GraphSAGE Reference,XinYe DGraph,xinye_dgraph,0.7883091465219312,study
+Temporal GraphSAGE Reference,Elliptic Transactions,elliptic_transactions,0.7735155543742663,study
+Temporal GraphSAGE Reference,Elliptic++ Transactions,ellipticpp_transactions,0.7805954465071225,study
+XGBoost Same Input,XinYe DGraph,xinye_dgraph,0.7457709138618753,study
+XGBoost Same Input,Elliptic Transactions,elliptic_transactions,0.9040277698112568,study
+XGBoost Same Input,Elliptic++ Transactions,ellipticpp_transactions,0.9413524917617198,study

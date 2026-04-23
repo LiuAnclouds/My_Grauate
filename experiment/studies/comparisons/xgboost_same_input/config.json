@@ -1,0 +1,27 @@
+{
+  "study_name": "xgboost_same_input",
+  "display_name": "XGBoost Same-Input Baseline",
+  "study_type": "comparison",
+  "runner": "xgboost",
+  "description": "Tabular baseline on the same unified cached inputs, without graphprop or teacher features.",
+  "dataset_profile": "../../common/tri_dataset_profile.json",
+  "seeds": [42],
+  "xgboost": {
+    "model_display_name": "XGBoost Same-Input Baseline",
+    "include_target_context": true,
+    "num_boost_round": 400,
+    "early_stopping_rounds": 40,
+    "params": {
+      "objective": "binary:logistic",
+      "eval_metric": "auc",
+      "tree_method": "hist",
+      "max_depth": 6,
+      "eta": 0.05,
+      "subsample": 0.9,
+      "colsample_bytree": 0.9,
+      "min_child_weight": 5.0,
+      "lambda": 1.0,
+      "alpha": 0.0
+    }
+  }
+}

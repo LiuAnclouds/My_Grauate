@@ -11,7 +11,7 @@
         "neighbor_similarity",
         "activation_early"
       ],
-      "epochs": 8,
+      "epochs": 30,
       "batch_size": 512,
       "hidden_dim": 128,
       "rel_dim": 32,

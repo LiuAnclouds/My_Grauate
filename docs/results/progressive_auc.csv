@@ -1,0 +1,19 @@
+setting,dataset,dataset_key,val_auc
+Plain TRGT Backbone,XinYe DGraph,xinye_dgraph,0.7907415142223859
+Plain TRGT Backbone,Elliptic Transactions,elliptic_transactions,0.8006292721310627
+Plain TRGT Backbone,Elliptic++ Transactions,ellipticpp_transactions,0.7840060824724777
+TRGT + Bridge,XinYe DGraph,xinye_dgraph,0.7886394933829568
+TRGT + Bridge,Elliptic Transactions,elliptic_transactions,0.784224611999008
+TRGT + Bridge,Elliptic++ Transactions,ellipticpp_transactions,0.7830530958080301
+TRGT + Bridge + Drift Expert,XinYe DGraph,xinye_dgraph,0.7883627731892557
+TRGT + Bridge + Drift Expert,Elliptic Transactions,elliptic_transactions,0.8119526158509442
+TRGT + Bridge + Drift Expert,Elliptic++ Transactions,ellipticpp_transactions,0.783624362689537
+TRGT + Bridge + Drift Expert + Prototype Memory,XinYe DGraph,xinye_dgraph,0.7894630610636718
+TRGT + Bridge + Drift Expert + Prototype Memory,Elliptic Transactions,elliptic_transactions,0.8091945389430928
+TRGT + Bridge + Drift Expert + Prototype Memory,Elliptic++ Transactions,ellipticpp_transactions,0.7830480466045521
+TRGT + Bridge + Drift Expert + Prototype Memory + Pseudo-Contrastive,XinYe DGraph,xinye_dgraph,0.7906796042671866
+TRGT + Bridge + Drift Expert + Prototype Memory + Pseudo-Contrastive,Elliptic Transactions,elliptic_transactions,0.8165805137907886
+TRGT + Bridge + Drift Expert + Prototype Memory + Pseudo-Contrastive,Elliptic++ Transactions,ellipticpp_transactions,0.7833988652622071
+Full DyRIFT-GNN,XinYe DGraph,xinye_dgraph,0.7928507856954765
+Full DyRIFT-GNN,Elliptic Transactions,elliptic_transactions,0.821329087693758
+Full DyRIFT-GNN,Elliptic++ Transactions,ellipticpp_transactions,0.821953270227715
