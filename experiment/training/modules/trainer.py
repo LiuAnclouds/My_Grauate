@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import torch.nn as nn
 
-from experiment.training.dyrift_model import build_dyrift_gnn_model
-from experiment.training.gnn_models import GraphModelConfig, TRGTExperiment
+from experiment.training.core.engine import GraphModelConfig, TRGTExperiment
+from experiment.training.modules.model import build_model
 
 
-class DyRIFTGNNExperiment(TRGTExperiment):
+class DyRIFTTrainer(TRGTExperiment):
     """Training wrapper for the final DyRIFT-GNN method.
 
     The legacy experiment base still owns batching, sampling, losses, metrics, and checkpointing.
-    This wrapper isolates the final thesis model construction from the shared `gnn_models.py`
+    This wrapper isolates the final thesis model construction from the shared engine
     runtime while exposing the public `dyrift_gnn` model id.
     """
 
@@ -30,7 +30,7 @@ class DyRIFTGNNExperiment(TRGTExperiment):
         model_config: GraphModelConfig,
         aggregator_type: str,
     ) -> nn.Module:
-        return build_dyrift_gnn_model(
+        return build_model(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             num_layers=num_layers,

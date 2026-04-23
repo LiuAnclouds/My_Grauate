@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from experiment.training.gnn_models import GraphModelConfig, RelationGraphSAGENetwork
+from experiment.training.core.engine import GraphModelConfig, RelationGraphSAGENetwork
 
 
 DYRIFT_MODEL_NAME = "DyRIFT-GNN"
 DYRIFT_BACKBONE_NAME = "TRGT"
 
 
-class DyRIFTGNNModel(RelationGraphSAGENetwork):
+class DyRIFTModel(RelationGraphSAGENetwork):
     """Named facade for the final thesis single-model pure-GNN architecture."""
 
     model_display_name = DYRIFT_MODEL_NAME
     backbone_display_name = DYRIFT_BACKBONE_NAME
 
 
-def build_dyrift_gnn_model(
+def build_model(
     *,
     input_dim: int,
     hidden_dim: int,
@@ -25,8 +25,8 @@ def build_dyrift_gnn_model(
     temporal: bool,
     model_config: GraphModelConfig,
     aggregator_type: str,
-) -> DyRIFTGNNModel:
-    return DyRIFTGNNModel(
+) -> DyRIFTModel:
+    return DyRIFTModel(
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         num_layers=num_layers,
@@ -37,8 +37,3 @@ def build_dyrift_gnn_model(
         model_config=model_config,
         aggregator_type=aggregator_type,
     )
-
-
-# Backward-compatible aliases for older local notebooks/scripts.
-DyRIFTGraphModel = DyRIFTGNNModel
-build_dyrift_model = build_dyrift_gnn_model

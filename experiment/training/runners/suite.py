@@ -10,17 +10,17 @@ from pathlib import Path
 from typing import Any
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from experiment.datasets.registry import DATASET_ENV_VAR, get_dataset_spec
-from experiment.training.thesis_hparam_profiles import (
-    MainlineDatasetHparams,
-    load_thesis_hparam_profile,
-    resolve_mainline_dataset_hparams,
+from experiment.training.core.hparams import (
+    DatasetHparams,
+    load_hparam_profile,
+    resolve_dataset_hparams,
 )
-from experiment.training.thesis_contract import (
+from experiment.training.core.spec import (
     DYRIFT_GNN_MODEL,
     DYRIFT_MODEL_DISPLAY_NAME,
     DYRIFT_MODEL_SHORT_NAME,
@@ -80,7 +80,7 @@ def parse_args() -> argparse.Namespace:
         "--preset",
         default=None,
         help=(
-            "Preset passed through to run_thesis_mainline.py. "
+            "Preset passed through to runners/mainline.py. "
             "Defaults: `m5_temporal_graphsage` -> `unified_baseline`, "
             f"`{OFFICIAL_BACKBONE_MODEL}` -> `{OFFICIAL_BACKBONE_PRESET}`, "
             f"`{TRANSFORMER_BACKBONE_MODEL}` -> `{TRANSFORMER_BACKBONE_PRESET}`. "
@@ -233,7 +233,7 @@ def _dataset_training_root(dataset_name: str) -> Path:
 def _run_name_for_dataset(
     args: argparse.Namespace,
     dataset_name: str,
-    settings: MainlineDatasetHparams,
+    settings: DatasetHparams,
 ) -> str:
     dataset_short = DATASET_SHORT_NAMES.get(dataset_name, dataset_name)
     template = settings.run_name_template or str(args.run_name_template)
@@ -247,7 +247,7 @@ def _run_name_for_dataset(
     )
 
 
-def _feature_dir_for_dataset(dataset_name: str, settings: MainlineDatasetHparams) -> Path | None:
+def _feature_dir_for_dataset(dataset_name: str, settings: DatasetHparams) -> Path | None:
     if settings.feature_subdir:
         return _dataset_training_root(dataset_name) / str(settings.feature_subdir)
     return settings.feature_dir
@@ -263,7 +263,7 @@ def _command_preview(command: list[str], dataset_name: str, *, extra_env: dict[s
 def _build_feature_command(*, feature_dir: Path | None) -> list[str]:
     command = [
         sys.executable,
-        str(REPO_ROOT / "experiment" / "training" / "run_thesis_mainline.py"),
+        str(REPO_ROOT / "experiment" / "training" / "runners" / "mainline.py"),
         "build_features",
         "--phase",
         "both",
@@ -277,13 +277,13 @@ def _build_train_command(
     *,
     args: argparse.Namespace,
     dataset_name: str,
-    settings: MainlineDatasetHparams,
+    settings: DatasetHparams,
     run_name: str,
 ) -> list[str]:
     feature_dir = _feature_dir_for_dataset(dataset_name, settings)
     command: list[str] = [
         sys.executable,
-        str(REPO_ROOT / "experiment" / "training" / "run_thesis_mainline.py"),
+        str(REPO_ROOT / "experiment" / "training" / "runners" / "mainline.py"),
         "train",
         "--model",
         args.model,
@@ -386,7 +386,7 @@ def _format_metric(value: Any) -> str:
 
 def main() -> None:
     args = parse_args()
-    profile = load_thesis_hparam_profile(args.dataset_hparams)
+    profile = load_hparam_profile(args.dataset_hparams)
     if args.preset is None:
         if str(args.model) == "m5_temporal_graphsage":
             args.preset = "unified_baseline"
@@ -400,7 +400,7 @@ def main() -> None:
     if str(args.model) == OFFICIAL_BACKBONE_MODEL and str(args.preset) != OFFICIAL_BACKBONE_PRESET:
         raise ValueError(
             "The legacy m7 thesis suite is locked to the unified m7 v4 backbone. "
-            "Use `run_thesis_mainline.py` for ad hoc ablations."
+            "Use `runners/mainline.py` for ad hoc ablations."
         )
     if str(args.model) == "m5_temporal_graphsage" and str(args.preset) != "unified_baseline":
         raise ValueError(
@@ -423,7 +423,7 @@ def main() -> None:
     resolved_hparams_by_dataset: dict[str, dict[str, Any]] = {}
     for dataset_name in args.datasets:
         _ = get_dataset_spec(dataset_name)
-        dataset_hparams = resolve_mainline_dataset_hparams(
+        dataset_hparams = resolve_dataset_hparams(
             args=args,
             dataset_name=dataset_name,
             profile=profile,

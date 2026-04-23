@@ -6,22 +6,22 @@ from typing import Any
 import numpy as np
 
 from experiment.datasets.registry import get_active_dataset_spec
-from experiment.training.common import load_phase_arrays
-from experiment.training.dyrift_training import DyRIFTGNNExperiment
-from experiment.training.features import (
-    FeatureStore,
-    HybridFeatureNormalizerState,
-    load_graph_cache,
-    resolve_feature_groups,
-)
-from experiment.training.gnn_models import (
+from experiment.training.core.engine import (
     GraphPhaseContext,
     RelationGraphSAGEExperiment,
     TemporalRelationGATExperiment,
     TemporalRelationGraphSAGEExperiment,
 )
-from experiment.training.sampling_profiles import load_or_build_raw_consistency_profile
-from experiment.training.thesis_contract import DYRIFT_GNN_MODEL
+from experiment.training.core.spec import DYRIFT_GNN_MODEL
+from experiment.training.data.features import (
+    FeatureStore,
+    HybridFeatureNormalizerState,
+    load_graph_cache,
+    resolve_feature_groups,
+)
+from experiment.training.modules.trainer import DyRIFTTrainer
+from experiment.training.utils.common import load_phase_arrays
+from experiment.training.utils.sampling import load_or_build_raw_consistency_profile
 
 
 GRAPH_EXPERIMENTS = {
@@ -29,18 +29,18 @@ GRAPH_EXPERIMENTS = {
     "m5_temporal_graphsage": TemporalRelationGraphSAGEExperiment,
     "m6_temporal_gat": TemporalRelationGATExperiment,
     "m7_utpm": TemporalRelationGraphSAGEExperiment,
-    DYRIFT_GNN_MODEL: DyRIFTGNNExperiment,
+    DYRIFT_GNN_MODEL: DyRIFTTrainer,
 }
 
 
-def resolve_graph_experiment_class(model_name: str):
+def get_experiment_cls(model_name: str):
     try:
         return GRAPH_EXPERIMENTS[model_name]
     except KeyError as exc:
         raise KeyError(f"Unsupported graph model: {model_name}") from exc
 
 
-def build_graph_label_artifacts(
+def build_label_artifacts(
     *,
     feature_dir: Path,
     split_train_ids: np.ndarray,
@@ -84,7 +84,7 @@ def build_graph_label_artifacts(
     }
 
 
-def make_graph_contexts(
+def build_contexts(
     *,
     feature_dir: Path,
     model_name: str,

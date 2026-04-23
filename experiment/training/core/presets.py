@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from experiment.training.gnn_models import GraphModelConfig
-from experiment.training.thesis_contract import (
+from experiment.training.core.engine import GraphModelConfig
+from experiment.training.core.spec import (
     DYRIFT_GNN_MODEL,
     OFFICIAL_BACKBONE_PRESET,
     TRANSFORMER_BACKBONE_MODEL,
@@ -175,25 +175,25 @@ _DEFAULT_PRESET_BY_MODEL = {
 }
 
 
-def supported_thesis_presets(model_name: str) -> tuple[str, ...]:
+def list_presets(model_name: str) -> tuple[str, ...]:
     preset_names = _PRESET_UPDATES.get(str(model_name))
     if preset_names is None:
         raise ValueError(f"Unsupported thesis model for presets: {model_name}")
     return tuple(preset_names.keys())
 
 
-def default_thesis_preset(model_name: str) -> str:
+def default_preset(model_name: str) -> str:
     try:
         return _DEFAULT_PRESET_BY_MODEL[str(model_name)]
     except KeyError as exc:
         raise ValueError(f"Unsupported thesis model for presets: {model_name}") from exc
 
 
-def build_thesis_graph_config(model_name: str, preset_name: str | None = None) -> GraphModelConfig:
-    resolved_preset = preset_name or default_thesis_preset(model_name)
+def build_graph_cfg(model_name: str, preset_name: str | None = None) -> GraphModelConfig:
+    resolved_preset = preset_name or default_preset(model_name)
     preset_updates = _PRESET_UPDATES.get(str(model_name), {}).get(str(resolved_preset))
     if preset_updates is None:
-        supported = ", ".join(supported_thesis_presets(model_name))
+        supported = ", ".join(list_presets(model_name))
         raise ValueError(
             f"Unsupported preset `{resolved_preset}` for `{model_name}`. Supported presets: {supported}"
         )
@@ -219,7 +219,7 @@ def _coerce_like(template_value: Any, raw_value: str) -> Any:
     return str(raw_value)
 
 
-def apply_graph_config_overrides(
+def apply_cfg_overrides(
     config: GraphModelConfig,
     overrides: list[str] | tuple[str, ...] | None,
 ) -> tuple[GraphModelConfig, dict[str, Any]]:

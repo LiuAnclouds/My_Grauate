@@ -13,7 +13,7 @@ from tqdm.auto import tqdm
 from experiment.datasets.registry import get_active_dataset_spec
 from experiment.eda.analysis import compute_degree_arrays, compute_temporal_core
 from experiment.eda.data_loader import PhaseData, load_phase
-from experiment.training.common import (
+from experiment.training.utils.common import (
     EDA_OUTPUT_ROOT,
     FEATURE_OUTPUT_ROOT,
     REPO_ROOT,
@@ -98,6 +98,20 @@ def _aux_label_prefix(label: int) -> str:
     return f"aux_label_{int(label)}"
 
 
+def _feature_profile_dim(groups: list[str]) -> int:
+    core_groups, neighbor_groups = _group_definition()
+    total_dim = 0
+    for group_name in groups:
+        if group_name in core_groups:
+            total_dim += len(core_groups[group_name])
+            continue
+        if group_name in neighbor_groups:
+            total_dim += len(neighbor_groups[group_name])
+            continue
+        raise KeyError(f"Unknown feature group in profile schema: {group_name}")
+    return int(total_dim)
+
+
 def _feature_schema_payload() -> dict[str, Any]:
     return {
         "raw_feature_count": int(RAW_FEATURE_COUNT),
@@ -107,27 +121,13 @@ def _feature_schema_payload() -> dict[str, Any]:
         "num_time_windows": int(NUM_TIME_WINDOWS),
         "utpm_attr_proj_dim": int(UTPM_ATTR_PROJ_DIM),
         "utpm_unified_groups": utpm_unified_feature_groups(),
-        "utpm_unified_dim": int(
-            UTPM_ATTR_PROJ_DIM
-            + UTPM_ATTR_STATS_DIM
-            + UTPM_GRAPH_CORE_DIM
-            + UTPM_RELATION_CORE_DIM
-            + UTPM_TEMPORAL_CORE_DIM
-            + UTPM_TEMPORAL_RISK_DIM
-            + UTPM_AUX_LABEL_DIM
-        ),
+        "utpm_unified_dim": _feature_profile_dim(utpm_unified_feature_groups()),
         "utpm_shift_compact_groups": utpm_shift_compact_feature_groups(),
-        "utpm_shift_compact_dim": int(
-            UTPM_ATTR_PROJ_DIM
-            + UTPM_ATTR_STATS_DIM
-            + UTPM_GRAPH_CORE_DIM
-            + UTPM_RELATION_CORE_DIM
-            + UTPM_TEMPORAL_CORE_DIM
-            + UTPM_TEMPORAL_RISK_DIM
-            + UTPM_AUX_LABEL_DIM
-            + UTPM_TEMPORAL_SHIFT_DIM
-        ),
+        "utpm_shift_compact_dim": _feature_profile_dim(utpm_shift_compact_feature_groups()),
         "utpm_shift_enhanced_groups": utpm_shift_enhanced_feature_groups(),
+        "utpm_shift_enhanced_dim": _feature_profile_dim(utpm_shift_enhanced_feature_groups()),
+        "utpm_shift_fused_groups": utpm_shift_fused_feature_groups(),
+        "utpm_shift_fused_dim": _feature_profile_dim(utpm_shift_fused_feature_groups()),
     }
 
 
@@ -189,6 +189,15 @@ def utpm_shift_enhanced_feature_groups() -> list[str]:
         "neighbor_similarity",
         "temporal_bucket_norm",
         "activation_early",
+    ]
+
+
+def utpm_shift_fused_feature_groups() -> list[str]:
+    return [
+        *utpm_shift_enhanced_feature_groups(),
+        "temporal_counterparty_concentration_recent",
+        "temporal_counterparty_share_focus",
+        "temporal_dual_scale_delta",
     ]
 
 
@@ -2861,6 +2870,8 @@ def resolve_feature_groups(
         groups = list(utpm_shift_compact_feature_groups())
     elif profile == "utpm_shift_enhanced":
         groups = list(utpm_shift_enhanced_feature_groups())
+    elif profile == "utpm_shift_fused":
+        groups = list(utpm_shift_fused_feature_groups())
     else:
         groups = list(default_feature_groups(model_name))
     for group_name in extra_groups or []:

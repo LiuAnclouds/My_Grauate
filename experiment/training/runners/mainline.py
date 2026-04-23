@@ -10,12 +10,37 @@ import numpy as np
 from tqdm.auto import tqdm
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from experiment.datasets.registry import get_active_dataset_spec
-from experiment.training.common import (
+from experiment.training.core.engine import GraphModelConfig
+from experiment.training.core.presets import (
+    apply_cfg_overrides,
+    build_graph_cfg,
+    default_preset,
+    list_presets,
+)
+from experiment.training.core.runtime import build_runtime
+from experiment.training.core.spec import (
+    DYRIFT_GNN_MODEL,
+    DYRIFT_MODEL_SHORT_NAME,
+    OFFICIAL_BACKBONE_FEATURE_PROFILE,
+    OFFICIAL_BACKBONE_MODEL,
+    OFFICIAL_MAINLINE_BATCH_SIZE,
+    OFFICIAL_MAINLINE_FANOUTS,
+    OFFICIAL_MAINLINE_HIDDEN_DIM,
+    OFFICIAL_MAINLINE_REL_DIM,
+    OFFICIAL_TARGET_CONTEXT_GROUPS,
+    TRGT_BACKBONE_SHORT_NAME,
+    TRANSFORMER_BACKBONE_DEPLOY_PRESET,
+    TRANSFORMER_BACKBONE_MODEL,
+    TRANSFORMER_BACKBONE_PRESET,
+)
+from experiment.training.data.features import build_feature_artifacts
+from experiment.training.data.graph import get_experiment_cls
+from experiment.training.utils.common import (
     FEATURE_OUTPUT_ROOT,
     MODEL_OUTPUT_ROOT,
     compute_binary_classification_metrics,
@@ -25,31 +50,6 @@ from experiment.training.common import (
     set_global_seed,
     slice_node_ids,
     write_json,
-)
-from experiment.training.features import build_feature_artifacts
-from experiment.training.graph_runtime import resolve_graph_experiment_class
-from experiment.training.gnn_models import GraphModelConfig
-from experiment.training.thesis_contract import (
-    DYRIFT_GNN_MODEL,
-    OFFICIAL_BACKBONE_FEATURE_PROFILE,
-    OFFICIAL_BACKBONE_MODEL,
-    OFFICIAL_MAINLINE_BATCH_SIZE,
-    OFFICIAL_MAINLINE_FANOUTS,
-    OFFICIAL_MAINLINE_HIDDEN_DIM,
-    OFFICIAL_MAINLINE_REL_DIM,
-    OFFICIAL_TARGET_CONTEXT_GROUPS,
-    DYRIFT_MODEL_SHORT_NAME,
-    TRGT_BACKBONE_SHORT_NAME,
-    TRANSFORMER_BACKBONE_MODEL,
-    TRANSFORMER_BACKBONE_DEPLOY_PRESET,
-    TRANSFORMER_BACKBONE_PRESET,
-)
-from experiment.training.thesis_runtime import prepare_thesis_runtime
-from experiment.training.thesis_presets import (
-    apply_graph_config_overrides,
-    build_thesis_graph_config,
-    default_thesis_preset,
-    supported_thesis_presets,
 )
 
 
@@ -306,14 +306,14 @@ def _prepare_split_ids(args: argparse.Namespace):
 
 
 def _build_graph_config(args: argparse.Namespace) -> GraphModelConfig:
-    preset_name = args.preset or default_thesis_preset(args.model)
-    if preset_name not in supported_thesis_presets(args.model):
-        supported = ", ".join(supported_thesis_presets(args.model))
+    preset_name = args.preset or default_preset(args.model)
+    if preset_name not in list_presets(args.model):
+        supported = ", ".join(list_presets(args.model))
         raise ValueError(
             f"Unsupported preset `{preset_name}` for `{args.model}`. Supported presets: {supported}"
         )
-    config = build_thesis_graph_config(args.model, preset_name)
-    config, applied_overrides = apply_graph_config_overrides(config, args.graph_config_override)
+    config = build_graph_cfg(args.model, preset_name)
+    config, applied_overrides = apply_cfg_overrides(config, args.graph_config_override)
     runtime_updates: dict[str, Any] = {}
     if args.learning_rate is not None:
         runtime_updates["learning_rate"] = float(args.learning_rate)
@@ -398,7 +398,7 @@ def run_train(args: argparse.Namespace) -> None:
         else:
             target_context_groups = normalized_target_context_groups
     metadata = _mainline_metadata(args.model, graph_config)
-    runtime = prepare_thesis_runtime(
+    runtime = build_runtime(
         feature_dir=args.feature_dir,
         model_name=args.model,
         split=split,
@@ -429,13 +429,13 @@ def run_train(args: argparse.Namespace) -> None:
     test_pool_predictions: list[np.ndarray] = []
     external_predictions: list[np.ndarray] = []
     metrics: list[dict[str, Any]] = []
-    experiment_cls = resolve_graph_experiment_class(args.model)
+    experiment_cls = get_experiment_cls(args.model)
 
     print(
         "[thesis_mainline] "
         f"dataset={ACTIVE_DATASET_SPEC.name} "
         f"model={args.model} "
-        f"preset={getattr(args, 'resolved_preset', default_thesis_preset(args.model))} "
+        f"preset={getattr(args, 'resolved_preset', default_preset(args.model))} "
         f"feature_profile={args.feature_profile} "
         f"context_bridge={','.join(runtime.target_context_feature_groups) if runtime.target_context_feature_groups else 'none'} "
         f"train={train_ids.size} val={val_ids.size} test_pool={test_pool_ids.size} external={external_ids.size}"
@@ -610,7 +610,7 @@ def run_train(args: argparse.Namespace) -> None:
         "run_name": args.run_name,
         "dataset": ACTIVE_DATASET_SPEC.name,
         "dataset_display_name": ACTIVE_DATASET_SPEC.display_name,
-        "preset": getattr(args, "resolved_preset", default_thesis_preset(args.model)),
+        "preset": getattr(args, "resolved_preset", default_preset(args.model)),
         "graph_config_overrides": getattr(args, "applied_graph_config_overrides", {}),
         "feature_profile": args.feature_profile,
         "official_eval_contract": ["train", "val", "test_pool"],

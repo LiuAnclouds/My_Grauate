@@ -4,7 +4,7 @@
 
 - [Back to README](../README.md)
 - [Method Overview](thesis_method.md)
-- [Mainline Guide](../experiment/training/README_thesis_mainline.md)
+- [Mainline Guide](../experiment/training/README.md)
 - [Final Pure-GNN Summary](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json)
 - [Final Pure-GNN Audit](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
 - [Final Metrics CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv)

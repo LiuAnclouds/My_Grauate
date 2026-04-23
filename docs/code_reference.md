@@ -1,86 +1,90 @@
 # Code Reference
 
-This document is a compact map of the final `DyRIFT-GNN / TRGT` code path.
+This is the compact code map for the final `DyRIFT-GNN / TRGT` route.
 
-## 1. Main Files
+## 1. Package Layout
 
-| File | Role |
+| Path | Role |
 | --- | --- |
-| [experiment/training/trgt_backbone.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/trgt_backbone.py) | TRGT backbone blocks and internal risk encoder |
-| [experiment/training/dyrift_model.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/dyrift_model.py) | model facade and factory |
-| [experiment/training/dyrift_training.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/dyrift_training.py) | final training wrapper |
-| [experiment/training/gnn_models.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/gnn_models.py) | shared network runtime, loss, sampling, evaluation |
-| [experiment/training/run_thesis_mainline.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/run_thesis_mainline.py) | build/train single-dataset runner |
-| [experiment/training/run_thesis_suite.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/run_thesis_suite.py) | three-dataset suite runner |
-| [experiment/training/graph_runtime.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/graph_runtime.py) | model-name to experiment-class resolution |
+| [../experiment/training/runners/mainline.py](../experiment/training/runners/mainline.py) | single-dataset build/train entry |
+| [../experiment/training/runners/suite.py](../experiment/training/runners/suite.py) | tri-dataset suite runner |
+| [../experiment/training/runners/audit.py](../experiment/training/runners/audit.py) | hard-leakage audit |
+| [../experiment/training/core/engine.py](../experiment/training/core/engine.py) | graph engine, losses, samplers, evaluation |
+| [../experiment/training/core/runtime.py](../experiment/training/core/runtime.py) | runtime bundle assembly |
+| [../experiment/training/core/presets.py](../experiment/training/core/presets.py) | official preset registry |
+| [../experiment/training/core/hparams.py](../experiment/training/core/hparams.py) | suite manifest and dataset hparam loading |
+| [../experiment/training/data/features.py](../experiment/training/data/features.py) | feature cache and normalizer utilities |
+| [../experiment/training/data/graph.py](../experiment/training/data/graph.py) | experiment resolution and graph contexts |
+| [../experiment/training/modules/backbone.py](../experiment/training/modules/backbone.py) | TRGT blocks and internal risk encoder |
+| [../experiment/training/modules/model.py](../experiment/training/modules/model.py) | DyRIFT model facade |
+| [../experiment/training/modules/trainer.py](../experiment/training/modules/trainer.py) | DyRIFT trainer wrapper |
+| [../experiment/training/modules/bridge.py](../experiment/training/modules/bridge.py) | target-context bridge |
+| [../experiment/training/modules/memory.py](../experiment/training/modules/memory.py) | prototype memory and normal-alignment memory |
+| [../experiment/training/utils/common.py](../experiment/training/utils/common.py) | IO, metrics, split loading, paths |
+| [../experiment/training/utils/sampling.py](../experiment/training/utils/sampling.py) | sampling-profile helpers |
 
-## 2. Final Public Classes And Functions
+## 2. Public Symbols
 
 | Symbol | File | Meaning |
 | --- | --- | --- |
-| `DyRIFTGNNModel` | `dyrift_model.py` | final paper-facing model facade |
-| `build_dyrift_gnn_model` | `dyrift_model.py` | final model factory |
-| `DyRIFTGNNExperiment` | `dyrift_training.py` | final trainer wrapper for `dyrift_gnn` |
-| `TRGTExperiment` | `gnn_models.py` | TRGT attention experiment base |
-| `TRGTTemporalRelationAttentionBlock` | `trgt_backbone.py` | backbone attention block |
-| `TRGTInternalRiskEncoder` | `trgt_backbone.py` | internal risk fusion module |
-
-Backward-compatible aliases remain for older imports:
-
-- `DyRIFTGraphModel`
-- `build_dyrift_model`
-- `TemporalRelationGraphTransformerExperiment`
+| `DyRIFTModel` | `modules/model.py` | final paper-facing model facade |
+| `build_model` | `modules/model.py` | DyRIFT-GNN model factory |
+| `DyRIFTTrainer` | `modules/trainer.py` | trainer wrapper bound to `dyrift_gnn` |
+| `get_experiment_cls` | `data/graph.py` | runtime model-id to experiment-class resolver |
+| `RuntimeBundle` | `core/runtime.py` | prepared runtime assets for train/inference |
+| `GraphModelConfig` | `core/engine.py` | central graph-model configuration object |
+| `TRGTTemporalRelationAttentionBlock` | `modules/backbone.py` | relation-temporal attention block |
+| `TRGTInternalRiskEncoder` | `modules/backbone.py` | internal multi-scale risk encoder |
+| `TargetContextFusionHead` | `modules/bridge.py` | temporal-normality bridge |
+| `PrototypeMemoryBank` | `modules/memory.py` | prototype regularization bank |
 
 ## 3. Runtime Resolution
 
-The `dyrift_gnn` runtime id is resolved in:
+Runtime id mapping is defined in [../experiment/training/data/graph.py](../experiment/training/data/graph.py):
 
-- [graph_runtime.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/graph_runtime.py)
+`dyrift_gnn -> DyRIFTTrainer`
 
-Current mapping:
-
-`dyrift_gnn -> DyRIFTGNNExperiment`
-
-This keeps the public runner argument aligned with the final DyRIFT-GNN method name.
+This keeps the CLI, checkpoints, and thesis method name aligned.
 
 ## 4. Training Call Chain
 
-The final mainline call chain is:
+The final call chain is:
 
-1. `run_thesis_mainline.py`
-2. `resolve_graph_experiment_class("dyrift_gnn")`
-3. `DyRIFTGNNExperiment`
-4. `build_dyrift_gnn_model`
-5. `DyRIFTGNNModel`
-6. `RelationGraphSAGENetwork`
-7. `TRGTTemporalRelationAttentionBlock` and related modules
+1. `runners/mainline.py`
+2. `build_graph_cfg(...)`
+3. `build_runtime(...)`
+4. `get_experiment_cls("dyrift_gnn")`
+5. `DyRIFTTrainer`
+6. `build_model(...)`
+7. `DyRIFTModel`
+8. `RelationGraphSAGENetwork`
+9. `TRGTTemporalRelationAttentionBlock` and related DyRIFT modules
 
-## 5. Important Shared Runtime Components
+## 5. Shared Engine Responsibilities
 
-These still live in `gnn_models.py` because they are used across the final graph training pipeline:
+[../experiment/training/core/engine.py](../experiment/training/core/engine.py) still owns the shared training runtime:
 
-- `GraphModelConfig`
-- `GraphPhaseContext`
-- `BaseGraphSAGEExperiment`
-- `RelationGraphSAGENetwork`
-- subgraph tensorization and sampling pipeline
-- training loss logic
-- evaluation and epoch logging
+- graph tensorization and neighborhood sampling
+- loss composition
+- pseudo-contrastive temporal mining
+- drift expert adapter
+- cold-start residual logic
+- evaluation, logging, checkpointing
 
-## 6. Configuration Files
+## 6. Config Files
 
 | File | Role |
 | --- | --- |
-| [experiment/training/configs/thesis_dataset_hparams.dyrift_gnn_trgt_deploy_pure_v1.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/configs/thesis_dataset_hparams.dyrift_gnn_trgt_deploy_pure_v1.json) | suite manifest |
-| [experiment/training/configs/dyrift_gnn/xinye_dgraph.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/configs/dyrift_gnn/xinye_dgraph.json) | XinYe profile |
-| [experiment/training/configs/dyrift_gnn/elliptic_transactions.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/configs/dyrift_gnn/elliptic_transactions.json) | ET profile |
-| [experiment/training/configs/dyrift_gnn/ellipticpp_transactions.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/configs/dyrift_gnn/ellipticpp_transactions.json) | EPP profile |
+| [../experiment/training/configs/dyrift_suite.json](../experiment/training/configs/dyrift_suite.json) | suite manifest |
+| [../experiment/training/configs/datasets/xinye_dgraph.json](../experiment/training/configs/datasets/xinye_dgraph.json) | XinYe profile |
+| [../experiment/training/configs/datasets/elliptic_transactions.json](../experiment/training/configs/datasets/elliptic_transactions.json) | ET profile |
+| [../experiment/training/configs/datasets/ellipticpp_transactions.json](../experiment/training/configs/datasets/ellipticpp_transactions.json) | EPP profile |
 
 ## 7. Result Files
 
 | File | Role |
 | --- | --- |
-| [summary.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json) | suite-level result metadata |
-| [leakage_audit.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json) | hard-leakage audit |
-| [thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv](/home/moonxkj/Desktop/MyWork/Graduation_Project/docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv) | final metrics |
-| [thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv](/home/moonxkj/Desktop/MyWork/Graduation_Project/docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv) | epoch-level logs |
+| [../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json) | suite-level summary |
+| [../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json) | hard-leakage audit |
+| [results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv) | final dataset metrics |
+| [results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv) | epoch-level logs |

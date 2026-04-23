@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_ATTR_PROJ_DIM = 32
 ATTR_PROJ_ENV_VAR = "GRADPROJ_UTPM_ATTR_PROJ_DIM"
 
@@ -32,7 +32,7 @@ _MAINLINE_ALLOWED_KEYS = {
 
 
 @dataclass(frozen=True)
-class LoadedThesisHparamProfile:
+class HparamProfile:
     path: Path
     payload: dict[str, Any]
 
@@ -46,7 +46,7 @@ class LoadedThesisHparamProfile:
 
 
 @dataclass(frozen=True)
-class MainlineDatasetHparams:
+class DatasetHparams:
     dataset_name: str
     run_name_template: str | None
     feature_profile: str
@@ -91,7 +91,8 @@ class MainlineDatasetHparams:
             "graph_config_overrides": list(self.graph_config_overrides),
         }
 
-def load_thesis_hparam_profile(path: Path | str | None) -> LoadedThesisHparamProfile | None:
+
+def load_hparam_profile(path: Path | str | None) -> HparamProfile | None:
     if path is None:
         return None
     profile_path = Path(path)
@@ -102,7 +103,7 @@ def load_thesis_hparam_profile(path: Path | str | None) -> LoadedThesisHparamPro
     if not isinstance(payload, dict):
         raise ValueError(f"Hyperparameter profile `{profile_path}` must contain a JSON object.")
     payload = _expand_dataset_file_refs(profile_path=profile_path, payload=payload)
-    return LoadedThesisHparamProfile(path=profile_path, payload=payload)
+    return HparamProfile(path=profile_path, payload=payload)
 
 
 def _expand_dataset_file_refs(*, profile_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
@@ -182,12 +183,12 @@ def _extract_dataset_hparam_payload(
     return _coerce_section_mapping(dataset_copy, location=str(dataset_path))
 
 
-def resolve_mainline_dataset_hparams(
+def resolve_dataset_hparams(
     *,
     args: Any,
     dataset_name: str,
-    profile: LoadedThesisHparamProfile | None,
-) -> MainlineDatasetHparams:
+    profile: HparamProfile | None,
+) -> DatasetHparams:
     feature_env: dict[str, str] = {}
     env_attr_proj_dim = os.environ.get(ATTR_PROJ_ENV_VAR)
     if env_attr_proj_dim is not None and str(env_attr_proj_dim).strip():
@@ -261,7 +262,7 @@ def resolve_mainline_dataset_hparams(
     if resolved["feature_subdir"] is None and resolved["feature_dir"] is None and attr_proj_dim not in {None, DEFAULT_ATTR_PROJ_DIM}:
         resolved["feature_subdir"] = f"features_ap{attr_proj_dim}"
 
-    return MainlineDatasetHparams(
+    return DatasetHparams(
         dataset_name=str(dataset_name),
         run_name_template=_coerce_optional_str(resolved["run_name_template"]),
         feature_profile=str(resolved["feature_profile"]),

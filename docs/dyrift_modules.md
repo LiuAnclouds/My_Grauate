@@ -1,18 +1,18 @@
 # DyRIFT-GNN Modules
 
-This document explains the modules used by the final `DyRIFT-GNN` route.
+This document explains the main modules used by the final `DyRIFT-GNN` route.
 
 ## 1. Module Map
 
 | Module | Code | Purpose |
 | --- | --- | --- |
-| TRGT backbone | `TRGTTemporalRelationAttentionBlock` | temporal-relation graph attention |
-| Internal risk encoder | `TRGTInternalRiskEncoder` | multi-scale risk fusion inside GNN |
-| Target-context bridge | `TargetContextFusionHead` | target-level temporal-normality fusion |
-| Drift expert | `TargetTimeDriftExpertAdapter` | temporal drift adaptation |
-| Prototype memory | `PrototypeMemoryBank` | class-structure regularization |
-| Pseudo-contrastive mining | training loop in `gnn_models.py` | time-balanced hard sample mining |
-| Cold-start residual | `RelationGraphSAGENetwork` cold-start path | late cold-start compensation |
+| TRGT backbone | [modules/backbone.py](../experiment/training/modules/backbone.py) | temporal-relation graph attention |
+| Internal risk encoder | [modules/backbone.py](../experiment/training/modules/backbone.py) | multi-scale risk fusion inside GNN |
+| Target-context bridge | [modules/bridge.py](../experiment/training/modules/bridge.py) | target-level temporal-normality fusion |
+| Drift expert | [core/engine.py](../experiment/training/core/engine.py) | temporal drift adaptation |
+| Prototype memory | [modules/memory.py](../experiment/training/modules/memory.py) | class-structure regularization |
+| Pseudo-contrastive mining | [core/engine.py](../experiment/training/core/engine.py) | time-balanced hard sample mining |
+| Cold-start residual | [core/engine.py](../experiment/training/core/engine.py) | late cold-start compensation |
 
 ## 2. Temporal-Relation Attention
 
@@ -30,7 +30,6 @@ The bridge uses target-context feature groups to calibrate graph embeddings.
 
 Typical groups:
 
-- `graph_stats`
 - `graph_time_detrend`
 - `neighbor_similarity`
 - `activation_early`
@@ -98,8 +97,8 @@ This is a module-level hyperparameter in the same architecture, not a different 
 
 ## 9. Deployment Path
 
-At inference time, the prediction still follows:
+At inference time, prediction still follows:
 
 `features + graph -> DyRIFT-GNN -> fraud probability`
 
-No module requires a separately trained external model at inference.
+No module requires a separately trained external model.

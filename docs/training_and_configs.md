@@ -1,90 +1,78 @@
 # Training And Configs
 
-This document describes how to reproduce the final `DyRIFT-GNN / TRGT` suite and how dataset-local hyperparameters are organized.
+This document describes how to reproduce the final `DyRIFT-GNN / TRGT` suite and how the training package is organized.
 
 ## 1. Environment
 
-Use the project environment:
+Use the project environment from repository root:
 
 ```bash
 conda run -n Graph --no-capture-output python3 ...
 ```
 
-The main training scripts assume repository root as the working directory.
+## 2. Runner Surface
 
-## 2. Build Features
+| File | Purpose |
+| --- | --- |
+| [../experiment/training/runners/mainline.py](../experiment/training/runners/mainline.py) | build unified features and train one dataset |
+| [../experiment/training/runners/suite.py](../experiment/training/runners/suite.py) | run the tri-dataset thesis suite |
+| [../experiment/training/runners/audit.py](../experiment/training/runners/audit.py) | verify hard-leakage constraints |
+
+## 3. Build Features
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_mainline.py \
+conda run -n Graph --no-capture-output python3 experiment/training/runners/mainline.py \
   build_features \
   --phase both
 ```
 
-This builds dataset-local graph and feature caches. The raw datasets are not mixed.
+This builds dataset-scoped feature and graph caches. Raw datasets are never mixed.
 
-## 3. Run Final Suite
+## 4. Run Final Suite
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/run_thesis_suite.py \
+conda run -n Graph --no-capture-output python3 experiment/training/runners/suite.py \
   --suite-name thesis_dyrift_gnn_trgt_deploy_pure_v1 \
   --model dyrift_gnn \
   --preset dyrift_trgt_deploy_v1 \
   --feature-profile utpm_shift_enhanced \
-  --dataset-hparams experiment/training/configs/thesis_dataset_hparams.dyrift_gnn_trgt_deploy_pure_v1.json \
+  --dataset-hparams experiment/training/configs/dyrift_suite.json \
   --seeds 42 \
   --skip-existing
 ```
 
-The `dyrift_gnn` argument is the official runtime model id. Internally it resolves to `DyRIFTGNNExperiment`.
+`dyrift_gnn` is the official runtime id and resolves to `DyRIFTTrainer`.
 
-## 4. Run Leakage Audit
+## 5. Run Leakage Audit
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/audit_thesis_leakage.py \
+conda run -n Graph --no-capture-output python3 experiment/training/runners/audit.py \
   --suite-summary experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
 ```
 
-Expected output:
+Expected audit conclusions:
 
 - `hard_leakage_detected=false`
-- no train/val/test_pool overlap
+- no `train/val/test_pool/external` overlap
 - no cross-dataset training
-- single GNN deployment path only
+- single pure-GNN deployment path only
 
-## 5. Config Layout
+## 6. Config Layout
 
-The final suite uses one manifest plus three dataset files.
+The final suite uses one shared manifest plus three dataset files:
 
-Manifest:
+| File | Role |
+| --- | --- |
+| [../experiment/training/configs/dyrift_suite.json](../experiment/training/configs/dyrift_suite.json) | shared defaults and dataset file references |
+| [../experiment/training/configs/datasets/xinye_dgraph.json](../experiment/training/configs/datasets/xinye_dgraph.json) | XinYe tuning |
+| [../experiment/training/configs/datasets/elliptic_transactions.json](../experiment/training/configs/datasets/elliptic_transactions.json) | ET tuning |
+| [../experiment/training/configs/datasets/ellipticpp_transactions.json](../experiment/training/configs/datasets/ellipticpp_transactions.json) | EPP tuning |
 
-- [thesis_dataset_hparams.dyrift_gnn_trgt_deploy_pure_v1.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/configs/thesis_dataset_hparams.dyrift_gnn_trgt_deploy_pure_v1.json)
+The manifest uses `mainline.dataset_files` to load the per-dataset JSON files.
 
-Dataset files:
+## 7. What Can Vary By Dataset
 
-- [xinye_dgraph.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/configs/dyrift_gnn/xinye_dgraph.json)
-- [elliptic_transactions.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/configs/dyrift_gnn/elliptic_transactions.json)
-- [ellipticpp_transactions.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/training/configs/dyrift_gnn/ellipticpp_transactions.json)
-
-The manifest uses `mainline.dataset_files` to load dataset-specific JSON files.
-
-## 6. Shared Defaults
-
-The manifest stores shared defaults such as:
-
-- `run_name_template`
-- `feature_profile`
-- `target_context_groups`
-- `epochs`
-- `batch_size`
-- `hidden_dim`
-- `rel_dim`
-- `fanouts`
-
-Each dataset file can override these values without changing the model architecture.
-
-## 7. Dataset-Specific Tuning
-
-The following hyperparameters are allowed to differ by dataset:
+The architecture stays fixed, but dataset-local hyperparameters can differ:
 
 - `attr_proj_dim`
 - `feature_profile`
@@ -99,7 +87,7 @@ The following hyperparameters are allowed to differ by dataset:
 - `time_decay_strength`
 - module weights such as `prototype_loss_weight` and `pseudo_contrastive_weight`
 
-This is dataset-local hyperparameter tuning, not a change of model family.
+This is per-dataset tuning under one model family, not a change of architecture.
 
 ## 8. Final Profiles
 
@@ -111,16 +99,10 @@ This is dataset-local hyperparameter tuning, not a change of model family.
 
 ## 9. Output Files
 
-Suite summary:
-
-- [summary.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json)
-
-Audit:
-
-- [leakage_audit.md](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
-- [leakage_audit.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json)
-
-Metrics:
-
-- [metrics.csv](/home/moonxkj/Desktop/MyWork/Graduation_Project/docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv)
-- [epoch_metrics.csv](/home/moonxkj/Desktop/MyWork/Graduation_Project/docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv)
+| File | Role |
+| --- | --- |
+| [../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json) | suite summary |
+| [../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md) | audit report |
+| [../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json) | audit JSON |
+| [results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv) | dataset metrics |
+| [results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv) | epoch logs |

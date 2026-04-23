@@ -18,9 +18,9 @@
       "fanouts": [15, 10]
     },
     "dataset_files": {
-      "xinye_dgraph": "dyrift_gnn/xinye_dgraph.json",
-      "elliptic_transactions": "dyrift_gnn/elliptic_transactions.json",
-      "ellipticpp_transactions": "dyrift_gnn/ellipticpp_transactions.json"
+      "xinye_dgraph": "datasets/xinye_dgraph.json",
+      "elliptic_transactions": "datasets/elliptic_transactions.json",
+      "ellipticpp_transactions": "datasets/ellipticpp_transactions.json"
     }
   }
 }

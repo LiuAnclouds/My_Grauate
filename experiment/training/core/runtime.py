@@ -5,15 +5,15 @@ from pathlib import Path
 
 import numpy as np
 
-from experiment.training.common import ExperimentSplit
-from experiment.training.features import build_hybrid_feature_normalizer, resolve_feature_groups
-from experiment.training.gnn_models import GraphModelConfig, GraphPhaseContext
-from experiment.training.graph_runtime import build_graph_label_artifacts, make_graph_contexts
-from experiment.training.thesis_contract import OFFICIAL_TARGET_CONTEXT_GROUPS
+from experiment.training.core.engine import GraphModelConfig, GraphPhaseContext
+from experiment.training.core.spec import OFFICIAL_TARGET_CONTEXT_GROUPS
+from experiment.training.data.features import build_hybrid_feature_normalizer, resolve_feature_groups
+from experiment.training.data.graph import build_contexts, build_label_artifacts
+from experiment.training.utils.common import ExperimentSplit
 
 
 @dataclass(frozen=True)
-class ThesisPreparedRuntime:
+class RuntimeBundle:
     graph_config: GraphModelConfig
     feature_groups: list[str]
     feature_normalizer_state: object | None
@@ -27,7 +27,7 @@ class ThesisPreparedRuntime:
     global_max_day: int
 
 
-def prepare_thesis_runtime(
+def build_runtime(
     *,
     feature_dir: Path,
     model_name: str,
@@ -36,13 +36,13 @@ def prepare_thesis_runtime(
     graph_config: GraphModelConfig,
     feature_profile: str = "utpm_unified",
     target_context_groups: list[str] | tuple[str, ...] | None = None,
-) -> ThesisPreparedRuntime:
+) -> RuntimeBundle:
     feature_groups = resolve_feature_groups(model_name, feature_profile=feature_profile)
     resolved_target_context_groups = list(
         OFFICIAL_TARGET_CONTEXT_GROUPS if target_context_groups is None else target_context_groups
     )
     eval_phase = str(split.external_phase or split.val_phase)
-    label_artifacts = build_graph_label_artifacts(
+    label_artifacts = build_label_artifacts(
         feature_dir=feature_dir,
         split_train_ids=train_ids,
         threshold_day=int(split.threshold_day),
@@ -73,7 +73,7 @@ def prepare_thesis_runtime(
             outdir=feature_dir,
         )
 
-    phase1_context, phase2_context = make_graph_contexts(
+    phase1_context, phase2_context = build_contexts(
         feature_dir=feature_dir,
         model_name=model_name,
         train_phase=split.train_phase,
@@ -99,7 +99,7 @@ def prepare_thesis_runtime(
         target_context_input_dim = int(input_dim)
     graph_config = replace(graph_config, target_context_input_dim=int(target_context_input_dim))
 
-    return ThesisPreparedRuntime(
+    return RuntimeBundle(
         graph_config=graph_config,
         feature_groups=feature_groups,
         feature_normalizer_state=feature_normalizer_state,
