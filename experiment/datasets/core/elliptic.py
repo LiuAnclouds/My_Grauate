@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-from experiment.datasets.contracts import PreparedPhaseContract
+from experiment.datasets.core.contracts import PreparedPhaseContract
 
 
 def load_pandas():

@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 from sklearn.metrics import average_precision_score, precision_recall_curve, roc_auc_score
 
-from experiment.datasets.registry import resolve_output_roots
+from experiment.datasets.core.registry import resolve_output_roots
 from experiment.eda.data_loader import resolve_dataset_path
 
 

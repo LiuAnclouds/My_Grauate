@@ -9,7 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from experiment.datasets.registry import get_active_dataset_spec, resolve_output_roots
+from experiment.datasets.core.registry import get_active_dataset_spec, resolve_output_roots
 from experiment.eda.analysis import ALL_ANALYSES, run_eda
 
 

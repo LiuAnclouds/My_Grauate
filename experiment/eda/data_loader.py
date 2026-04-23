@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from experiment.datasets.registry import get_active_dataset_spec, get_dataset_spec
+from experiment.datasets.core.registry import get_active_dataset_spec, get_dataset_spec
 
 
 ACTIVE_DATASET_SPEC = get_active_dataset_spec()

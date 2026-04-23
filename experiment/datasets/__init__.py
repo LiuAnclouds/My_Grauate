@@ -1,4 +1,6 @@
-from experiment.datasets.contracts import (
+"""Dataset domain for the DyRIFT-GNN thesis benchmarks."""
+
+from experiment.datasets.core.contracts import (
     PreparedGraphContract,
     PreparedPhaseContract,
     save_prepared_graph,
@@ -6,8 +8,13 @@ from experiment.datasets.contracts import (
     validate_prepared_graph,
     validate_prepared_phase,
 )
-from experiment.datasets.download_utils import DownloadResult, build_download_candidates, download_file, is_huggingface_url
-from experiment.datasets.registry import (
+from experiment.datasets.core.downloads import (
+    DownloadResult,
+    build_download_candidates,
+    download_file,
+    is_huggingface_url,
+)
+from experiment.datasets.core.registry import (
     DATASET_ENV_VAR,
     DatasetSpec,
     get_active_dataset_name,

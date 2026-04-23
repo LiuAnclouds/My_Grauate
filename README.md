@@ -18,6 +18,8 @@ The deployed path is single-model pure GNN. No external tree model, teacher bran
 | [Code Reference](docs/code_reference.md) | package layout, main classes, call chain |
 | [Training And Configs](docs/training_and_configs.md) | commands, config files, output layout |
 | [Experiment Results](docs/thesis_experiments.md) | final AUC table, GNN comparison, ablations |
+| [Experiment Workspace](experiment/README.md) | experiment-level folder layout and responsibility split |
+| [Dataset Workspace](experiment/datasets/README.md) | dataset registry, preparation scripts, and raw-data layout |
 | [Training README](experiment/training/README.md) | engineering-facing guide for the training package |
 | [Leakage Audit](experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md) | final hard-leakage audit |
 | [Suite Summary](experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json) | final tri-dataset suite summary |
@@ -44,6 +46,9 @@ Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
 | [experiment/training/runners/mainline.py](experiment/training/runners/mainline.py) | single-dataset feature build and train entry |
 | [experiment/training/runners/suite.py](experiment/training/runners/suite.py) | tri-dataset suite runner |
 | [experiment/training/runners/audit.py](experiment/training/runners/audit.py) | hard-leakage audit |
+| [experiment/datasets/core/registry.py](experiment/datasets/core/registry.py) | active dataset registry and raw/prepared path contract |
+| [experiment/datasets/scripts/prepare_elliptic.py](experiment/datasets/scripts/prepare_elliptic.py) | Elliptic dataset preparation entry |
+| [experiment/datasets/scripts/prepare_ellipticpp.py](experiment/datasets/scripts/prepare_ellipticpp.py) | Elliptic++ dataset preparation entry |
 | [experiment/training/core/engine.py](experiment/training/core/engine.py) | shared graph engine, loss, sampling, evaluation |
 | [experiment/training/core/runtime.py](experiment/training/core/runtime.py) | runtime bundle builder |
 | [experiment/training/core/presets.py](experiment/training/core/presets.py) | official preset definitions |

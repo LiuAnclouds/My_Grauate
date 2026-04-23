@@ -35,7 +35,7 @@ DATASET_SPECS: dict[str, DatasetSpec] = {
     "xinye_dgraph": DatasetSpec(
         name="xinye_dgraph",
         display_name="XinYe DGraph",
-        dataset_root_relative="experiment/dataset/XinYe Dataset",
+        dataset_root_relative="experiment/datasets/raw/xinye_dgraph",
         phase_filenames={
             "graph": "phase1_gdata.npz",
             "phase1": "phase1_gdata.npz",
@@ -61,7 +61,7 @@ DATASET_SPECS: dict[str, DatasetSpec] = {
     "ellipticpp_transactions": DatasetSpec(
         name="ellipticpp_transactions",
         display_name="Elliptic++ Transactions",
-        dataset_root_relative="experiment/dataset/EllipticPlusPlus/Transactions/prepared",
+        dataset_root_relative="experiment/datasets/raw/ellipticpp_transactions/prepared",
         phase_filenames={
             "graph": "graph_gdata.npz",
             "phase1": "phase1_gdata.npz",
@@ -87,7 +87,7 @@ DATASET_SPECS: dict[str, DatasetSpec] = {
     "elliptic_transactions": DatasetSpec(
         name="elliptic_transactions",
         display_name="Elliptic Transactions",
-        dataset_root_relative="experiment/dataset/Elliptic/Transactions/prepared",
+        dataset_root_relative="experiment/datasets/raw/elliptic_transactions/prepared",
         phase_filenames={
             "graph": "graph_gdata.npz",
             "phase1": "phase1_gdata.npz",

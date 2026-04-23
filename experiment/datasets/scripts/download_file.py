@@ -5,11 +5,11 @@ import sys
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from experiment.datasets.download_utils import download_file, is_huggingface_url
+from experiment.datasets.core.downloads import download_file, is_huggingface_url
 
 
 def parse_args() -> argparse.Namespace:

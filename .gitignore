@@ -1,8 +1,7 @@
 /other
 /.claude
 /.idea
-/experiment/dataset
-/experiment/*.zip
+/experiment/datasets/raw
 /experiment/outputs
 /backups/
 /article_code/GeneralDyG-main/dataset

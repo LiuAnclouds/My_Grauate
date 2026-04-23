@@ -10,7 +10,7 @@ import numpy as np
 from sklearn.decomposition import TruncatedSVD
 from tqdm.auto import tqdm
 
-from experiment.datasets.registry import get_active_dataset_spec
+from experiment.datasets.core.registry import get_active_dataset_spec
 from experiment.eda.analysis import compute_degree_arrays, compute_temporal_core
 from experiment.eda.data_loader import PhaseData, load_phase
 from experiment.training.utils.common import (

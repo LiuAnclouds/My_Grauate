@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from experiment.datasets.registry import get_active_dataset_spec
+from experiment.datasets.core.registry import get_active_dataset_spec
 from experiment.eda.data_loader import LABEL_NAMES, PhaseData, load_phase
 
 
@@ -1063,10 +1063,15 @@ def build_recommended_split(
     }
 
     if graph.test_mask.size:
-        np.save(outdir / "unlabeled_ids.npy", graph.test_mask)
+        np.save(outdir / "test_pool_ids.npy", graph.test_mask)
+        split_summary["test_pool"] = {
+            "size": int(graph.test_mask.size),
+            "id_path": "test_pool_ids.npy",
+        }
+        # Keep the legacy alias so older readers do not break immediately.
         split_summary["unlabeled_pool"] = {
             "size": int(graph.test_mask.size),
-            "id_path": "unlabeled_ids.npy",
+            "id_path": "test_pool_ids.npy",
         }
 
     external_artifact = split_external_artifact()

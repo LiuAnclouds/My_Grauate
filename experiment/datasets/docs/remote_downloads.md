@@ -10,8 +10,8 @@ For Hugging Face content:
 
 This is implemented in:
 
-- [download_utils.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/datasets/download_utils.py)
-- [download_remote_file.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/datasets/download_remote_file.py)
+- [core/downloads.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/datasets/core/downloads.py)
+- [scripts/download_file.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/datasets/scripts/download_file.py)
 
 ## Default Behavior
 
@@ -27,9 +27,9 @@ This is implemented in:
 ## Example
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/datasets/download_remote_file.py \
+conda run -n Graph --no-capture-output python3 experiment/datasets/scripts/download_file.py \
   --url 'https://huggingface.co/datasets/<repo>/resolve/main/file.csv' \
-  --output experiment/dataset/_downloads/file.csv \
+  --output experiment/datasets/raw/archive/file.csv \
   --hf-mirror 'https://hf-mirror.com'
 ```
 

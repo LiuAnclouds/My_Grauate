@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from experiment.datasets.registry import get_active_dataset_spec
+from experiment.datasets.core.registry import get_active_dataset_spec
 from experiment.training.core.engine import (
     GraphPhaseContext,
     RelationGraphSAGEExperiment,

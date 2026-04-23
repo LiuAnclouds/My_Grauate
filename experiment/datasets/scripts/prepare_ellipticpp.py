@@ -8,13 +8,13 @@ from pathlib import Path
 import numpy as np
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from experiment.datasets.contracts import save_prepared_phase
-from experiment.datasets.download_utils import download_file
-from experiment.datasets.elliptic_prepare_common import (
+from experiment.datasets.core.contracts import save_prepared_phase
+from experiment.datasets.core.downloads import download_file
+from experiment.datasets.core.elliptic import (
     build_chronological_node_contracts,
     build_edge_arrays,
     build_full_graph_contract,
@@ -46,13 +46,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--raw-dir",
         type=Path,
-        default=REPO_ROOT / "experiment" / "dataset" / "EllipticPlusPlus" / "Transactions" / "raw",
+        default=REPO_ROOT / "experiment" / "datasets" / "raw" / "ellipticpp_transactions" / "raw",
         help="Directory for downloaded raw CSV files.",
     )
     parser.add_argument(
         "--prepared-dir",
         type=Path,
-        default=REPO_ROOT / "experiment" / "dataset" / "EllipticPlusPlus" / "Transactions" / "prepared",
+        default=REPO_ROOT / "experiment" / "datasets" / "raw" / "ellipticpp_transactions" / "prepared",
         help="Directory where phase1_gdata.npz and phase2_gdata.npz will be written.",
     )
     parser.add_argument(
@@ -75,6 +75,7 @@ def parse_args() -> argparse.Namespace:
         help="Re-download raw CSV files even when local copies already exist.",
     )
     return parser.parse_args()
+
 
 def _download_raw_files(raw_dir: Path, force: bool) -> dict[str, Path]:
     paths = {name: raw_dir / filename for name, filename in RAW_FILE_NAMES.items()}
