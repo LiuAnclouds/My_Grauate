@@ -13,7 +13,7 @@ from tqdm.auto import tqdm
 from experiment.datasets.core.registry import get_active_dataset_spec
 from experiment.eda.analysis import compute_degree_arrays, compute_temporal_core
 from experiment.eda.data_loader import PhaseData, load_phase
-from experiment.training.utils.common import (
+from experiment.utils.common import (
     EDA_OUTPUT_ROOT,
     FEATURE_OUTPUT_ROOT,
     REPO_ROOT,

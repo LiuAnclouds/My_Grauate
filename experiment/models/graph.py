@@ -6,22 +6,22 @@ from typing import Any
 import numpy as np
 
 from experiment.datasets.core.registry import get_active_dataset_spec
-from experiment.training.core.engine import (
-    GraphPhaseContext,
-    RelationGraphSAGEExperiment,
-    TemporalRelationGATExperiment,
-    TemporalRelationGraphSAGEExperiment,
-)
-from experiment.training.core.spec import DYRIFT_GNN_MODEL
-from experiment.training.data.features import (
+from experiment.features.features import (
     FeatureStore,
     HybridFeatureNormalizerState,
     load_graph_cache,
     resolve_feature_groups,
 )
-from experiment.training.modules.trainer import DyRIFTTrainer
-from experiment.training.utils.common import load_phase_arrays
-from experiment.training.utils.sampling import load_or_build_raw_consistency_profile
+from experiment.models.engine import (
+    GraphPhaseContext,
+    RelationGraphSAGEExperiment,
+    TemporalRelationGATExperiment,
+    TemporalRelationGraphSAGEExperiment,
+)
+from experiment.models.modules.trainer import DyRIFTTrainer
+from experiment.models.spec import DYRIFT_GNN_MODEL
+from experiment.utils.common import load_phase_arrays
+from experiment.utils.sampling import load_or_build_raw_consistency_profile
 
 
 GRAPH_EXPERIMENTS = {

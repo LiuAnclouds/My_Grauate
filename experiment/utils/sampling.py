@@ -5,8 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
-from experiment.training.data.features import FeatureStore
-from experiment.training.utils.common import ensure_dir
+from experiment.features.features import FeatureStore
+from experiment.utils.common import ensure_dir
 
 
 RAW_CONSISTENCY_PROFILE_VERSION = "raw_consistency_v1"

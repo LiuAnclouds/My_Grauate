@@ -13,7 +13,7 @@ from experiment.datasets.core.registry import resolve_output_roots
 from experiment.eda.data_loader import resolve_dataset_path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 EDA_OUTPUT_ROOT, TRAINING_OUTPUT_ROOT = resolve_output_roots(REPO_ROOT)
 FEATURE_OUTPUT_ROOT = TRAINING_OUTPUT_ROOT / "features"
 MODEL_OUTPUT_ROOT = TRAINING_OUTPUT_ROOT / "models"

@@ -1,6 +1,6 @@
 # Training And Configs
 
-This document describes how to reproduce the final `DyRIFT-GNN / TRGT` suite and how the training package is organized.
+This document describes how to reproduce the final `DyRIFT-GNN / TRGT` suite and how the experiment pipeline is organized.
 
 ## 1. Environment
 
@@ -14,14 +14,14 @@ conda run -n Graph --no-capture-output python3 ...
 
 | File | Purpose |
 | --- | --- |
-| [../experiment/training/runners/mainline.py](../experiment/training/runners/mainline.py) | build unified features and train one dataset |
-| [../experiment/training/runners/suite.py](../experiment/training/runners/suite.py) | run the tri-dataset thesis suite |
-| [../experiment/training/runners/audit.py](../experiment/training/runners/audit.py) | verify hard-leakage constraints |
+| [../experiment/mainline.py](../experiment/mainline.py) | build unified features and train one dataset |
+| [../experiment/suite.py](../experiment/suite.py) | run the tri-dataset thesis suite |
+| [../experiment/audit.py](../experiment/audit.py) | verify hard-leakage constraints |
 
 ## 3. Build Features
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/mainline.py \
+conda run -n Graph --no-capture-output python3 experiment/mainline.py \
   build_features \
   --phase both
 ```
@@ -31,12 +31,12 @@ This builds dataset-scoped feature and graph caches. Raw datasets are never mixe
 ## 4. Run Final Suite
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/suite.py \
+conda run -n Graph --no-capture-output python3 experiment/suite.py \
   --suite-name thesis_dyrift_gnn_trgt_deploy_pure_v1 \
   --model dyrift_gnn \
   --preset dyrift_trgt_deploy_v1 \
   --feature-profile utpm_shift_enhanced \
-  --dataset-hparams experiment/training/configs/dyrift_suite.json \
+  --dataset-hparams experiment/dyrift_suite.json \
   --seeds 42 \
   --skip-existing
 ```
@@ -46,7 +46,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/runners/suite
 ## 5. Run Leakage Audit
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/audit.py \
+conda run -n Graph --no-capture-output python3 experiment/audit.py \
   --suite-summary experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
 ```
 
@@ -63,10 +63,10 @@ The final suite uses one shared manifest plus three dataset files:
 
 | File | Role |
 | --- | --- |
-| [../experiment/training/configs/dyrift_suite.json](../experiment/training/configs/dyrift_suite.json) | shared defaults and dataset file references |
-| [../experiment/training/configs/datasets/xinye_dgraph.json](../experiment/training/configs/datasets/xinye_dgraph.json) | XinYe tuning |
-| [../experiment/training/configs/datasets/elliptic_transactions.json](../experiment/training/configs/datasets/elliptic_transactions.json) | ET tuning |
-| [../experiment/training/configs/datasets/ellipticpp_transactions.json](../experiment/training/configs/datasets/ellipticpp_transactions.json) | EPP tuning |
+| [../experiment/dyrift_suite.json](../experiment/dyrift_suite.json) | shared defaults and dataset file references |
+| [../experiment/xinye_dgraph.json](../experiment/xinye_dgraph.json) | XinYe tuning |
+| [../experiment/elliptic_transactions.json](../experiment/elliptic_transactions.json) | ET tuning |
+| [../experiment/ellipticpp_transactions.json](../experiment/ellipticpp_transactions.json) | EPP tuning |
 
 The manifest uses `mainline.dataset_files` to load the per-dataset JSON files.
 

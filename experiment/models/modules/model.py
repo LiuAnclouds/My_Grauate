@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from experiment.training.core.engine import GraphModelConfig, RelationGraphSAGENetwork
+from experiment.models.engine import GraphModelConfig, RelationGraphSAGENetwork
 
 
 DYRIFT_MODEL_NAME = "DyRIFT-GNN"

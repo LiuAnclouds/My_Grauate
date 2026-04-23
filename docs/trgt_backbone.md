@@ -4,7 +4,7 @@
 
 It is the backbone of `DyRIFT-GNN`. The main implementation is:
 
-- [../experiment/training/modules/backbone.py](../experiment/training/modules/backbone.py)
+- [../experiment/models/modules/backbone.py](../experiment/models/modules/backbone.py)
 
 ## 1. Backbone Goal
 

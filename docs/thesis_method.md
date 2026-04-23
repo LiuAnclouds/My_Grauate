@@ -4,7 +4,7 @@
 
 - [Back to README](../README.md)
 - [Experiment Table](thesis_experiments.md)
-- [Mainline Guide](../experiment/training/README.md)
+- [Mainline Guide](../experiment/README_pipeline.md)
 - [Final Pure-GNN Summary](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json)
 - [Final Pure-GNN Audit](../experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
 - [Final Metrics CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv)
@@ -114,19 +114,19 @@
 构建统一特征缓存：
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/mainline.py \
+conda run -n Graph --no-capture-output python3 experiment/mainline.py \
   build_features --phase both
 ```
 
 运行 final pure-GNN suite：
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/suite.py \
+conda run -n Graph --no-capture-output python3 experiment/suite.py \
   --suite-name thesis_dyrift_gnn_trgt_deploy_pure_v1 \
   --model dyrift_gnn \
   --preset dyrift_trgt_deploy_v1 \
   --feature-profile utpm_shift_enhanced \
-  --dataset-hparams experiment/training/configs/dyrift_suite.json \
+  --dataset-hparams experiment/dyrift_suite.json \
   --seeds 42 \
   --skip-existing
 ```
@@ -134,6 +134,6 @@ conda run -n Graph --no-capture-output python3 experiment/training/runners/suite
 生成硬泄露审计：
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/audit.py \
+conda run -n Graph --no-capture-output python3 experiment/audit.py \
   --suite-summary experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
 ```

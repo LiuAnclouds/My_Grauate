@@ -6,13 +6,13 @@ This document explains the main modules used by the final `DyRIFT-GNN` route.
 
 | Module | Code | Purpose |
 | --- | --- | --- |
-| TRGT backbone | [modules/backbone.py](../experiment/training/modules/backbone.py) | temporal-relation graph attention |
-| Internal risk encoder | [modules/backbone.py](../experiment/training/modules/backbone.py) | multi-scale risk fusion inside GNN |
-| Target-context bridge | [modules/bridge.py](../experiment/training/modules/bridge.py) | target-level temporal-normality fusion |
-| Drift expert | [core/engine.py](../experiment/training/core/engine.py) | temporal drift adaptation |
-| Prototype memory | [modules/memory.py](../experiment/training/modules/memory.py) | class-structure regularization |
-| Pseudo-contrastive mining | [core/engine.py](../experiment/training/core/engine.py) | time-balanced hard sample mining |
-| Cold-start residual | [core/engine.py](../experiment/training/core/engine.py) | late cold-start compensation |
+| TRGT backbone | [modules/backbone.py](../experiment/models/modules/backbone.py) | temporal-relation graph attention |
+| Internal risk encoder | [modules/backbone.py](../experiment/models/modules/backbone.py) | multi-scale risk fusion inside GNN |
+| Target-context bridge | [modules/bridge.py](../experiment/models/modules/bridge.py) | target-level temporal-normality fusion |
+| Drift expert | [core/engine.py](../experiment/models/engine.py) | temporal drift adaptation |
+| Prototype memory | [modules/memory.py](../experiment/models/modules/memory.py) | class-structure regularization |
+| Pseudo-contrastive mining | [core/engine.py](../experiment/models/engine.py) | time-balanced hard sample mining |
+| Cold-start residual | [core/engine.py](../experiment/models/engine.py) | late cold-start compensation |
 
 ## 2. Temporal-Relation Attention
 

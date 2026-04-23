@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import torch.nn as nn
 
-from experiment.training.core.engine import GraphModelConfig, TRGTExperiment
-from experiment.training.modules.model import build_model
+from experiment.models.engine import GraphModelConfig, TRGTExperiment
+from experiment.models.modules.model import build_model
 
 
 class DyRIFTTrainer(TRGTExperiment):

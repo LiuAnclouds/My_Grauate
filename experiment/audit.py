@@ -8,12 +8,12 @@ from typing import Any
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from experiment.datasets.core.registry import get_dataset_spec
-from experiment.training.core.spec import OFFICIAL_PURE_SUITE_NAME
+from experiment.models.spec import OFFICIAL_PURE_SUITE_NAME
 
 
 def _dataset_output_roots(dataset_name: str) -> tuple[Path, Path]:

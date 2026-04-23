@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ATTR_PROJ_DIM = 32
 ATTR_PROJ_ENV_VAR = "GRADPROJ_UTPM_ATTR_PROJ_DIM"
 

@@ -10,20 +10,20 @@ import numpy as np
 from tqdm.auto import tqdm
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from experiment.datasets.core.registry import get_active_dataset_spec
-from experiment.training.core.engine import GraphModelConfig
-from experiment.training.core.presets import (
+from experiment.models.engine import GraphModelConfig
+from experiment.models.presets import (
     apply_cfg_overrides,
     build_graph_cfg,
     default_preset,
     list_presets,
 )
-from experiment.training.core.runtime import build_runtime
-from experiment.training.core.spec import (
+from experiment.models.runtime import build_runtime
+from experiment.models.spec import (
     DYRIFT_GNN_MODEL,
     DYRIFT_MODEL_SHORT_NAME,
     OFFICIAL_BACKBONE_FEATURE_PROFILE,
@@ -38,9 +38,9 @@ from experiment.training.core.spec import (
     TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_PRESET,
 )
-from experiment.training.data.features import build_feature_artifacts
-from experiment.training.data.graph import get_experiment_cls
-from experiment.training.utils.common import (
+from experiment.features.features import build_feature_artifacts
+from experiment.models.graph import get_experiment_cls
+from experiment.utils.common import (
     FEATURE_OUTPUT_ROOT,
     MODEL_OUTPUT_ROOT,
     compute_binary_classification_metrics,

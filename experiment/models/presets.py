@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from experiment.training.core.engine import GraphModelConfig
-from experiment.training.core.spec import (
+from experiment.models.engine import GraphModelConfig
+from experiment.models.spec import (
     DYRIFT_GNN_MODEL,
     OFFICIAL_BACKBONE_PRESET,
     TRANSFORMER_BACKBONE_MODEL,

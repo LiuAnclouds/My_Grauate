@@ -54,9 +54,9 @@ TRGT performs relation-aware, time-aware message passing over sampled dynamic su
 
 Main code:
 
-- [../experiment/training/modules/backbone.py](../experiment/training/modules/backbone.py)
-- [../experiment/training/modules/trainer.py](../experiment/training/modules/trainer.py)
-- [../experiment/training/core/engine.py](../experiment/training/core/engine.py)
+- [../experiment/models/modules/backbone.py](../experiment/models/modules/backbone.py)
+- [../experiment/models/modules/trainer.py](../experiment/models/modules/trainer.py)
+- [../experiment/models/engine.py](../experiment/models/engine.py)
 
 Key backbone class:
 
@@ -82,7 +82,7 @@ Typical context groups:
 
 Implementation:
 
-- [../experiment/training/modules/bridge.py](../experiment/training/modules/bridge.py)
+- [../experiment/models/modules/bridge.py](../experiment/models/modules/bridge.py)
 
 ### 5.2 Drift-Expert Adaptation
 
@@ -90,7 +90,7 @@ The drift adapter changes context fusion behavior across time buckets.
 
 Implementation:
 
-- `TargetTimeDriftExpertAdapter` in [../experiment/training/core/engine.py](../experiment/training/core/engine.py)
+- `TargetTimeDriftExpertAdapter` in [../experiment/models/engine.py](../experiment/models/engine.py)
 
 ### 5.3 Prototype Memory
 
@@ -98,7 +98,7 @@ Prototype memory regularizes representation structure and stabilizes class cente
 
 Implementation:
 
-- [../experiment/training/modules/memory.py](../experiment/training/modules/memory.py)
+- [../experiment/models/modules/memory.py](../experiment/models/modules/memory.py)
 
 ### 5.4 Pseudo-Contrastive Temporal Mining
 
@@ -106,7 +106,7 @@ Pseudo-contrastive mining selects high-confidence temporal hard cases during tra
 
 Implementation:
 
-- training logic in [../experiment/training/core/engine.py](../experiment/training/core/engine.py)
+- training logic in [../experiment/models/engine.py](../experiment/models/engine.py)
 
 ### 5.5 Internal Causal Risk Fusion
 
@@ -114,7 +114,7 @@ Internal multi-scale risk features are learned directly from the sampled subgrap
 
 Implementation:
 
-- `TRGTInternalRiskEncoder` in [../experiment/training/modules/backbone.py](../experiment/training/modules/backbone.py)
+- `TRGTInternalRiskEncoder` in [../experiment/models/modules/backbone.py](../experiment/models/modules/backbone.py)
 
 ### 5.6 Context-Conditioned Cold-Start Residual
 
@@ -122,7 +122,7 @@ This branch compensates message sparsity for late cold-start nodes inside the sa
 
 Implementation:
 
-- cold-start residual logic in [../experiment/training/core/engine.py](../experiment/training/core/engine.py)
+- cold-start residual logic in [../experiment/models/engine.py](../experiment/models/engine.py)
 
 ## 6. Final Results
 

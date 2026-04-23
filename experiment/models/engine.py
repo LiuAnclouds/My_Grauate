@@ -15,25 +15,25 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm.auto import tqdm
 
-from experiment.training.data.features import (
+from experiment.features.features import (
     FeatureStore,
     GraphCache,
     HybridFeatureNormalizerState,
     default_feature_groups,
 )
-from experiment.training.modules.backbone import (
+from experiment.models.modules.backbone import (
     TRGTInternalRiskEncoder,
     TRGTMeanRelationBlock,
     TRGTTemporalRelationAttentionBlock,
 )
-from experiment.training.modules.bridge import TargetContextFusionHead
-from experiment.training.modules.memory import (
+from experiment.models.modules.bridge import TargetContextFusionHead
+from experiment.models.modules.memory import (
     PrototypeMemoryBank,
     PrototypeMemoryConfig,
     TemporalNormalAlignmentBank,
     TemporalNormalAlignmentConfig,
 )
-from experiment.training.utils.common import (
+from experiment.utils.common import (
     compute_binary_classification_metrics,
     ensure_dir,
     resolve_device,

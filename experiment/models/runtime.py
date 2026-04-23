@@ -5,11 +5,11 @@ from pathlib import Path
 
 import numpy as np
 
-from experiment.training.core.engine import GraphModelConfig, GraphPhaseContext
-from experiment.training.core.spec import OFFICIAL_TARGET_CONTEXT_GROUPS
-from experiment.training.data.features import build_hybrid_feature_normalizer, resolve_feature_groups
-from experiment.training.data.graph import build_contexts, build_label_artifacts
-from experiment.training.utils.common import ExperimentSplit
+from experiment.features.features import build_hybrid_feature_normalizer, resolve_feature_groups
+from experiment.models.engine import GraphModelConfig, GraphPhaseContext
+from experiment.models.graph import build_contexts, build_label_artifacts
+from experiment.models.spec import OFFICIAL_TARGET_CONTEXT_GROUPS
+from experiment.utils.common import ExperimentSplit
 
 
 @dataclass(frozen=True)

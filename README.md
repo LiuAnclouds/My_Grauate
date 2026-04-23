@@ -20,7 +20,7 @@ The deployed path is single-model pure GNN. No external tree model, teacher bran
 | [Experiment Results](docs/thesis_experiments.md) | final AUC table, GNN comparison, ablations |
 | [Experiment Workspace](experiment/README.md) | experiment-level folder layout and responsibility split |
 | [Dataset Workspace](experiment/datasets/README.md) | dataset registry, preparation scripts, and raw-data layout |
-| [Training README](experiment/training/README.md) | engineering-facing guide for the training package |
+| [Pipeline Guide](experiment/README_pipeline.md) | engineering-facing guide for the final experiment pipeline |
 | [Leakage Audit](experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md) | final hard-leakage audit |
 | [Suite Summary](experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json) | final tri-dataset suite summary |
 | [Metrics CSV](docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv) | final dataset-level metrics |
@@ -43,25 +43,25 @@ Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
 
 | Path | Role |
 | --- | --- |
-| [experiment/training/runners/mainline.py](experiment/training/runners/mainline.py) | single-dataset feature build and train entry |
-| [experiment/training/runners/suite.py](experiment/training/runners/suite.py) | tri-dataset suite runner |
-| [experiment/training/runners/audit.py](experiment/training/runners/audit.py) | hard-leakage audit |
+| [experiment/mainline.py](experiment/mainline.py) | single-dataset feature build and train entry |
+| [experiment/suite.py](experiment/suite.py) | tri-dataset suite runner |
+| [experiment/audit.py](experiment/audit.py) | hard-leakage audit |
 | [experiment/datasets/core/registry.py](experiment/datasets/core/registry.py) | active dataset registry and raw/prepared path contract |
 | [experiment/datasets/scripts/prepare_elliptic.py](experiment/datasets/scripts/prepare_elliptic.py) | Elliptic dataset preparation entry |
 | [experiment/datasets/scripts/prepare_ellipticpp.py](experiment/datasets/scripts/prepare_ellipticpp.py) | Elliptic++ dataset preparation entry |
-| [experiment/training/core/engine.py](experiment/training/core/engine.py) | shared graph engine, loss, sampling, evaluation |
-| [experiment/training/core/runtime.py](experiment/training/core/runtime.py) | runtime bundle builder |
-| [experiment/training/core/presets.py](experiment/training/core/presets.py) | official preset definitions |
-| [experiment/training/core/hparams.py](experiment/training/core/hparams.py) | suite and dataset hyperparameter loading |
-| [experiment/training/data/features.py](experiment/training/data/features.py) | UTPM feature cache and normalizer utilities |
-| [experiment/training/data/graph.py](experiment/training/data/graph.py) | experiment-class resolution and graph contexts |
-| [experiment/training/modules/backbone.py](experiment/training/modules/backbone.py) | TRGT backbone blocks and internal risk encoder |
-| [experiment/training/modules/model.py](experiment/training/modules/model.py) | DyRIFT-GNN model facade |
-| [experiment/training/modules/trainer.py](experiment/training/modules/trainer.py) | DyRIFT-GNN trainer wrapper |
-| [experiment/training/modules/bridge.py](experiment/training/modules/bridge.py) | target-context bridge |
-| [experiment/training/modules/memory.py](experiment/training/modules/memory.py) | prototype and normal-alignment memory |
-| [experiment/training/utils/common.py](experiment/training/utils/common.py) | paths, split loading, metrics, IO helpers |
-| [experiment/training/utils/sampling.py](experiment/training/utils/sampling.py) | sampling-profile helpers |
+| [experiment/models/engine.py](experiment/models/engine.py) | shared graph engine, loss, sampling, evaluation |
+| [experiment/models/runtime.py](experiment/models/runtime.py) | runtime bundle builder |
+| [experiment/models/presets.py](experiment/models/presets.py) | official preset definitions |
+| [experiment/config_loader.py](experiment/config_loader.py) | suite and dataset hyperparameter loading |
+| [experiment/features/features.py](experiment/features/features.py) | UTPM feature cache and normalizer utilities |
+| [experiment/models/graph.py](experiment/models/graph.py) | experiment-class resolution and graph contexts |
+| [experiment/models/modules/backbone.py](experiment/models/modules/backbone.py) | TRGT backbone blocks and internal risk encoder |
+| [experiment/models/modules/model.py](experiment/models/modules/model.py) | DyRIFT-GNN model facade |
+| [experiment/models/modules/trainer.py](experiment/models/modules/trainer.py) | DyRIFT-GNN trainer wrapper |
+| [experiment/models/modules/bridge.py](experiment/models/modules/bridge.py) | target-context bridge |
+| [experiment/models/modules/memory.py](experiment/models/modules/memory.py) | prototype and normal-alignment memory |
+| [experiment/utils/common.py](experiment/utils/common.py) | paths, split loading, metrics, IO helpers |
+| [experiment/utils/sampling.py](experiment/utils/sampling.py) | sampling-profile helpers |
 
 ## Config Files
 
@@ -69,17 +69,17 @@ The model family is shared across all datasets. Dataset-local tuning lives in se
 
 | File | Role |
 | --- | --- |
-| [experiment/training/configs/dyrift_suite.json](experiment/training/configs/dyrift_suite.json) | suite manifest with shared defaults and dataset file references |
-| [experiment/training/configs/datasets/xinye_dgraph.json](experiment/training/configs/datasets/xinye_dgraph.json) | XinYe profile |
-| [experiment/training/configs/datasets/elliptic_transactions.json](experiment/training/configs/datasets/elliptic_transactions.json) | ET profile |
-| [experiment/training/configs/datasets/ellipticpp_transactions.json](experiment/training/configs/datasets/ellipticpp_transactions.json) | EPP profile |
+| [experiment/dyrift_suite.json](experiment/dyrift_suite.json) | suite manifest with shared defaults and dataset file references |
+| [experiment/xinye_dgraph.json](experiment/xinye_dgraph.json) | XinYe profile |
+| [experiment/elliptic_transactions.json](experiment/elliptic_transactions.json) | ET profile |
+| [experiment/ellipticpp_transactions.json](experiment/ellipticpp_transactions.json) | EPP profile |
 
 ## Reproduce
 
 Build unified features:
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/mainline.py \
+conda run -n Graph --no-capture-output python3 experiment/mainline.py \
   build_features \
   --phase both
 ```
@@ -87,12 +87,12 @@ conda run -n Graph --no-capture-output python3 experiment/training/runners/mainl
 Run the final suite:
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/suite.py \
+conda run -n Graph --no-capture-output python3 experiment/suite.py \
   --suite-name thesis_dyrift_gnn_trgt_deploy_pure_v1 \
   --model dyrift_gnn \
   --preset dyrift_trgt_deploy_v1 \
   --feature-profile utpm_shift_enhanced \
-  --dataset-hparams experiment/training/configs/dyrift_suite.json \
+  --dataset-hparams experiment/dyrift_suite.json \
   --seeds 42 \
   --skip-existing
 ```
@@ -100,7 +100,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/runners/suite
 Run hard-leakage audit:
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/audit.py \
+conda run -n Graph --no-capture-output python3 experiment/audit.py \
   --suite-summary experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
 ```
 

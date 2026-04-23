@@ -9,7 +9,7 @@
 - [Final Pure-GNN Audit](../outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
 - [Final Metrics CSV](../../docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv)
 - [Epoch Metrics CSV](../../docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv)
-- [Suite Config](configs/dyrift_suite.json)
+- [Suite Config](../configs/dyrift_suite.json)
 
 ## Recommended Surface
 
@@ -57,7 +57,7 @@
 ### 1. Build Unified Features
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/mainline.py \
+conda run -n Graph --no-capture-output python3 experiment/mainline.py \
   build_features \
   --phase both
 ```
@@ -65,12 +65,12 @@ conda run -n Graph --no-capture-output python3 experiment/training/runners/mainl
 ### 2. Run Final Pure-GNN Suite
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/suite.py \
+conda run -n Graph --no-capture-output python3 experiment/suite.py \
   --suite-name thesis_dyrift_gnn_trgt_deploy_pure_v1 \
   --model dyrift_gnn \
   --preset dyrift_trgt_deploy_v1 \
   --feature-profile utpm_shift_enhanced \
-  --dataset-hparams experiment/training/configs/dyrift_suite.json \
+  --dataset-hparams experiment/dyrift_suite.json \
   --seeds 42 \
   --skip-existing
 ```
@@ -82,7 +82,7 @@ conda run -n Graph --no-capture-output python3 experiment/training/runners/suite
 ### 3. Audit Hard Leakage For The Final Suite
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/training/runners/audit.py \
+conda run -n Graph --no-capture-output python3 experiment/audit.py \
   --suite-summary experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
 ```
 
@@ -111,14 +111,14 @@ conda run -n Graph --no-capture-output python3 experiment/training/runners/audit
 
 后续如果继续只改 thesis 主线，优先改这些文件：
 
-- `experiment/training/runners/mainline.py`
-- `experiment/training/runners/suite.py`
-- `experiment/training/modules/trainer.py`
-- `experiment/training/modules/model.py`
-- `experiment/training/modules/backbone.py`
-- `experiment/training/core/presets.py`
-- `experiment/training/core/spec.py`
-- `experiment/training/runners/audit.py`
+- `experiment/mainline.py`
+- `experiment/suite.py`
+- `experiment/models/modules/trainer.py`
+- `experiment/models/modules/model.py`
+- `experiment/models/modules/backbone.py`
+- `experiment/models/presets.py`
+- `experiment/models/spec.py`
+- `experiment/audit.py`
 
 ## Code Names
 
