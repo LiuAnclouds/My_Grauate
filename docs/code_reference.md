@@ -75,10 +75,10 @@ The final call chain is:
 
 | File | Role |
 | --- | --- |
-| [../experiment/dyrift_suite.json](../experiment/dyrift_suite.json) | suite manifest |
-| [../experiment/xinye_dgraph.json](../experiment/xinye_dgraph.json) | XinYe profile |
-| [../experiment/elliptic_transactions.json](../experiment/elliptic_transactions.json) | ET profile |
-| [../experiment/ellipticpp_transactions.json](../experiment/ellipticpp_transactions.json) | EPP profile |
+| [../experiment/configs/dyrift_suite.json](../experiment/configs/dyrift_suite.json) | suite manifest |
+| [../experiment/configs/xinye_dgraph.json](../experiment/configs/xinye_dgraph.json) | XinYe profile |
+| [../experiment/configs/elliptic_transactions.json](../experiment/configs/elliptic_transactions.json) | ET profile |
+| [../experiment/configs/ellipticpp_transactions.json](../experiment/configs/ellipticpp_transactions.json) | EPP profile |
 
 ## 7. Result Files
 

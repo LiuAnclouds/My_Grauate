@@ -30,9 +30,9 @@
 - 架构固定：`DyRIFT-GNN` / `TRGT` / dataset-local UTPM feature schema / single-model inference
 - 允许分别调：`attr_proj_dim`、`hidden_dim`、`rel_dim`、`fanouts`、`attention_num_heads`、`batch_size`、`epochs`、`learning_rate`、`weight_decay`、`dropout`、`graph_config_overrides`
 - 主线 manifest：`configs/dyrift_suite.json`
-- XinYe profile：`configs/datasets/xinye_dgraph.json`
-- ET profile：`configs/datasets/elliptic_transactions.json`
-- EPP profile：`configs/datasets/ellipticpp_transactions.json`
+- XinYe profile：`configs/xinye_dgraph.json`
+- ET profile：`configs/elliptic_transactions.json`
+- EPP profile：`configs/ellipticpp_transactions.json`
 
 如果不传 `--dataset-hparams`，suite 会退回全局统一超参。
 
@@ -70,7 +70,7 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
   --model dyrift_gnn \
   --preset dyrift_trgt_deploy_v1 \
   --feature-profile utpm_shift_enhanced \
-  --dataset-hparams experiment/dyrift_suite.json \
+  --dataset-hparams experiment/configs/dyrift_suite.json \
   --seeds 42 \
   --skip-existing
 ```

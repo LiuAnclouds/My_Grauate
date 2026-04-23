@@ -36,7 +36,7 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
   --model dyrift_gnn \
   --preset dyrift_trgt_deploy_v1 \
   --feature-profile utpm_shift_enhanced \
-  --dataset-hparams experiment/dyrift_suite.json \
+  --dataset-hparams experiment/configs/dyrift_suite.json \
   --seeds 42 \
   --skip-existing
 ```
@@ -63,10 +63,10 @@ The final suite uses one shared manifest plus three dataset files:
 
 | File | Role |
 | --- | --- |
-| [../experiment/dyrift_suite.json](../experiment/dyrift_suite.json) | shared defaults and dataset file references |
-| [../experiment/xinye_dgraph.json](../experiment/xinye_dgraph.json) | XinYe tuning |
-| [../experiment/elliptic_transactions.json](../experiment/elliptic_transactions.json) | ET tuning |
-| [../experiment/ellipticpp_transactions.json](../experiment/ellipticpp_transactions.json) | EPP tuning |
+| [../experiment/configs/dyrift_suite.json](../experiment/configs/dyrift_suite.json) | shared defaults and dataset file references |
+| [../experiment/configs/xinye_dgraph.json](../experiment/configs/xinye_dgraph.json) | XinYe tuning |
+| [../experiment/configs/elliptic_transactions.json](../experiment/configs/elliptic_transactions.json) | ET tuning |
+| [../experiment/configs/ellipticpp_transactions.json](../experiment/configs/ellipticpp_transactions.json) | EPP tuning |
 
 The manifest uses `mainline.dataset_files` to load the per-dataset JSON files.
 

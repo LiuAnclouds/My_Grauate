@@ -15,7 +15,7 @@ This directory is the runnable thesis workspace for the final `DyRIFT-GNN / TRGT
 | [suite.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/suite.py) | tri-dataset suite runner |
 | [audit.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/audit.py) | leakage audit entry |
 | [config_loader.py](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/config_loader.py) | suite manifest loader and dataset-local hparam merge logic |
-| [dyrift_suite.json](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/dyrift_suite.json) | shared suite manifest at experiment root |
+| [configs](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/configs) | parameter manifests and dataset-local JSON hyperparameter files |
 | [utils](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/utils) | shared metrics, split IO, path helpers, and sampling helpers |
 | [outputs](/home/moonxkj/Desktop/MyWork/Graduation_Project/experiment/outputs) | ignored generated artifacts, logs, checkpoints, feature caches, and reports |
 
@@ -26,5 +26,5 @@ This directory is the runnable thesis workspace for the final `DyRIFT-GNN / TRGT
 - `features/` builds the unified input contract consumed by all three datasets.
 - `models/` owns the pure-GNN runtime, backbone, modules, and graph execution logic.
 - Root-level `experiment/*.py` files are the only public CLI surface for build/train/suite/audit execution.
-- Root-level `experiment/*.json` files hold the suite manifest plus dataset-local hyperparameters.
+- `experiment/configs/*.json` holds the suite manifest plus dataset-local hyperparameters.
 - `outputs/` is generated state only and is ignored by Git.
