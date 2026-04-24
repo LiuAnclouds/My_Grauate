@@ -134,6 +134,14 @@ Dataset-level feature and training parameters are explicit in `experiment/config
 
 Rerun outputs are written to suite-scoped names such as `dyrift_mainline_rerun_xy_70e_min30`, so previous saved results are not overwritten.
 
+For single-dataset training, use the explicit `Parameter` JSON interface. The train entrypoint does not provide hidden model/data defaults; core fields must come from this JSON file or from CLI flags, while operational controls such as `epochs` can fall back to the maintained policy.
+
+```bash
+conda run -n Graph --no-capture-output python3 experiment/mainline.py \
+  train \
+  --parameter-file experiment/configs/parameters/xinye_dgraph_train.json
+```
+
 The official thesis result table is:
 
 | Dataset | Val AUC |

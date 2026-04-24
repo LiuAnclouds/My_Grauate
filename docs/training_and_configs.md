@@ -49,7 +49,63 @@ conda run -n Graph --no-capture-output python3 experiment/mainline.py \
 
 新的 mainline rerun 使用 `{suite_name}_{dataset_short}_70e_min30` 作为 run name 模板，避免覆盖旧 accepted artifact。
 
-## 5. Run Mainline Rerun
+## 5. Direct Train Parameters
+
+`experiment/mainline.py train` 使用 `TrainParameters` / `Parameter` 容器接管训练参数。这个入口不再把论文超参数写成代码默认值；除了 `epochs` 和输出目录这类运行控制项有安全 fallback，模型、preset、feature profile、feature dir、batch size、hidden dim、relation dim、fanouts、seeds 等核心训练参数必须来自 JSON 或 CLI。`device` 也可以由 JSON 或 CLI 指定，不指定时交给训练器自动选择。
+
+单数据集 JSON 参数文件存放在：
+
+| File | Dataset |
+| --- | --- |
+| [../experiment/configs/parameters/xinye_dgraph_train.json](../experiment/configs/parameters/xinye_dgraph_train.json) | XinYe DGraph |
+| [../experiment/configs/parameters/elliptic_transactions_train.json](../experiment/configs/parameters/elliptic_transactions_train.json) | Elliptic Transactions |
+| [../experiment/configs/parameters/ellipticpp_transactions_train.json](../experiment/configs/parameters/ellipticpp_transactions_train.json) | Elliptic++ Transactions |
+
+示例：
+
+```bash
+conda run -n Graph --no-capture-output python3 experiment/mainline.py \
+  train \
+  --parameter-file experiment/configs/parameters/xinye_dgraph_train.json
+```
+
+CLI 参数会覆盖 JSON：
+
+```bash
+conda run -n Graph --no-capture-output python3 experiment/mainline.py \
+  train \
+  --parameter-file experiment/configs/parameters/xinye_dgraph_train.json \
+  --epochs 90 \
+  --graph-config-override min_early_stop_epoch=40
+```
+
+只检查参数解析、不训练：
+
+```bash
+conda run -n Graph --no-capture-output python3 experiment/mainline.py \
+  train \
+  --parameter-file experiment/configs/parameters/xinye_dgraph_train.json \
+  --dry-run
+```
+
+完全不用 JSON 时，也可以显式传入所有核心参数：
+
+```bash
+conda run -n Graph --no-capture-output python3 experiment/mainline.py \
+  train \
+  --model dyrift_gnn \
+  --preset dyrift_trgt_deploy_v1 \
+  --run-name manual_cli_run \
+  --feature-profile utpm_shift_enhanced \
+  --feature-dir experiment/outputs/training/features_ap32 \
+  --seeds 42 \
+  --batch-size 512 \
+  --hidden-dim 128 \
+  --rel-dim 32 \
+  --fanouts 15 10
+```
+
+## 6. Run Mainline Rerun
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/suite.py \
@@ -63,7 +119,7 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
 
 `dyrift_gnn` 是正式 runtime id，对应 `DyRIFTTrainer`。
 
-## 6. What Can Vary By Dataset
+## 7. What Can Vary By Dataset
 
 架构固定，但这些超参数允许按数据集单独调：
 
@@ -85,7 +141,7 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
 
 这属于同一模型族下的 dataset-local tuning，不是换架构。
 
-## 7. Final Profiles In The Maintained Configs
+## 8. Final Profiles In The Maintained Configs
 
 | Dataset | Key Choices |
 | --- | --- |
@@ -93,7 +149,7 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
 | Elliptic Transactions | `attr_proj_dim=64`, `hidden_dim=160`, `rel_dim=48`, `attention_num_heads=4`, `epochs=70`, `min_early_stop_epoch=30` |
 | Elliptic++ Transactions | `attr_proj_dim=96`, `hidden_dim=192`, `rel_dim=64`, `attention_num_heads=16`, `cold_start_residual_strength=0.35`, `epochs=70`, `min_early_stop_epoch=30` |
 
-## 8. Run Comparison, Ablation, And Progressive Studies
+## 9. Run Comparison, Ablation, And Progressive Studies
 
 对比实验：
 
@@ -116,7 +172,7 @@ conda run -n Graph --no-capture-output python3 \
   experiment/studies/progressive/trgt_bridge_drift_prototype_pseudocontrastive/run.py
 ```
 
-## 9. Run Supplementary XinYe Joint Train
+## 10. Run Supplementary XinYe Joint Train
 
 这些补充实验是 XinYe phase1/phase2 诊断实验，不是正式论文主线。它们使用 phase2 标注节点，因此只用于解释跨阶段分布漂移和 checkpoint 选择 trade-off。
 
@@ -141,7 +197,7 @@ Phase-aware balanced 和 dual-validation 诊断结果已经作为 archived outpu
 - `experiment/outputs/studies/supplementary/xinye_phase12_phase_aware_balanced/` archived diagnostic output
 - `experiment/outputs/studies/supplementary/xinye_phase12_phase_aware_dualval/` archived diagnostic output
 
-## 10. Run Leakage Audit
+## 11. Run Leakage Audit
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/audit.py \
@@ -155,7 +211,7 @@ conda run -n Graph --no-capture-output python3 experiment/audit.py \
 - no cross-dataset training
 - single pure-GNN deployment path only
 
-## 11. Output Files
+## 12. Output Files
 
 | File | Role |
 | --- | --- |

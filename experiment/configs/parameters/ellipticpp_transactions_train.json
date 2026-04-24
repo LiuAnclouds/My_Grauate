@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "name": "ellipticpp_transactions_dyrift_train_parameters",
+  "dataset": "ellipticpp_transactions",
+  "notes": "Single-dataset DyRIFT-GNN train parameters. Use with experiment/mainline.py train --parameter-file.",
+  "train": {
+    "model": "dyrift_gnn",
+    "preset": "dyrift_trgt_deploy_v1",
+    "run_name": "ellipticpp_transactions_dyrift_70e_min30",
+    "feature_profile": "utpm_shift_enhanced",
+    "feature_dir": "experiment/outputs/ellipticpp_transactions/training/features_ap96",
+    "outdir": "experiment/outputs/ellipticpp_transactions/training/models",
+    "seeds": [42],
+    "epochs": 70,
+    "batch_size": 512,
+    "hidden_dim": 192,
+    "rel_dim": 64,
+    "fanouts": [20, 15],
+    "dropout": 0.10,
+    "target_context_groups": [
+      "graph_stats",
+      "graph_time_detrend",
+      "neighbor_similarity",
+      "activation_early"
+    ],
+    "graph_config_overrides": {
+      "min_early_stop_epoch": 30,
+      "attention_num_heads": 16,
+      "neighbor_sampler": "hybrid",
+      "recent_window": 120,
+      "recent_ratio": 0.45,
+      "time_decay_strength": 2.0,
+      "target_time_weight_half_life_days": 20,
+      "target_time_weight_floor": 0.35,
+      "cold_start_residual_strength": 0.35
+    }
+  }
+}

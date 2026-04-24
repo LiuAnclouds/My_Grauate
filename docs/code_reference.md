@@ -57,6 +57,7 @@ This is the compact code map for the current `DyRIFT-GNN / TRGT` route.
 | `build_model` | `modules/model.py` | DyRIFT model factory |
 | `RuntimeBundle` | `models/runtime.py` | prepared runtime assets |
 | `GraphModelConfig` | `models/engine.py` | central graph-model config object |
+| `TrainParameters` / `Parameter` | `config_loader.py` | explicit JSON/CLI train-parameter container |
 | `TRGTTemporalRelationAttentionBlock` | `modules/backbone.py` | temporal-relation attention block |
 | `TRGTInternalRiskEncoder` | `modules/backbone.py` | internal risk encoder |
 

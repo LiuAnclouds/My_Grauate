@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -15,25 +16,19 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from experiment.datasets.core.registry import get_active_dataset_spec
+from experiment.config_loader import TrainParameters, resolve_train_parameters
 from experiment.models.engine import GraphModelConfig
 from experiment.models.presets import (
     apply_cfg_overrides,
     build_graph_cfg,
-    default_preset,
     list_presets,
 )
 from experiment.models.runtime import build_runtime
 from experiment.models.spec import (
     DYRIFT_GNN_MODEL,
     DYRIFT_MODEL_SHORT_NAME,
-    OFFICIAL_BACKBONE_FEATURE_PROFILE,
     OFFICIAL_BACKBONE_MODEL,
-    OFFICIAL_MAINLINE_BATCH_SIZE,
-    OFFICIAL_MAINLINE_FANOUTS,
-    OFFICIAL_MAINLINE_HIDDEN_DIM,
-    OFFICIAL_MAINLINE_REL_DIM,
     OFFICIAL_SUITE_EPOCHS,
-    OFFICIAL_TARGET_CONTEXT_GROUPS,
     TRGT_BACKBONE_SHORT_NAME,
     TRANSFORMER_BACKBONE_DEPLOY_PRESET,
     TRANSFORMER_BACKBONE_MODEL,
@@ -148,9 +143,18 @@ def parse_args() -> argparse.Namespace:
         help="Train the clean thesis mainline with unified train/val/test_pool evaluation.",
     )
     train_parser.add_argument(
+        "--parameter-file",
+        type=Path,
+        default=None,
+        help=(
+            "Optional JSON train-parameter file. CLI values override JSON values. "
+            "Core train hyperparameters have no thesis defaults in this entrypoint."
+        ),
+    )
+    train_parser.add_argument(
         "--model",
         choices=("m5_temporal_graphsage", "m7_utpm", DYRIFT_GNN_MODEL),
-        default=TRANSFORMER_BACKBONE_MODEL,
+        default=None,
         help=(
             "`m5_temporal_graphsage` is the unified baseline; "
             "`m7_utpm` is the legacy stable GraphSAGE thesis backbone; "
@@ -171,19 +175,19 @@ def parse_args() -> argparse.Namespace:
     )
     train_parser.add_argument(
         "--run-name",
-        default="thesis_mainline",
+        default=None,
         help="Subdirectory name for this experiment run.",
     )
     train_parser.add_argument(
         "--feature-profile",
         choices=("utpm_unified", "utpm_shift_compact", "utpm_shift_enhanced"),
-        default=OFFICIAL_BACKBONE_FEATURE_PROFILE,
+        default=None,
         help="Unified feature contract used by the thesis mainline.",
     )
     train_parser.add_argument(
         "--feature-dir",
         type=Path,
-        default=FEATURE_OUTPUT_ROOT,
+        default=None,
         help="Feature cache directory from build_features.",
     )
     train_parser.add_argument(
@@ -192,21 +196,21 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Optional explicit target-context feature groups for the internal prior bridge. "
-            "When omitted, the thesis default group set is used. "
+            "When omitted, no hidden thesis group default is injected. "
             "Pass `none` to disable the internal target-context feature branch."
         ),
     )
     train_parser.add_argument(
         "--outdir",
         type=Path,
-        default=MODEL_OUTPUT_ROOT,
+        default=None,
         help="Output directory for model checkpoints and predictions.",
     )
     train_parser.add_argument(
         "--seeds",
         type=int,
         nargs="+",
-        default=[42, 52, 62],
+        default=None,
         help="Random seeds used for multi-seed evaluation.",
     )
     train_parser.add_argument(
@@ -241,32 +245,32 @@ def parse_args() -> argparse.Namespace:
     train_parser.add_argument(
         "--epochs",
         type=int,
-        default=OFFICIAL_SUITE_EPOCHS,
+        default=None,
         help="Epochs for graph models.",
     )
     train_parser.add_argument(
         "--batch-size",
         type=int,
-        default=OFFICIAL_MAINLINE_BATCH_SIZE,
+        default=None,
         help="Batch size for graph models.",
     )
     train_parser.add_argument(
         "--fanouts",
         type=int,
         nargs="+",
-        default=list(OFFICIAL_MAINLINE_FANOUTS),
+        default=None,
         help="Neighbor fanouts per layer for graph models.",
     )
     train_parser.add_argument(
         "--hidden-dim",
         type=int,
-        default=OFFICIAL_MAINLINE_HIDDEN_DIM,
+        default=None,
         help="Hidden dimension for graph models.",
     )
     train_parser.add_argument(
         "--rel-dim",
         type=int,
-        default=OFFICIAL_MAINLINE_REL_DIM,
+        default=None,
         help="Relation embedding dimension for graph models.",
     )
     train_parser.add_argument(
@@ -294,6 +298,11 @@ def parse_args() -> argparse.Namespace:
         metavar="KEY=VALUE",
         help="Low-level GraphModelConfig override, repeatable. Example: --graph-config-override pseudo_contrastive_weight=0.0",
     )
+    train_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Resolve train parameters and print them without loading data or training.",
+    )
     return parser.parse_args()
 
 
@@ -306,8 +315,36 @@ def _prepare_split_ids(args: argparse.Namespace):
     return split, train_ids, val_ids, test_pool_ids, external_ids
 
 
+def _apply_train_parameters(args: argparse.Namespace) -> TrainParameters:
+    params = resolve_train_parameters(
+        args=args,
+        default_epochs=OFFICIAL_SUITE_EPOCHS,
+        default_outdir=MODEL_OUTPUT_ROOT,
+    )
+    args.model = params.model
+    args.preset = params.preset
+    args.run_name = params.run_name
+    args.feature_profile = params.feature_profile
+    args.feature_dir = params.feature_dir
+    args.target_context_groups = params.target_context_groups
+    args.outdir = params.outdir
+    args.seeds = list(params.seeds)
+    args.epochs = int(params.epochs)
+    args.batch_size = int(params.batch_size)
+    args.hidden_dim = int(params.hidden_dim)
+    args.rel_dim = int(params.rel_dim)
+    args.fanouts = list(params.fanouts)
+    args.device = params.device
+    args.learning_rate = params.learning_rate
+    args.weight_decay = params.weight_decay
+    args.dropout = params.dropout
+    args.graph_config_override = list(params.graph_config_overrides)
+    args.resolved_train_parameters = params
+    return params
+
+
 def _build_graph_config(args: argparse.Namespace) -> GraphModelConfig:
-    preset_name = args.preset or default_preset(args.model)
+    preset_name = str(args.preset)
     if preset_name not in list_presets(args.model):
         supported = ", ".join(list_presets(args.model))
         raise ValueError(
@@ -378,18 +415,17 @@ def run_build_features(args: argparse.Namespace) -> None:
 
 
 def run_train(args: argparse.Namespace) -> None:
+    params = _apply_train_parameters(args)
+    if bool(getattr(args, "dry_run", False)):
+        print(json.dumps({"train_parameters": params.to_summary_payload()}, indent=2, ensure_ascii=False))
+        return
     split, train_ids, val_ids, test_pool_ids, external_ids = _prepare_split_ids(args)
     if split.train_phase != split.val_phase:
         raise NotImplementedError("The thesis mainline requires train/val to come from the same graph.")
 
     graph_config = _build_graph_config(args)
     if args.target_context_groups is None:
-        target_context_groups = list(OFFICIAL_TARGET_CONTEXT_GROUPS)
-        if (
-            str(graph_config.target_context_fusion) == "none"
-            and float(graph_config.target_time_adapter_strength) <= 0.0
-        ):
-            target_context_groups = []
+        target_context_groups = []
     else:
         normalized_target_context_groups = [
             str(value).strip() for value in args.target_context_groups if str(value).strip()
@@ -436,7 +472,7 @@ def run_train(args: argparse.Namespace) -> None:
         "[thesis_mainline] "
         f"dataset={ACTIVE_DATASET_SPEC.name} "
         f"model={args.model} "
-        f"preset={getattr(args, 'resolved_preset', default_preset(args.model))} "
+        f"preset={getattr(args, 'resolved_preset', args.preset)} "
         f"feature_profile={args.feature_profile} "
         f"context_bridge={','.join(runtime.target_context_feature_groups) if runtime.target_context_feature_groups else 'none'} "
         f"train={train_ids.size} val={val_ids.size} test_pool={test_pool_ids.size} external={external_ids.size}"
@@ -611,7 +647,8 @@ def run_train(args: argparse.Namespace) -> None:
         "run_name": args.run_name,
         "dataset": ACTIVE_DATASET_SPEC.name,
         "dataset_display_name": ACTIVE_DATASET_SPEC.display_name,
-        "preset": getattr(args, "resolved_preset", default_preset(args.model)),
+        "preset": getattr(args, "resolved_preset", args.preset),
+        "train_parameters": params.to_summary_payload(),
         "graph_config_overrides": getattr(args, "applied_graph_config_overrides", {}),
         "feature_profile": args.feature_profile,
         "official_eval_contract": ["train", "val", "test_pool"],
