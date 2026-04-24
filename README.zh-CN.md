@@ -20,12 +20,12 @@
 
 ## 主结果
 
-| 数据集 | Val AUC | 结果目录 |
-| --- | ---: | --- |
-| XinYe DGraph | 79.2851% | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1` |
-| Elliptic Transactions | 82.1329% | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1` |
-| Elliptic++ Transactions | 82.1953% | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1` |
-| 宏平均 | 81.2044% | `docs/results/accepted_mainline_summary.json` |
+| 数据集 | Val AUC |
+| --- | ---: |
+| XinYe DGraph | 79.2851% |
+| Elliptic Transactions | 82.1329% |
+| Elliptic++ Transactions | 82.1953% |
+| 宏平均 | 81.2044% |
 
 运行时模型名：`dyrift_gnn`  
 论文方法名：`Dynamic Risk-Informed Fraud Graph Neural Network (DyRIFT-GNN)`  

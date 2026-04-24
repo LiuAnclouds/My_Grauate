@@ -161,13 +161,13 @@ The saved prediction files contain:
 
 The phase1+phase2 studies use additional phase2 labels and therefore are not used as the official leakage-free thesis mainline. They are useful for explaining phase drift and checkpoint-selection trade-offs.
 
-## 9. Accepted Results And Artifacts
+## 9. Accepted Results
 
-| Dataset | Val AUC | Epoch log |
-| --- | ---: | --- |
-| XinYe DGraph | 79.2851% | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1/seed_42/epoch_metrics.csv` |
-| Elliptic Transactions | 82.1329% | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1/seed_42/epoch_metrics.csv` |
-| Elliptic++ Transactions | 82.1953% | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1/seed_42/epoch_metrics.csv` |
+| Dataset | Val AUC |
+| --- | ---: |
+| XinYe DGraph | 79.2851% |
+| Elliptic Transactions | 82.1329% |
+| Elliptic++ Transactions | 82.1953% |
 
 The full manifest is `docs/results/epoch_log_manifest.csv`.
 

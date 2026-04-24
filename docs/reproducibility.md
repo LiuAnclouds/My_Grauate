@@ -132,16 +132,16 @@ The policy is stored in `experiment/configs/training_policy.json` and summarized
 
 Dataset-level feature and training parameters are explicit in `experiment/configs/dyrift_suite.json`, `experiment/configs/xinye_dgraph.json`, `experiment/configs/elliptic_transactions.json`, and `experiment/configs/ellipticpp_transactions.json`. The runner does not require hidden thesis-only defaults.
 
-Rerun outputs are written to suite-scoped names such as `dyrift_mainline_rerun_xy_70e_min30`, so the saved accepted artifact directories listed below are not overwritten.
+Rerun outputs are written to suite-scoped names such as `dyrift_mainline_rerun_xy_70e_min30`, so previous saved results are not overwritten.
 
-The official saved thesis artifacts are:
+The official thesis result table is:
 
-| Dataset | Val AUC | Saved artifact |
-| --- | ---: | --- |
-| XinYe DGraph | 79.2851% | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1` |
-| Elliptic Transactions | 82.1329% | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1` |
-| Elliptic++ Transactions | 82.1953% | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1` |
-| Macro Average | 81.2044% | `docs/results/accepted_mainline_summary.json` |
+| Dataset | Val AUC |
+| --- | ---: |
+| XinYe DGraph | 79.2851% |
+| Elliptic Transactions | 82.1329% |
+| Elliptic++ Transactions | 82.1953% |
+| Macro Average | 81.2044% |
 
 ## 7. Result Files
 

@@ -20,11 +20,7 @@
 
 ## 1. Accepted Mainline Result
 
-当前论文正式主结果采用三条已经保存的 accepted run artifact：
-
-- XinYe: `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1`
-- ET: `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1`
-- EPP: `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1`
+当前论文正式主结果只展示指标，不在论文表格中暴露内部输出目录。
 
 | Setting | XinYe | ET | EPP | Macro Val AUC |
 | --- | ---: | ---: | ---: | ---: |
@@ -90,7 +86,7 @@
 说明：
 
 - 前五行来自 `experiment/outputs/studies/progressive/` 的统一 study 输出。
-- 最后一行使用 accepted 主结果 artifact，因为它才是论文最终采用的 full model。
+- 最后一行使用论文正式主结果，因为它才是最终采用的 full model。
 
 ## 5. Supplementary XinYe Phase1+Phase2 Diagnostics
 

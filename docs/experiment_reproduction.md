@@ -34,13 +34,7 @@ Accepted result table:
 | --- | ---: | ---: | ---: | ---: |
 | Full DyRIFT-GNN | 79.2851% | 82.1329% | 82.1953% | 81.2044% |
 
-Accepted artifacts:
-
-| Dataset | Saved artifact |
-| --- | --- |
-| XinYe DGraph | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1` |
-| Elliptic Transactions | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1` |
-| Elliptic++ Transactions | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1` |
+Traceability paths are intentionally kept out of the presentation table. Use `docs/results/epoch_log_manifest.csv` when logs, curves, and summary files are needed.
 
 ## 2. Comparison Studies
 

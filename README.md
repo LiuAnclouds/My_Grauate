@@ -16,12 +16,12 @@ The final inference route is single-model pure GNN. No external tree model, teac
 
 ## Mainline Result
 
-| Dataset | Val AUC | Artifact |
-| --- | ---: | --- |
-| XinYe DGraph | 79.2851% | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1` |
-| Elliptic Transactions | 82.1329% | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1` |
-| Elliptic++ Transactions | 82.1953% | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1` |
-| Macro Average | 81.2044% | `docs/results/accepted_mainline_summary.json` |
+| Dataset | Val AUC |
+| --- | ---: |
+| XinYe DGraph | 79.2851% |
+| Elliptic Transactions | 82.1329% |
+| Elliptic++ Transactions | 82.1953% |
+| Macro Average | 81.2044% |
 
 Runtime id: `dyrift_gnn`  
 Paper-facing method: `Dynamic Risk-Informed Fraud Graph Neural Network (DyRIFT-GNN)`  
