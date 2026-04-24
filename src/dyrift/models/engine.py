@@ -15,25 +15,25 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm.auto import tqdm
 
-from features.features import (
+from dyrift.features.features import (
     FeatureStore,
     GraphCache,
     HybridFeatureNormalizerState,
     default_feature_groups,
 )
-from models.components.backbone import (
+from dyrift.models.components.backbone import (
     TRGTInternalRiskEncoder,
     TRGTMeanRelationBlock,
     TRGTTemporalRelationAttentionBlock,
 )
-from models.components.bridge import TargetContextFusionHead
-from models.components.memory import (
+from dyrift.models.components.bridge import TargetContextFusionHead
+from dyrift.models.components.memory import (
     PrototypeMemoryBank,
     PrototypeMemoryConfig,
     TemporalNormalAlignmentBank,
     TemporalNormalAlignmentConfig,
 )
-from utils.common import (
+from dyrift.utils.common import (
     compute_binary_classification_metrics,
     ensure_dir,
     resolve_device,

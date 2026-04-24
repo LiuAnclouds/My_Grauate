@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from data_processing.core.registry import get_active_dataset_spec, get_dataset_spec
+from dyrift.data_processing.core.registry import get_active_dataset_spec, get_dataset_spec
 
 
 ACTIVE_DATASET_SPEC = get_active_dataset_spec()
@@ -39,7 +39,7 @@ def resolve_dataset_path(phase: str, repo_root: Path | None = None) -> Path:
         raise ValueError(f"Unsupported phase: {phase}")
 
     if repo_root is None:
-        repo_root = Path(__file__).resolve().parents[1]
+        repo_root = Path(__file__).resolve().parents[3]
 
     spec = get_active_dataset_spec()
     dataset_root = repo_root / spec.dataset_root_relative

@@ -1,6 +1,6 @@
 """Dataset domain for the DyRIFT-GNN thesis benchmarks."""
 
-from data_processing.core.contracts import (
+from dyrift.data_processing.core.contracts import (
     PreparedGraphContract,
     PreparedPhaseContract,
     save_prepared_graph,
@@ -8,13 +8,13 @@ from data_processing.core.contracts import (
     validate_prepared_graph,
     validate_prepared_phase,
 )
-from data_processing.core.downloads import (
+from dyrift.data_processing.core.downloads import (
     DownloadResult,
     build_download_candidates,
     download_file,
     is_huggingface_url,
 )
-from data_processing.core.registry import (
+from dyrift.data_processing.core.registry import (
     DATASET_ENV_VAR,
     DatasetSpec,
     get_active_dataset_name,

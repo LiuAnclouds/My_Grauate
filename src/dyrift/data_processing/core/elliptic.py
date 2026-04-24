@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-from data_processing.core.contracts import PreparedPhaseContract
+from dyrift.data_processing.core.contracts import PreparedPhaseContract
 
 
 def load_pandas():

@@ -12,19 +12,21 @@ from tqdm.auto import tqdm
 
 
 REPO_ROOT = Path(__file__).resolve().parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+SRC_ROOT = REPO_ROOT / "src"
+for import_root in (SRC_ROOT, REPO_ROOT):
+    if str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
 
-from data_processing.core.registry import get_active_dataset_spec
-from config_loader import TrainParameters, resolve_train_parameters
-from models.engine import GraphModelConfig
-from models.presets import (
+from dyrift.data_processing.core.registry import get_active_dataset_spec
+from dyrift.config_loader import TrainParameters, resolve_train_parameters
+from dyrift.models.engine import GraphModelConfig
+from dyrift.models.presets import (
     apply_cfg_overrides,
     build_graph_cfg,
     list_presets,
 )
-from models.runtime import build_runtime
-from models.spec import (
+from dyrift.models.runtime import build_runtime
+from dyrift.models.spec import (
     DYRIFT_GNN_MODEL,
     DYRIFT_MODEL_SHORT_NAME,
     OFFICIAL_TRAIN_EPOCHS,
@@ -33,9 +35,9 @@ from models.spec import (
     TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_PRESET,
 )
-from features.features import build_feature_artifacts
-from models.graph import get_experiment_cls
-from utils.common import (
+from dyrift.features.features import build_feature_artifacts
+from dyrift.models.graph import get_experiment_cls
+from dyrift.utils.common import (
     FEATURE_OUTPUT_ROOT,
     TRAIN_OUTPUT_ROOT,
     compute_binary_classification_metrics,

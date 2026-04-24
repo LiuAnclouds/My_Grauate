@@ -5,8 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
-from features.features import FeatureStore
-from utils.common import ensure_dir
+from dyrift.features.features import FeatureStore
+from dyrift.utils.common import ensure_dir
 
 
 RAW_CONSISTENCY_PROFILE_VERSION = "raw_consistency_v1"

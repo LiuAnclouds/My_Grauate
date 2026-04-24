@@ -7,8 +7,8 @@ from typing import Any
 import numpy as np
 import xgboost as xgb
 
-from features.features import FeatureStore, build_hybrid_feature_normalizer, resolve_feature_groups
-from utils.common import (
+from dyrift.features.features import FeatureStore, build_hybrid_feature_normalizer, resolve_feature_groups
+from dyrift.utils.common import (
     compute_binary_classification_metrics,
     ensure_dir,
     load_experiment_split,
@@ -98,8 +98,8 @@ def run_xgboost_dataset(
         if phase2_target_store is not None and external_ids.size:
             external_x = np.concatenate([external_x, phase2_target_store.take_rows(external_ids)], axis=1)
 
-    from models.runtime import build_runtime  # local import to reuse correct label contract
-    from models.engine import GraphModelConfig
+    from dyrift.models.runtime import build_runtime  # local import to reuse correct label contract
+    from dyrift.models.engine import GraphModelConfig
 
     runtime = build_runtime(
         feature_dir=plan.feature_dir,

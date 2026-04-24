@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from models.engine import GraphModelConfig
-from models.spec import (
+from dyrift.models.engine import GraphModelConfig
+from dyrift.models.spec import (
     DYRIFT_GNN_MODEL,
     OFFICIAL_BACKBONE_PRESET,
     TRANSFORMER_BACKBONE_MODEL,

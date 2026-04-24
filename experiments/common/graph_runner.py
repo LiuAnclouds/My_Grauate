@@ -7,10 +7,10 @@ from typing import Any
 import numpy as np
 from tqdm.auto import tqdm
 
-from models.graph import get_experiment_cls
-from models.presets import _BASE_GRAPH_CONFIG, apply_cfg_overrides, build_graph_cfg
-from models.runtime import build_runtime
-from utils.common import (
+from dyrift.models.graph import get_experiment_cls
+from dyrift.models.presets import _BASE_GRAPH_CONFIG, apply_cfg_overrides, build_graph_cfg
+from dyrift.models.runtime import build_runtime
+from dyrift.utils.common import (
     compute_binary_classification_metrics,
     ensure_dir,
     load_experiment_split,

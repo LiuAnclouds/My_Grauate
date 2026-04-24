@@ -14,14 +14,14 @@ pip install -r requirements.txt
 本地数据放在 `data/raw/`，该目录不提交到 Git。Elliptic 数据可重新准备：
 
 ```bash
-python3 data_processing/scripts/prepare_elliptic.py
-python3 data_processing/scripts/prepare_ellipticpp.py
+python3 src/dyrift/data_processing/scripts/prepare_elliptic.py
+python3 src/dyrift/data_processing/scripts/prepare_ellipticpp.py
 ```
 
 ## 分析与特征
 
 ```bash
-GRADPROJ_ACTIVE_DATASET=xinye_dgraph python3 analysis/run_analysis.py
+GRADPROJ_ACTIVE_DATASET=xinye_dgraph python3 src/dyrift/analysis/run_analysis.py
 GRADPROJ_ACTIVE_DATASET=xinye_dgraph python3 train.py build_features --outdir outputs/features/xinye_dgraph/features_ap32
 ```
 

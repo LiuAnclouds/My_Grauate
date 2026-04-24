@@ -10,11 +10,11 @@ from typing import Any
 import numpy as np
 from sklearn.metrics import average_precision_score, precision_recall_curve, roc_auc_score
 
-from data_processing.core.registry import resolve_output_roots
-from analysis.data_loader import resolve_dataset_path
+from dyrift.data_processing.core.registry import resolve_output_roots
+from dyrift.analysis.data_loader import resolve_dataset_path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 ANALYSIS_OUTPUT_ROOT, FEATURE_OUTPUT_ROOT = resolve_output_roots(REPO_ROOT)
 TRAIN_OUTPUT_ROOT = REPO_ROOT / "outputs" / "train"
 EPOCH_METRIC_COLUMNS = ("epoch", "train_loss", "train_auc", "val_loss", "val_auc")

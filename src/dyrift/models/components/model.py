@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from models.engine import GraphModelConfig, RelationGraphSAGENetwork
+from dyrift.models.engine import GraphModelConfig, RelationGraphSAGENetwork
 
 
 DYRIFT_MODEL_NAME = "DyRIFT-GNN"

@@ -8,13 +8,15 @@ from pathlib import Path
 import numpy as np
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SRC_ROOT = REPO_ROOT / "src"
+for import_root in (SRC_ROOT, REPO_ROOT):
+    if str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
 
-from data_processing.core.contracts import save_prepared_phase
-from data_processing.core.downloads import download_file
-from data_processing.core.elliptic import (
+from dyrift.data_processing.core.contracts import save_prepared_phase
+from dyrift.data_processing.core.downloads import download_file
+from dyrift.data_processing.core.elliptic import (
     build_chronological_node_contracts,
     build_edge_arrays,
     build_full_graph_contract,

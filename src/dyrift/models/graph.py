@@ -5,23 +5,23 @@ from typing import Any
 
 import numpy as np
 
-from data_processing.core.registry import get_active_dataset_spec
-from features.features import (
+from dyrift.data_processing.core.registry import get_active_dataset_spec
+from dyrift.features.features import (
     FeatureStore,
     HybridFeatureNormalizerState,
     load_graph_cache,
     resolve_feature_groups,
 )
-from models.engine import (
+from dyrift.models.engine import (
     GraphPhaseContext,
     RelationGraphSAGEExperiment,
     TemporalRelationGATExperiment,
     TemporalRelationGraphSAGEExperiment,
 )
-from models.components.trainer import DyRIFTTrainer
-from models.spec import DYRIFT_GNN_MODEL
-from utils.common import load_phase_arrays
-from utils.sampling import load_or_build_raw_consistency_profile
+from dyrift.models.components.trainer import DyRIFTTrainer
+from dyrift.models.spec import DYRIFT_GNN_MODEL
+from dyrift.utils.common import load_phase_arrays
+from dyrift.utils.sampling import load_or_build_raw_consistency_profile
 
 
 GRAPH_EXPERIMENTS = {

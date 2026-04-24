@@ -7,12 +7,9 @@
 | 路径 | 内容 |
 | --- | --- |
 | `train.py` | 单数据集训练入口 |
+| `src/dyrift/` | 项目源码，包含分析、数据处理、特征、模型和通用工具 |
 | `configs/train/` | 三个数据集各自的训练参数 |
-| `data_processing/` | 数据下载、转换和数据集注册代码 |
 | `data/raw/` | 本地原始/预处理数据，默认不提交 |
-| `analysis/` | 数据分析和划分文件生成 |
-| `features/` | 特征缓存构建 |
-| `models/` | DyRIFT-GNN、TRGT 和基础图模型实现 |
 | `experiments/` | 对比、消融、渐进实验配置和入口 |
 | `outputs/analysis/` | 数据分析输出 |
 | `outputs/features/` | 特征缓存 |

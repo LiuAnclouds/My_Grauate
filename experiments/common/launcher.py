@@ -7,8 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from data_processing.core.registry import DATASET_ENV_VAR
-from utils.common import ensure_dir
+from dyrift.data_processing.core.registry import DATASET_ENV_VAR
+from dyrift.utils.common import ensure_dir
 
 from .contracts import DatasetPlan, ExperimentConfig, REPO_ROOT, load_experiment_config, resolve_dataset_plan
 

@@ -5,12 +5,14 @@ import sys
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SRC_ROOT = REPO_ROOT / "src"
+for import_root in (SRC_ROOT, REPO_ROOT):
+    if str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
 
-from data_processing.core.registry import get_active_dataset_spec, resolve_output_roots
-from analysis.analysis import ALL_ANALYSES, run_analysis
+from dyrift.data_processing.core.registry import get_active_dataset_spec, resolve_output_roots
+from dyrift.analysis.analysis import ALL_ANALYSES, run_analysis
 
 
 ANALYSIS_OUTPUT_ROOT, _ = resolve_output_roots(REPO_ROOT)

@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from config_loader import ATTR_PROJ_ENV_VAR
-from data_processing.core.registry import get_dataset_spec
+from dyrift.config_loader import ATTR_PROJ_ENV_VAR
+from dyrift.data_processing.core.registry import get_dataset_spec
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

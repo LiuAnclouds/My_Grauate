@@ -10,10 +10,10 @@ import numpy as np
 from sklearn.decomposition import TruncatedSVD
 from tqdm.auto import tqdm
 
-from data_processing.core.registry import get_active_dataset_spec
-from analysis.analysis import compute_degree_arrays, compute_temporal_core
-from analysis.data_loader import PhaseData, load_phase
-from utils.common import (
+from dyrift.data_processing.core.registry import get_active_dataset_spec
+from dyrift.analysis.analysis import compute_degree_arrays, compute_temporal_core
+from dyrift.analysis.data_loader import PhaseData, load_phase
+from dyrift.utils.common import (
     ANALYSIS_OUTPUT_ROOT,
     FEATURE_OUTPUT_ROOT,
     REPO_ROOT,

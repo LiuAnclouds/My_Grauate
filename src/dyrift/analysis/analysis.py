@@ -12,8 +12,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from data_processing.core.registry import get_active_dataset_spec
-from analysis.data_loader import LABEL_NAMES, PhaseData, load_phase
+from dyrift.data_processing.core.registry import get_active_dataset_spec
+from dyrift.analysis.data_loader import LABEL_NAMES, PhaseData, load_phase
 
 
 ALL_ANALYSES = ("overview", "feature", "graph", "temporal", "drift", "split")

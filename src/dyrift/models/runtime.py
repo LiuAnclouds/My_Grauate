@@ -5,11 +5,11 @@ from pathlib import Path
 
 import numpy as np
 
-from features.features import build_hybrid_feature_normalizer, resolve_feature_groups
-from models.engine import GraphModelConfig, GraphPhaseContext
-from models.graph import build_contexts, build_label_artifacts
-from models.spec import OFFICIAL_TARGET_CONTEXT_GROUPS
-from utils.common import ExperimentSplit
+from dyrift.features.features import build_hybrid_feature_normalizer, resolve_feature_groups
+from dyrift.models.engine import GraphModelConfig, GraphPhaseContext
+from dyrift.models.graph import build_contexts, build_label_artifacts
+from dyrift.models.spec import OFFICIAL_TARGET_CONTEXT_GROUPS
+from dyrift.utils.common import ExperimentSplit
 
 
 @dataclass(frozen=True)
