@@ -54,12 +54,14 @@
 | [代码索引](docs/code_reference.md) | 代码目录与调用链 |
 | [Studies 工作区](experiment/studies/README.md) | 对比、消融、递进式实验、补充实验 |
 | [泄露审计](docs/leakage_audit.md) | 当前 accepted 主结果的硬泄露审计 |
+| [训练策略 JSON](experiment/configs/training_policy.json) | 维护中的 `70` 轮、最少第 `30` 轮后早停策略 |
 | [主结果 AUC 表](docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv) | 三数据集 accepted AUC 汇总 |
 | [对比实验 AUC 表](docs/results/comparison_auc.csv) | 对比实验 AUC 汇总 |
 | [消融实验 AUC 表](docs/results/ablation_auc.csv) | 减法消融 AUC 汇总 |
 | [递进实验 AUC 表](docs/results/progressive_auc.csv) | 方法递进式 AUC 汇总 |
 | [补充实验 AUC 表](docs/results/supplementary_auc.csv) | XinYe `phase1+phase2` 联合训练补充实验 |
 | [展示用 AUC 表](docs/results/presentation_auc_percent.csv) | 论文表格使用的百分数 AUC 和百分点差值 |
+| [实验 epoch 策略表](docs/results/experiment_epoch_policy.csv) | 各实验计划最大 epoch 和最小早停 epoch |
 | [历史外部评测记录](docs/results/historical_external_records.csv) | 用户提供的竞赛/外部评测记录，和可复现主线 artifact 分开保存 |
 | [训练日志清单](docs/results/epoch_log_manifest.csv) | 每个实验的 epoch、日志和曲线路径 |
 
@@ -117,6 +119,8 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
   --dataset-hparams experiment/configs/dyrift_suite.json \
   --seeds 42
 ```
+
+当前维护中的 rerun 策略是 `max_epochs=70`，并通过 `min_early_stop_epoch=30` 保证图模型不会在第 30 轮之前早停。已有 accepted artifact 保持真实保存的 epoch 日志；重新运行上面的命令会写入类似 `dyrift_mainline_rerun_xy_70e_min30` 的 suite 级新目录。
 
 运行单个独立 study：
 

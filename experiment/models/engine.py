@@ -85,6 +85,7 @@ class GraphModelConfig:
     grad_clip: float = 0.0
     scheduler: str = "none"
     early_stop_patience: int = 0
+    min_early_stop_epoch: int = 0
     train_negative_ratio: float = 0.0
     negative_sampler: str = "random"
     hard_negative_mix: float = 0.5
@@ -182,6 +183,7 @@ class GraphModelConfig:
             "grad_clip": float(self.grad_clip),
             "scheduler": self.scheduler,
             "early_stop_patience": int(self.early_stop_patience),
+            "min_early_stop_epoch": int(self.min_early_stop_epoch),
             "train_negative_ratio": float(self.train_negative_ratio),
             "negative_sampler": self.negative_sampler,
             "hard_negative_mix": float(self.hard_negative_mix),
@@ -289,6 +291,7 @@ class GraphModelConfig:
             grad_clip=float(payload.get("grad_clip", 0.0)),
             scheduler=str(payload.get("scheduler", "none")),
             early_stop_patience=int(payload.get("early_stop_patience", 0)),
+            min_early_stop_epoch=int(payload.get("min_early_stop_epoch", 0)),
             train_negative_ratio=float(payload.get("train_negative_ratio", 0.0)),
             negative_sampler=str(payload.get("negative_sampler", "random")),
             hard_negative_mix=float(payload.get("hard_negative_mix", 0.5)),
@@ -4263,6 +4266,8 @@ class BaseGraphSAGEExperiment:
                     f"{self.graph_config.historical_background_negative_warmup_epochs} "
                     f"historical_background_aux_only={self.graph_config.historical_background_aux_only} "
                     f"negative_sampler={self.graph_config.negative_sampler} "
+                    f"early_stop_patience={self.graph_config.early_stop_patience} "
+                    f"min_early_stop_epoch={self.graph_config.min_early_stop_epoch} "
                     f"loss_type={self.graph_config.loss_type} "
                     f"ranking_weight={self.graph_config.ranking_weight:.4f} "
                     f"ranking_margin={self.graph_config.ranking_margin:.4f} "
@@ -4820,11 +4825,13 @@ class BaseGraphSAGEExperiment:
 
                 if (
                     self.graph_config.early_stop_patience > 0
+                    and epoch >= max(int(self.graph_config.min_early_stop_epoch), 1)
                     and epochs_without_improvement >= self.graph_config.early_stop_patience
                 ):
                     early_stop_line = (
                         f"[{self.model_name}] early_stop epoch={epoch} "
-                        f"patience={self.graph_config.early_stop_patience}"
+                        f"patience={self.graph_config.early_stop_patience} "
+                        f"min_early_stop_epoch={self.graph_config.min_early_stop_epoch}"
                     )
                     tqdm.write(early_stop_line)
                     if log_path is not None:
@@ -4837,9 +4844,11 @@ class BaseGraphSAGEExperiment:
         fit_summary = {
             "val_auc": float(best_val_auc),
             "best_epoch": float(best_epoch),
+            "trained_epochs": int(len(self.training_history)),
             "loss_pos_weight": float(pos_weight.item()),
             "loss_type": str(self.graph_config.loss_type),
             "negative_sampler": str(self.graph_config.negative_sampler),
+            "min_early_stop_epoch": int(self.graph_config.min_early_stop_epoch),
         }
         self.fit_summary = fit_summary
         if history_csv_path is not None:

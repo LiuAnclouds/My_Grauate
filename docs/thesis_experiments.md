@@ -14,6 +14,7 @@
 - [Progressive AUC CSV](results/progressive_auc.csv)
 - [Supplementary AUC CSV](results/supplementary_auc.csv)
 - [Presentation AUC CSV](results/presentation_auc_percent.csv)
+- [Experiment Epoch Policy CSV](results/experiment_epoch_policy.csv)
 - [Historical External Records](results/historical_external_records.csv)
 - [Epoch Log Manifest](results/epoch_log_manifest.csv)
 
@@ -52,7 +53,7 @@
 - 正式主结果相对 `Plain TRGT Backbone` 的宏平均提升是 `+2.0252` 个百分点。
 - 正式主结果相对 `TGAT-style Reference` 的宏平均提升是 `+2.0805` 个百分点。
 - 正式主结果相对 `Temporal GraphSAGE Reference` 的宏平均提升是 `+3.1238` 个百分点。
-- `XGBoost Same Input` 只作为同输入的非 GNN 参考线，不参与最终方法选型，因为它不是统一纯 GNN 部署路线。
+- `XGBoost Same Input` 只作为同输入的非 GNN 补充参考线，不参与最终方法选型，也不用于说明 GNN 方法优越性，因为它不是统一纯 GNN 部署路线。
 
 ## 3. Subtractive Ablation
 
@@ -137,7 +138,23 @@ CSV: [Historical External Records](results/historical_external_records.csv)
 - [Progressive AUC CSV](results/progressive_auc.csv)
 - [Supplementary AUC CSV](results/supplementary_auc.csv)
 - [Presentation AUC CSV](results/presentation_auc_percent.csv)
+- [Experiment Epoch Policy CSV](results/experiment_epoch_policy.csv)
+- [Training Policy Summary JSON](results/training_policy_summary.json)
 - [Historical External Records](results/historical_external_records.csv)
 - [Epoch Log Manifest](results/epoch_log_manifest.csv)
 - [Studies Workspace](../experiment/studies/README.md)
 - [Accepted Leakage Audit JSON](results/leakage_audit.json)
+
+## 8. Epoch Policy
+
+当前维护中的正式 rerun 和所有 study rerun 统一采用：
+
+| Item | Value |
+| --- | ---: |
+| Max epochs | 70 |
+| Minimum early-stop epoch | 30 |
+| Default graph patience | 10 |
+| XGBoost boosting rounds | 70 |
+| XGBoost early-stopping rounds | 30 |
+
+`docs/results/experiment_epoch_policy.csv` 记录计划训练策略；`docs/results/epoch_log_manifest.csv` 记录已经保存 artifact 的真实 epoch、日志和曲线路径。两者不混写，避免为了展示而改动历史训练记录。

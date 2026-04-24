@@ -109,6 +109,7 @@
 - XinYe accepted run 使用 `full_xinye_repro_v1`。
 - ET final profile 关闭了 `internal_risk_fusion`，但仍然保持同一 `DyRIFT-GNN / TRGT` 架构。
 - EPP final profile 在同一架构内启用了 `cold_start_residual_strength=0.35`。
+- 维护中的重新训练策略为 `max_epochs=70`、`min_early_stop_epoch=30`；历史 accepted artifact 的真实 epoch 日志不手动补写。
 
 ## 8. Leakage Guardrails
 

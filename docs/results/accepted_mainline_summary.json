@@ -9,6 +9,12 @@
   "dataset_isolation": true,
   "cross_dataset_training": false,
   "same_architecture_across_datasets": true,
+  "maintained_rerun_policy": {
+    "max_epochs": 70,
+    "min_early_stop_epoch": 30,
+    "policy_path": "experiment/configs/training_policy.json",
+    "note": "Existing accepted artifacts keep their observed epoch logs; future reruns use this policy."
+  },
   "results": [
     {
       "dataset": "xinye_dgraph",

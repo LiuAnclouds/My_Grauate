@@ -7,6 +7,8 @@ This workspace isolates comparison, ablation, progressive, and supplementary exp
 - Do not modify the production `experiment/mainline.py` route just to run a study.
 - Every study owns its own `config.json` and `run.py`.
 - All outputs go to `experiment/outputs/studies/`.
+- Maintained graph studies run with `epochs=70` and `min_early_stop_epoch=30`.
+- The same-input XGBoost study uses `num_boost_round=70` and `early_stopping_rounds=30`.
 - Each study writes:
   - dataset-level `summary.json`
   - per-seed `epoch_metrics.csv`

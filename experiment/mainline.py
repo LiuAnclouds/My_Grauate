@@ -32,6 +32,7 @@ from experiment.models.spec import (
     OFFICIAL_MAINLINE_FANOUTS,
     OFFICIAL_MAINLINE_HIDDEN_DIM,
     OFFICIAL_MAINLINE_REL_DIM,
+    OFFICIAL_SUITE_EPOCHS,
     OFFICIAL_TARGET_CONTEXT_GROUPS,
     TRGT_BACKBONE_SHORT_NAME,
     TRANSFORMER_BACKBONE_DEPLOY_PRESET,
@@ -240,7 +241,7 @@ def parse_args() -> argparse.Namespace:
     train_parser.add_argument(
         "--epochs",
         type=int,
-        default=16,
+        default=OFFICIAL_SUITE_EPOCHS,
         help="Epochs for graph models.",
     )
     train_parser.add_argument(

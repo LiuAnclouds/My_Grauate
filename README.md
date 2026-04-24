@@ -51,12 +51,14 @@ Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
 | [Code Reference](docs/code_reference.md) | package layout and call chain |
 | [Studies Workspace](experiment/studies/README.md) | isolated comparison, ablation, progressive, and supplementary experiments |
 | [Leakage Audit](docs/leakage_audit.md) | accepted mainline hard-leakage audit |
+| [Training Policy JSON](experiment/configs/training_policy.json) | maintained `70` epoch / min-`30` early-stop policy for future reruns |
 | [Mainline AUC CSV](docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv) | accepted three-dataset AUC table |
 | [Comparison AUC CSV](docs/results/comparison_auc.csv) | comparison-study AUC table |
 | [Ablation AUC CSV](docs/results/ablation_auc.csv) | subtractive ablation AUC table |
 | [Progressive AUC CSV](docs/results/progressive_auc.csv) | progressive method-building table |
 | [Supplementary AUC CSV](docs/results/supplementary_auc.csv) | XinYe `phase1+phase2` joint-train supplement |
 | [Presentation AUC CSV](docs/results/presentation_auc_percent.csv) | percentage-format AUC and percentage-point deltas for thesis tables |
+| [Experiment Epoch Policy CSV](docs/results/experiment_epoch_policy.csv) | per-study planned max epochs and minimum early-stop epoch |
 | [Historical External Records](docs/results/historical_external_records.csv) | user-provided competition/external evaluation records kept separate from reproducible mainline artifacts |
 | [Epoch Log Manifest](docs/results/epoch_log_manifest.csv) | per-experiment epoch, log, and curve paths |
 
@@ -114,6 +116,8 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
   --dataset-hparams experiment/configs/dyrift_suite.json \
   --seeds 42
 ```
+
+The maintained rerun policy is `max_epochs=70` with `min_early_stop_epoch=30`. Existing accepted artifacts keep their actual saved epoch logs; rerunning the commands above regenerates curves under suite-scoped names such as `dyrift_mainline_rerun_xy_70e_min30`.
 
 Run one isolated study:
 

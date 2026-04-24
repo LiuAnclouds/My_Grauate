@@ -41,8 +41,13 @@ conda run -n Graph --no-capture-output python3 experiment/mainline.py \
 | [../experiment/configs/xinye_dgraph.json](../experiment/configs/xinye_dgraph.json) | XinYe profile |
 | [../experiment/configs/elliptic_transactions.json](../experiment/configs/elliptic_transactions.json) | ET profile |
 | [../experiment/configs/ellipticpp_transactions.json](../experiment/configs/ellipticpp_transactions.json) | EPP profile |
+| [../experiment/configs/training_policy.json](../experiment/configs/training_policy.json) | maintained epoch and early-stopping policy |
 
-当前 repo 维护的 rerun config 统一把 `epochs` 设为 `30`，同时允许早停。accepted 论文主结果 artifact 已经单独保存，直接通过结果表引用。
+当前 repo 维护的 rerun config 统一把 `epochs` 设为 `70`，并通过 `GraphModelConfig.min_early_stop_epoch=30` 保证图模型不会在第 30 轮之前早停。accepted 论文主结果 artifact 已经单独保存，直接通过结果表引用。
+
+历史已保存 artifact 的 epoch 曲线保持真实落盘状态，不手动补 synthetic epoch。新的正式 rerun 和 study rerun 使用 70/30 策略重新生成曲线。
+
+新的 mainline rerun 使用 `{suite_name}_{dataset_short}_70e_min30` 作为 run name 模板，避免覆盖旧 accepted artifact。
 
 ## 5. Run Mainline Rerun
 
@@ -76,6 +81,7 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
 - `prototype_loss_weight`
 - `pseudo_contrastive_weight`
 - `cold_start_residual_strength`
+- `min_early_stop_epoch`
 
 这属于同一模型族下的 dataset-local tuning，不是换架构。
 
@@ -83,9 +89,9 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
 
 | Dataset | Key Choices |
 | --- | --- |
-| XinYe DGraph | `attr_proj_dim=32`, `hidden_dim=128`, `rel_dim=32`, `fanouts=[15,10]`, `epochs=30` |
-| Elliptic Transactions | `attr_proj_dim=64`, `hidden_dim=160`, `rel_dim=48`, `attention_num_heads=4`, `epochs=30` |
-| Elliptic++ Transactions | `attr_proj_dim=96`, `hidden_dim=192`, `rel_dim=64`, `attention_num_heads=16`, `cold_start_residual_strength=0.35`, `epochs=30` |
+| XinYe DGraph | `attr_proj_dim=32`, `hidden_dim=128`, `rel_dim=32`, `fanouts=[15,10]`, `epochs=70`, `min_early_stop_epoch=30` |
+| Elliptic Transactions | `attr_proj_dim=64`, `hidden_dim=160`, `rel_dim=48`, `attention_num_heads=4`, `epochs=70`, `min_early_stop_epoch=30` |
+| Elliptic++ Transactions | `attr_proj_dim=96`, `hidden_dim=192`, `rel_dim=64`, `attention_num_heads=16`, `cold_start_residual_strength=0.35`, `epochs=70`, `min_early_stop_epoch=30` |
 
 ## 8. Run Comparison, Ablation, And Progressive Studies
 
@@ -161,3 +167,5 @@ conda run -n Graph --no-capture-output python3 experiment/audit.py \
 | [results/progressive_auc.csv](results/progressive_auc.csv) | progressive-study AUC table |
 | [results/supplementary_auc.csv](results/supplementary_auc.csv) | supplementary-study AUC table |
 | [results/epoch_log_manifest.csv](results/epoch_log_manifest.csv) | epoch/log/curve manifest for all kept experiments |
+| [results/experiment_epoch_policy.csv](results/experiment_epoch_policy.csv) | planned 70-epoch / min-30 early-stop policy for maintained reruns |
+| [results/training_policy_summary.json](results/training_policy_summary.json) | machine-readable policy summary for thesis reproduction |

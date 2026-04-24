@@ -6,5 +6,8 @@ This directory holds parameter manifests only.
 - `xinye_dgraph.json`: XinYe dataset-local hyperparameters
 - `elliptic_transactions.json`: ET dataset-local hyperparameters
 - `ellipticpp_transactions.json`: EPP dataset-local hyperparameters
+- `training_policy.json`: maintained epoch and early-stopping policy for mainline and study reruns
 
 Public training and evaluation entrypoints stay at `experiment/mainline.py`, `experiment/suite.py`, and `experiment/audit.py`.
+
+The maintained policy uses `max_epochs=70` and `min_early_stop_epoch=30`. Saved historical artifacts keep their observed epoch logs; this directory defines future rerun behavior rather than rewriting old curves.

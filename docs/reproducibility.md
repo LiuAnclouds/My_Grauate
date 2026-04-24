@@ -120,6 +120,20 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
   --seeds 42
 ```
 
+Maintained reruns use:
+
+| Policy Item | Value |
+| --- | ---: |
+| Max epochs | 70 |
+| Minimum early-stop epoch | 30 |
+| Default graph patience | 10 |
+
+The policy is stored in `experiment/configs/training_policy.json` and summarized in `docs/results/experiment_epoch_policy.csv`. Historical saved artifacts are not rewritten; rerunning the commands above regenerates epoch curves under this policy.
+
+Dataset-level feature and training parameters are explicit in `experiment/configs/dyrift_suite.json`, `experiment/configs/xinye_dgraph.json`, `experiment/configs/elliptic_transactions.json`, and `experiment/configs/ellipticpp_transactions.json`. The runner does not require hidden thesis-only defaults.
+
+Rerun outputs are written to suite-scoped names such as `dyrift_mainline_rerun_xy_70e_min30`, so the saved accepted artifact directories listed below are not overwritten.
+
 The official saved thesis artifacts are:
 
 | Dataset | Val AUC | Saved artifact |
@@ -141,6 +155,8 @@ Use these files for tables and figures:
 | `docs/results/progressive_auc.csv` | progressive method-building table |
 | `docs/results/supplementary_auc.csv` | supplementary XinYe phase diagnostics |
 | `docs/results/presentation_auc_percent.csv` | percentage-format AUC and percentage-point deltas for thesis tables |
+| `docs/results/experiment_epoch_policy.csv` | maintained 70-epoch / min-30 early-stop policy |
+| `docs/results/training_policy_summary.json` | machine-readable policy summary |
 | `docs/results/epoch_log_manifest.csv` | per-run epoch log, train log, curve, and summary paths |
 
 Each training artifact normally contains `summary.json`, `seed_42/epoch_metrics.csv`, `seed_42/train.log`, `seed_42/training_curves.png`, and saved prediction files.

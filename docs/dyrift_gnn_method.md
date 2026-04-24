@@ -94,7 +94,10 @@ Validation AUC:
 对应结果表：
 
 - [Mainline AUC CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv)
+- [Epoch Policy CSV](results/experiment_epoch_policy.csv)
 - [Experiment Table](thesis_experiments.md)
+
+维护中的 rerun 策略为 `70` 个最大 epoch，且图模型第 `30` 个 epoch 前不允许早停。
 
 ## 7. Leakage Guardrails
 

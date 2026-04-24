@@ -3,7 +3,7 @@ mainline,Full DyRIFT-GNN,79.2851%,82.1329%,82.1953%,81.2044%,+0.0000 pp,accepted
 comparison,Plain TRGT Backbone,79.0742%,80.0629%,78.4006%,79.1792%,-2.0252 pp,backbone only
 comparison,TGAT-style Reference,78.9445%,80.0629%,78.3644%,79.1239%,-2.0805 pp,temporal-attention GNN reference
 comparison,Temporal GraphSAGE Reference,78.8309%,77.3516%,78.0595%,78.0807%,-3.1238 pp,temporal neighbor-aggregation GNN reference
-comparison,XGBoost Same Input,74.5771%,90.4028%,94.1352%,86.3717%,+5.1673 pp,non-GNN same-input reference and not the deployment route
+comparison,XGBoost Same Input,74.5771%,90.4028%,94.1352%,86.3717%,+5.1673 pp,supplementary non-GNN same-input reference; excluded from GNN deployment claim
 ablation,w/o Target-Context Bridge,79.0284%,80.0629%,78.3473%,79.1462%,-2.0582 pp,subtractive ablation
 ablation,w/o Drift Expert,79.0578%,78.5032%,80.3772%,79.3127%,-1.8917 pp,subtractive ablation
 ablation,w/o Prototype Memory,79.1456%,82.1686%,81.9782%,81.0975%,-0.1070 pp,subtractive ablation

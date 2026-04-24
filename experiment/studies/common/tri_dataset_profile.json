@@ -6,7 +6,7 @@
       "feature_profile": "utpm_shift_enhanced",
       "feature_subdir": "features_ap32",
       "attr_proj_dim": 32,
-      "epochs": 30,
+      "epochs": 70,
       "batch_size": 512,
       "hidden_dim": 128,
       "rel_dim": 32,
@@ -18,14 +18,16 @@
         "neighbor_similarity",
         "activation_early"
       ],
-      "graph_config_overrides": []
+      "graph_config_overrides": [
+        "min_early_stop_epoch=30"
+      ]
     },
     "elliptic_transactions": {
       "dataset_short": "et",
       "feature_profile": "utpm_shift_compact",
       "feature_subdir": "features_ap64",
       "attr_proj_dim": 64,
-      "epochs": 30,
+      "epochs": 70,
       "batch_size": 512,
       "hidden_dim": 160,
       "rel_dim": 48,
@@ -37,6 +39,7 @@
         "activation_early"
       ],
       "graph_config_overrides": [
+        "min_early_stop_epoch=30",
         "attention_num_heads=4",
         "internal_risk_fusion=none",
         "message_risk_strength=0.0",
@@ -53,7 +56,7 @@
       "feature_profile": "utpm_shift_enhanced",
       "feature_subdir": "features_ap96",
       "attr_proj_dim": 96,
-      "epochs": 30,
+      "epochs": 70,
       "batch_size": 512,
       "hidden_dim": 192,
       "rel_dim": 64,
@@ -66,6 +69,7 @@
         "activation_early"
       ],
       "graph_config_overrides": [
+        "min_early_stop_epoch=30",
         "attention_num_heads=16",
         "neighbor_sampler=hybrid",
         "recent_window=120",

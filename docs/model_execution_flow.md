@@ -171,6 +171,8 @@ The phase1+phase2 studies use additional phase2 labels and therefore are not use
 
 The full manifest is `docs/results/epoch_log_manifest.csv`.
 
+Maintained reruns use `max_epochs=70` and `min_early_stop_epoch=30`; the policy table is `docs/results/experiment_epoch_policy.csv`. Existing saved epoch logs remain the observed artifact records.
+
 ## 10. Engineering Guarantees
 
 The maintained codebase is organized around these guarantees:

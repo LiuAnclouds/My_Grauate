@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "policy_name": "dyrift_70_epoch_min30_early_stop",
+  "scope": [
+    "accepted_mainline_rerun",
+    "comparison_studies",
+    "subtractive_ablations",
+    "progressive_studies",
+    "supplementary_studies"
+  ],
+  "max_epochs": 70,
+  "min_early_stop_epoch": 30,
+  "graph_default_early_stop_patience": 10,
+  "xgboost_num_boost_round": 70,
+  "xgboost_early_stopping_rounds": 30,
+  "artifact_rule": "Do not rewrite saved epoch curves or summary metrics. Existing artifacts keep their observed trained_epochs; future reruns use this policy.",
+  "notes": [
+    "The graph trainer now exposes GraphModelConfig.min_early_stop_epoch.",
+    "Early stopping can only trigger when both patience is exhausted and epoch >= min_early_stop_epoch.",
+    "The same policy is applied through the mainline dataset configs and the isolated study dataset profile."
+  ]
+}

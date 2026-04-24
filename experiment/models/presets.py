@@ -26,6 +26,7 @@ _BASE_GRAPH_CONFIG = GraphModelConfig(
     subgraph_head="meanmax",
     grad_clip=1.0,
     scheduler="plateau",
+    min_early_stop_epoch=30,
     train_negative_ratio=3.0,
     negative_sampler="mixed",
     neighbor_sampler="consistency_recent",
@@ -42,6 +43,7 @@ _BASE_GRAPH_CONFIG = GraphModelConfig(
 
 _DYRIFT_TRGT_SHARED: dict[str, Any] = {
     "early_stop_patience": 10,
+    "min_early_stop_epoch": 30,
     "loss_type": "bce",
     "ranking_weight": 0.0,
     "ranking_margin": 0.2,
@@ -116,12 +118,14 @@ _PRESET_UPDATES: dict[str, dict[str, dict[str, Any]]] = {
     "m5_temporal_graphsage": {
         "unified_baseline": {
             "early_stop_patience": 6,
+            "min_early_stop_epoch": 30,
             "loss_type": "bce",
         },
     },
     "m7_utpm": {
         "utpm_temporal_shift_v4": {
             "early_stop_patience": 10,
+            "min_early_stop_epoch": 30,
             "loss_type": "bce",
             "ranking_weight": 0.0,
             "ranking_margin": 0.2,

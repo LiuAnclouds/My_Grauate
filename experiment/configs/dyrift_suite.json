@@ -11,11 +11,14 @@
         "neighbor_similarity",
         "activation_early"
       ],
-      "epochs": 30,
+      "epochs": 70,
       "batch_size": 512,
       "hidden_dim": 128,
       "rel_dim": 32,
-      "fanouts": [15, 10]
+      "fanouts": [15, 10],
+      "graph_config_overrides": {
+        "min_early_stop_epoch": 30
+      }
     },
     "dataset_files": {
       "xinye_dgraph": "xinye_dgraph.json",

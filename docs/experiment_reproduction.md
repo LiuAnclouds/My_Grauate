@@ -12,6 +12,8 @@ conda run -n Graph --no-capture-output python3 experiment/mainline.py \
 
 `same input` means the models consume features produced by the same build pipeline. A comparison model may apply its own lightweight tensor or matrix adapter at the model entry, but it must not introduce a separate dataset-specific feature engineering route.
 
+All maintained graph reruns use `max_epochs=70` and `min_early_stop_epoch=30`. The XGBoost same-input reference uses `num_boost_round=70` and `early_stopping_rounds=30`. The policy is recorded in `experiment/configs/training_policy.json` and `docs/results/experiment_epoch_policy.csv`.
+
 ## 1. Accepted Mainline
 
 Run the maintained three-dataset `DyRIFT-GNN / TRGT` suite:
@@ -64,6 +66,8 @@ Current comparison results:
 | TGAT-style Reference | 78.9445% | 80.0629% | 78.3644% | 79.1239% | -2.0805 pp | temporal-attention GNN reference |
 | Temporal GraphSAGE Reference | 78.8309% | 77.3516% | 78.0595% | 78.0807% | -3.1238 pp | temporal neighbor-aggregation GNN reference |
 | XGBoost Same Input | 74.5771% | 90.4028% | 94.1352% | 86.3717% | +5.1673 pp | non-GNN reference, not deployment route |
+
+`XGBoost Same Input` is intentionally kept as a supplementary non-GNN reference. It is not used as the thesis deployment route and should not be mixed into the GNN-only method comparison claim.
 
 ## 3. Subtractive Ablations
 
@@ -157,7 +161,15 @@ Accepted audit files:
 
 ## 7. Epoch Logs And Curves
 
-Every official table row should have an entry in:
+The maintained rerun policy is:
+
+| File | Purpose |
+| --- | --- |
+| `experiment/configs/training_policy.json` | authoritative max-epoch and early-stop policy |
+| `docs/results/experiment_epoch_policy.csv` | per-study planned epoch policy |
+| `docs/results/training_policy_summary.json` | machine-readable policy summary for docs |
+
+Every saved table row should also have an actual artifact entry in:
 
 ```text
 docs/results/epoch_log_manifest.csv
@@ -170,3 +182,5 @@ Use that manifest to locate:
 - `seed_42/train.log` for training diagnostics.
 - `seed_42/training_curves.png` for saved figures.
 - prediction `.npz` files for node ids, labels, and probabilities.
+
+Important distinction: `experiment_epoch_policy.csv` is the maintained rerun design, while `epoch_log_manifest.csv` records observed saved artifacts. Existing artifacts are not expanded with synthetic rows.
