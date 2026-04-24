@@ -1,5 +1,7 @@
 # Training And Configs
 
+For a full installation and reproduction checklist, see [Reproducibility Guide](reproducibility.md). For the model data flow, see [Model Execution Flow](model_execution_flow.md).
+
 This document describes how the current `DyRIFT-GNN / TRGT` pipeline is organized, how to rerun it, and where the saved artifacts live.
 
 ## 1. Environment
@@ -110,7 +112,9 @@ conda run -n Graph --no-capture-output python3 \
 
 ## 9. Run Supplementary XinYe Joint Train
 
-这个补充实验是 from-scratch `phase1.train + phase2.train` 联合训练，不是 warmup：
+这些补充实验是 XinYe phase1/phase2 诊断实验，不是正式论文主线。它们使用 phase2 标注节点，因此只用于解释跨阶段分布漂移和 checkpoint 选择 trade-off。
+
+基础 from-scratch `phase1.train + phase2.train` 联合训练：
 
 ```bash
 conda run -n Graph --no-capture-output python3 \
@@ -118,14 +122,18 @@ conda run -n Graph --no-capture-output python3 \
   --device cuda
 ```
 
-它固定：
+基础联合训练固定：
 
 - `train = phase1.train + phase2.train`
 - `val = phase1.val`
 
-并且输出到：
+Phase-aware balanced 和 dual-validation 诊断结果已经作为 archived output 记录在结果表中。对应 exploratory runner 不再作为维护中的实验代码保留。它们从 `phase2.train_mask` 中切出一部分 labeled holdout，不使用官方 test pool 标签，但仍不作为无泄露主线。
+
+输出到：
 
 - `experiment/outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/`
+- `experiment/outputs/studies/supplementary/xinye_phase12_phase_aware_balanced/` archived diagnostic output
+- `experiment/outputs/studies/supplementary/xinye_phase12_phase_aware_dualval/` archived diagnostic output
 
 ## 10. Run Leakage Audit
 

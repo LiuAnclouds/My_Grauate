@@ -42,6 +42,8 @@
 
 | 文档 | 说明 |
 | --- | --- |
+| [复现指南](docs/reproducibility.md) | 环境安装、特征构建、实验命令和结果文件 |
+| [模型执行流程](docs/model_execution_flow.md) | 从原始动态图到欺诈概率的工程执行链路 |
 | [论文方法说明](docs/thesis_method.md) | 论文主线、约束、统一架构与部署路径 |
 | [方法卡片](docs/dyrift_gnn_method.md) | DyRIFT-GNN 简版方法卡 |
 | [TRGT 主干](docs/trgt_backbone.md) | 主干结构与时序关系注意力 |
@@ -74,6 +76,8 @@
 | [docs/](docs) | 论文方法、实验和代码说明文档 |
 
 ## 复现命令
+
+完整环境配置和复现清单见 [复现指南](docs/reproducibility.md)。下面是最小运行命令。
 
 统一构建特征：
 

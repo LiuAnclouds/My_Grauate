@@ -3,6 +3,8 @@
 ## Quick Links
 
 - [Back to README](../README.md)
+- [Reproducibility Guide](reproducibility.md)
+- [Model Execution Flow](model_execution_flow.md)
 - [Method Overview](thesis_method.md)
 - [Accepted Leakage Audit](leakage_audit.md)
 - [Mainline AUC CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv)
@@ -86,26 +88,31 @@
 - 前五行来自 `experiment/outputs/studies/progressive/` 的统一 study 输出。
 - 最后一行使用 accepted 主结果 artifact，因为它才是论文最终采用的 full model。
 
-## 5. Supplementary XinYe Phase1+Phase2 Joint Train
+## 5. Supplementary XinYe Phase1+Phase2 Diagnostics
 
-补充实验不是 warmup，而是从头把 `phase1.train + phase2.train` 做成 disjoint-union joint graph 来训练，同时把验证集固定在官方 `phase1.val`。
+补充实验不是正式论文主线。它们用于回答一个诊断问题：如果把 XinYe phase2 的标注训练节点引入联合训练，模型是否能同时维持 phase1 验证表现并学习 phase2 排序。
 
-| Setting | Train Scope | Val Scope | XinYe Val AUC | Note |
-| --- | --- | --- | ---: | --- |
-| Official XinYe Mainline | `phase1.train` | `phase1.val` | 0.792851 | 正式无泄露论文主线 |
-| Joint Phase1+Phase2 Train | `phase1.train + phase2.train` | `phase1.val` | 0.791441 | 补充实验，不是正式主线 |
+| Setting | Train Scope | Checkpoint Scope | Phase1 Val AUC | Phase2 Train AUC | Phase2 Holdout AUC | Note |
+| --- | --- | --- | ---: | ---: | ---: | --- |
+| Official XinYe Mainline | `phase1.train` | `phase1.val` | 0.792851 | n/a | n/a | 正式无泄露论文主线 |
+| Joint Phase1+Phase2 Train | `phase1.train + phase2.train` | `phase1.val` | 0.791441 | 0.716531 | n/a | 补充实验，不切 phase2 holdout |
+| Phase-Aware Balanced | `phase1.train + 50% phase2.train` | `phase1.val` | 0.789344 | 0.635207 | 0.636328 | 加 phase indicator，phase2 holdout 仅诊断 |
+| Phase-Aware DualVal | `phase1.train + 50% phase2.train` | `phase1.val + phase2.holdout` | 0.784233 | 0.709306 | 0.706197 | phase2 能提升，但牺牲 phase1 val |
 
 补充实验的关键事实：
 
-- 它是 from-scratch joint training，不是 warmup 或 fine-tune。
-- 它保留 `phase1.val` 不变。
-- 它没有跨 phase 人工造边，只做 disjoint union。
-- 它使用了 `phase2` 的标注训练节点，因此不作为正式无泄露主结果。
+- 这些实验是 from-scratch joint training，不是 warmup 或 fine-tune。
+- 它们没有跨 phase 人工造边，只做 disjoint union。
+- `phase2.holdout` 来自 `phase2.train_mask` 的分层切分，不是官方 test pool。
+- 它们使用了 `phase2` 的标注训练节点，因此不作为正式无泄露主结果。
+- DualVal 将 phase2 AUC 从约 0.636 提升到约 0.706，但 phase1 val 从 0.789344 降到 0.784233，说明 phase1/phase2 存在明显阶段漂移。
 
 输出位置：
 
 - `experiment/outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/summary.json`
 - `experiment/outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/xinye_dgraph/summary.json`
+- `experiment/outputs/studies/supplementary/xinye_phase12_phase_aware_balanced/xinye_dgraph/summary.json`
+- `experiment/outputs/studies/supplementary/xinye_phase12_phase_aware_dualval/xinye_dgraph/summary.json`
 
 ## 6. Saved Result Files
 

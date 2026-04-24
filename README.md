@@ -39,6 +39,8 @@ Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
 | Card | Description |
 | --- | --- |
 | [Chinese README](README.zh-CN.md) | Chinese project overview |
+| [Reproducibility Guide](docs/reproducibility.md) | environment setup, feature build, experiment commands, and result files |
+| [Model Execution Flow](docs/model_execution_flow.md) | end-to-end engineering flow from raw graph to fraud probability |
 | [Thesis Method](docs/thesis_method.md) | thesis-facing method, constraints, and deployment path |
 | [DyRIFT Method Card](docs/dyrift_gnn_method.md) | compact model identity and method card |
 | [TRGT Backbone](docs/trgt_backbone.md) | backbone structure and temporal-relation attention |
@@ -71,6 +73,8 @@ Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
 | [docs/](docs) | thesis-facing method, experiment, and code documents |
 
 ## Reproduce
+
+For the complete environment and reproduction checklist, see [Reproducibility Guide](docs/reproducibility.md). The minimal commands are listed below.
 
 Build unified features:
 

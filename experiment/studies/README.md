@@ -67,3 +67,5 @@ conda run -n Graph --no-capture-output python3 \
   experiment/studies/supplementary/xinye_phase12_joint_train_phase1_val/run.py \
   --device cuda
 ```
+
+Archived phase-aware diagnostic results are recorded in `docs/results/supplementary_auc.csv`, but their exploratory runners are not kept as maintained study code. They used additional `phase2.train_mask` labels and are not the official leakage-free thesis mainline.
