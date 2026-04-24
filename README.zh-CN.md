@@ -22,10 +22,10 @@
 
 | 数据集 | Val AUC | 结果目录 |
 | --- | ---: | --- |
-| XinYe DGraph | 0.792851 | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1` |
-| Elliptic Transactions | 0.821329 | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1` |
-| Elliptic++ Transactions | 0.821953 | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1` |
-| 宏平均 | 0.812044 | `docs/results/accepted_mainline_summary.json` |
+| XinYe DGraph | 79.2851% | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1` |
+| Elliptic Transactions | 82.1329% | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1` |
+| Elliptic++ Transactions | 82.1953% | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1` |
+| 宏平均 | 81.2044% | `docs/results/accepted_mainline_summary.json` |
 
 运行时模型名：`dyrift_gnn`  
 论文方法名：`Dynamic Risk-Informed Fraud Graph Neural Network (DyRIFT-GNN)`  
@@ -42,7 +42,8 @@
 
 | 文档 | 说明 |
 | --- | --- |
-| [复现指南](docs/reproducibility.md) | 环境安装、特征构建、实验命令和结果文件 |
+| [复现指南](docs/reproducibility.md) | clone 仓库、conda 环境、依赖安装、数据布局、特征构建和主线 rerun |
+| [实验复现指南](docs/experiment_reproduction.md) | 主结果、对比实验、消融实验、递进实验、补充实验和泄露审计命令 |
 | [模型执行流程](docs/model_execution_flow.md) | 从原始动态图到欺诈概率的工程执行链路 |
 | [论文方法说明](docs/thesis_method.md) | 论文主线、约束、统一架构与部署路径 |
 | [方法卡片](docs/dyrift_gnn_method.md) | DyRIFT-GNN 简版方法卡 |
@@ -58,6 +59,8 @@
 | [消融实验 AUC 表](docs/results/ablation_auc.csv) | 减法消融 AUC 汇总 |
 | [递进实验 AUC 表](docs/results/progressive_auc.csv) | 方法递进式 AUC 汇总 |
 | [补充实验 AUC 表](docs/results/supplementary_auc.csv) | XinYe `phase1+phase2` 联合训练补充实验 |
+| [展示用 AUC 表](docs/results/presentation_auc_percent.csv) | 论文表格使用的百分数 AUC 和百分点差值 |
+| [历史外部评测记录](docs/results/historical_external_records.csv) | 用户提供的竞赛/外部评测记录，和可复现主线 artifact 分开保存 |
 | [训练日志清单](docs/results/epoch_log_manifest.csv) | 每个实验的 epoch、日志和曲线路径 |
 
 ## 目录结构
@@ -77,9 +80,25 @@
 
 ## 复现命令
 
-完整环境配置和复现清单见 [复现指南](docs/reproducibility.md)。下面是最小运行命令。
+复现文档分成两层：
 
-统一构建特征：
+- [复现指南](docs/reproducibility.md)：clone 仓库、创建 conda 环境、安装依赖、放置数据集、构建特征、运行正式主线。
+- [实验复现指南](docs/experiment_reproduction.md)：复现对比实验、消融实验、递进实验、补充实验和泄露审计。
+
+从干净机器开始的最小环境流程：
+
+```bash
+git clone git@github.com:LiuAnclouds/My_Grauate.git
+cd My_Grauate
+
+conda create -n Graph python=3.10 -y
+conda run -n Graph --no-capture-output pip install torch torchvision torchaudio \
+  --index-url https://download.pytorch.org/whl/cu128
+conda run -n Graph --no-capture-output pip install -r requirements.txt
+conda run -n Graph --no-capture-output python3 -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu')"
+```
+
+将原始数据放到 `experiment/datasets/raw/` 后，统一构建特征：
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/mainline.py \

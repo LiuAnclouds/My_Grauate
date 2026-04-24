@@ -18,10 +18,10 @@ The final inference route is single-model pure GNN. No external tree model, teac
 
 | Dataset | Val AUC | Artifact |
 | --- | ---: | --- |
-| XinYe DGraph | 0.792851 | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1` |
-| Elliptic Transactions | 0.821329 | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1` |
-| Elliptic++ Transactions | 0.821953 | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1` |
-| Macro Average | 0.812044 | `docs/results/accepted_mainline_summary.json` |
+| XinYe DGraph | 79.2851% | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1` |
+| Elliptic Transactions | 82.1329% | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1` |
+| Elliptic++ Transactions | 82.1953% | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1` |
+| Macro Average | 81.2044% | `docs/results/accepted_mainline_summary.json` |
 
 Runtime id: `dyrift_gnn`  
 Paper-facing method: `Dynamic Risk-Informed Fraud Graph Neural Network (DyRIFT-GNN)`  
@@ -39,7 +39,8 @@ Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
 | Card | Description |
 | --- | --- |
 | [Chinese README](README.zh-CN.md) | Chinese project overview |
-| [Reproducibility Guide](docs/reproducibility.md) | environment setup, feature build, experiment commands, and result files |
+| [Reproducibility Guide](docs/reproducibility.md) | clone, conda environment, dependency installation, data layout, feature build, and mainline rerun |
+| [Experiment Reproduction](docs/experiment_reproduction.md) | accepted mainline, comparison, ablation, progressive, supplementary, and audit commands |
 | [Model Execution Flow](docs/model_execution_flow.md) | end-to-end engineering flow from raw graph to fraud probability |
 | [Thesis Method](docs/thesis_method.md) | thesis-facing method, constraints, and deployment path |
 | [DyRIFT Method Card](docs/dyrift_gnn_method.md) | compact model identity and method card |
@@ -55,6 +56,8 @@ Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
 | [Ablation AUC CSV](docs/results/ablation_auc.csv) | subtractive ablation AUC table |
 | [Progressive AUC CSV](docs/results/progressive_auc.csv) | progressive method-building table |
 | [Supplementary AUC CSV](docs/results/supplementary_auc.csv) | XinYe `phase1+phase2` joint-train supplement |
+| [Presentation AUC CSV](docs/results/presentation_auc_percent.csv) | percentage-format AUC and percentage-point deltas for thesis tables |
+| [Historical External Records](docs/results/historical_external_records.csv) | user-provided competition/external evaluation records kept separate from reproducible mainline artifacts |
 | [Epoch Log Manifest](docs/results/epoch_log_manifest.csv) | per-experiment epoch, log, and curve paths |
 
 ## Repository Layout
@@ -74,9 +77,25 @@ Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
 
 ## Reproduce
 
-For the complete environment and reproduction checklist, see [Reproducibility Guide](docs/reproducibility.md). The minimal commands are listed below.
+The full checklist is split into two documents:
 
-Build unified features:
+- [Reproducibility Guide](docs/reproducibility.md): clone the repository, create the conda environment, install dependencies, place datasets, build features, and run the accepted mainline.
+- [Experiment Reproduction](docs/experiment_reproduction.md): rerun comparison, ablation, progressive, supplementary, and leakage-audit studies.
+
+Minimal end-to-end setup from a clean machine:
+
+```bash
+git clone git@github.com:LiuAnclouds/My_Grauate.git
+cd My_Grauate
+
+conda create -n Graph python=3.10 -y
+conda run -n Graph --no-capture-output pip install torch torchvision torchaudio \
+  --index-url https://download.pytorch.org/whl/cu128
+conda run -n Graph --no-capture-output pip install -r requirements.txt
+conda run -n Graph --no-capture-output python3 -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu')"
+```
+
+Build unified features after raw datasets are placed under `experiment/datasets/raw/`:
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/mainline.py \

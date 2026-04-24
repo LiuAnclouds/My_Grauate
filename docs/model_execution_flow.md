@@ -165,9 +165,9 @@ The phase1+phase2 studies use additional phase2 labels and therefore are not use
 
 | Dataset | Val AUC | Epoch log |
 | --- | ---: | --- |
-| XinYe DGraph | 0.792851 | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1/seed_42/epoch_metrics.csv` |
-| Elliptic Transactions | 0.821329 | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1/seed_42/epoch_metrics.csv` |
-| Elliptic++ Transactions | 0.821953 | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1/seed_42/epoch_metrics.csv` |
+| XinYe DGraph | 79.2851% | `experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1/seed_42/epoch_metrics.csv` |
+| Elliptic Transactions | 82.1329% | `experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1/seed_42/epoch_metrics.csv` |
+| Elliptic++ Transactions | 82.1953% | `experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1/seed_42/epoch_metrics.csv` |
 
 The full manifest is `docs/results/epoch_log_manifest.csv`.
 

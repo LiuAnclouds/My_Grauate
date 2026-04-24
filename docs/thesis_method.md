@@ -99,10 +99,10 @@
 
 | Dataset | Val AUC |
 | --- | ---: |
-| XinYe DGraph | 0.792851 |
-| Elliptic Transactions | 0.821329 |
-| Elliptic++ Transactions | 0.821953 |
-| Macro | 0.812044 |
+| XinYe DGraph | 79.2851% |
+| Elliptic Transactions | 82.1329% |
+| Elliptic++ Transactions | 82.1953% |
+| Macro | 81.2044% |
 
 补充说明：
 

@@ -1,6 +1,6 @@
 # Training And Configs
 
-For a full installation and reproduction checklist, see [Reproducibility Guide](reproducibility.md). For the model data flow, see [Model Execution Flow](model_execution_flow.md).
+For installation and mainline reproduction, see [Reproducibility Guide](reproducibility.md). For the full experiment matrix, see [Experiment Reproduction](experiment_reproduction.md). For the model data flow, see [Model Execution Flow](model_execution_flow.md).
 
 This document describes how the current `DyRIFT-GNN / TRGT` pipeline is organized, how to rerun it, and where the saved artifacts live.
 
