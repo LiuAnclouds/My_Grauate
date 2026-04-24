@@ -1,6 +1,6 @@
 # Thesis Leakage Audit
 
-- Suite: `thesis_dyrift_gnn_trgt_deploy_pure_v1`
+- Suite: `dyrift_gnn_accepted_mainline`
 - Mode: `pure_gnn_mainline`
 - Scope: direct train/val/test/external overlap and cross-dataset isolation.
 - Conclusion: no hard leakage was detected in the audited thesis suite.
@@ -16,4 +16,4 @@
 - `train`, `val`, `test_pool`, and `external` id sets are pairwise disjoint for every dataset.
 - DyRIFT-GNN `phase1_train`, `phase1_val`, and `test_pool` prediction bundles exactly match the official split ids.
 - Every run directory stays inside its dataset-scoped output namespace.
-- No cross-dataset prediction path is used by the audited pure-GNN mainline.
+- No cross-dataset prediction path, external classifier, or second-stage model is used by the audited pure-GNN mainline.

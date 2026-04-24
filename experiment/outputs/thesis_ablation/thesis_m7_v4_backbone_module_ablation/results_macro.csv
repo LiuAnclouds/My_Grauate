@@ -1,6 +1,0 @@
-group,setting_id,setting_label,suite_name,macro_val_auc,description
-backbone_ablation,official_backbone,Official Backbone,thesis_m7_v4_unified_e8,0.7888948858613869,Unified pure m7_utpm backbone without decision-layer correction.
-backbone_ablation,ablate_no_prototype,No Prototype Memory,thesis_m7_v4_ablate_noprototype,0.7893436598460376,Disable prototype loss and prototype memory blending inside the GNN backbone.
-backbone_ablation,ablate_no_pseudocontrast,No Pseudo-Contrastive Mining,thesis_m7_v4_ablate_nopseudocontrast,0.7827124409895808,Disable temporal pseudo-contrastive mining inside the GNN backbone.
-backbone_ablation,ablate_no_drift_residual,No Drift Residual Context,thesis_m7_v4_ablate_nodriftresidual,0.7908977489689212,Disable target-context residual fusion and time-adapter drift correction.
-decision_reference,official_gnn_primary_blend,Official GNN-primary Blend,thesis_m7_v4_graphpropblend082,0.8971041731288864,Reference official hybrid result for comparison with pure-backbone ablations.

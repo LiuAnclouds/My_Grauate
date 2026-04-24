@@ -1,5 +1,5 @@
 {
-  "suite_name": "thesis_dyrift_gnn_trgt_deploy_pure_v1",
+  "suite_name": "dyrift_gnn_accepted_mainline",
   "suite_type": "pure_gnn_mainline",
   "hard_leakage_detected": false,
   "datasets": [
@@ -21,7 +21,7 @@
         "val__external": 0,
         "test_pool__external": 0
       },
-      "run_dir": "experiment/outputs/training/models/dyrift_gnn/probe_xy_dyrift_pure_enhbase_smallctx_v1",
+      "run_dir": "experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1",
       "checks": {
         "split_pairwise_disjoint": true,
         "phase1_train_matches_split_train": true,

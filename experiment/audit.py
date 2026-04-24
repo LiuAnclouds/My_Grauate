@@ -13,7 +13,6 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from experiment.datasets.core.registry import get_dataset_spec
-from experiment.models.spec import OFFICIAL_PURE_SUITE_NAME
 
 
 def _dataset_output_roots(dataset_name: str) -> tuple[Path, Path]:
@@ -179,7 +178,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--suite-summary",
         type=Path,
-        default=REPO_ROOT / "experiment" / "outputs" / "thesis_suite" / OFFICIAL_PURE_SUITE_NAME / "summary.json",
+        default=REPO_ROOT / "experiment" / "outputs" / "reports" / "accepted_mainline" / "summary.json",
     )
     return parser.parse_args()
 

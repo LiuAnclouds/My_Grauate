@@ -352,7 +352,7 @@ def _write_suite_summary(
     suite_name: str,
     payload: dict[str, Any],
 ) -> Path:
-    suite_dir = REPO_ROOT / "experiment" / "outputs" / "thesis_suite" / suite_name
+    suite_dir = REPO_ROOT / "experiment" / "outputs" / "reports" / "suites" / suite_name
     suite_dir.mkdir(parents=True, exist_ok=True)
     summary_path = suite_dir / "summary.json"
     summary_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

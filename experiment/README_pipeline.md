@@ -2,14 +2,14 @@
 
 ## Quick Links
 
-- [Repository README](../../README.md)
-- [Method Overview](../../docs/thesis_method.md)
-- [Experiment Table](../../docs/thesis_experiments.md)
-- [Final Pure-GNN Summary](../outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json)
-- [Final Pure-GNN Audit](../outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
-- [Final Metrics CSV](../../docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_metrics.csv)
-- [Epoch Metrics CSV](../../docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_epoch_metrics.csv)
-- [Suite Config](../configs/dyrift_suite.json)
+- [Repository README](../README.md)
+- [Method Overview](../docs/thesis_method.md)
+- [Experiment Table](../docs/thesis_experiments.md)
+- [Accepted Mainline Summary](outputs/reports/accepted_mainline/summary.json)
+- [Accepted Mainline Audit](outputs/reports/accepted_mainline/leakage_audit.md)
+- [Mainline AUC CSV](../docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv)
+- [Epoch Log Manifest](../docs/results/epoch_log_manifest.csv)
+- [Suite Config](configs/dyrift_suite.json)
 
 ## Recommended Surface
 
@@ -20,8 +20,8 @@
 - 统一运行入口：`dyrift_gnn`
 - 统一纯 GNN preset：`dyrift_trgt_deploy_v1`
 - 统一推理路径：single pure-GNN path
-- 统一论文主结果：[thesis_dyrift_gnn_trgt_deploy_pure_v1](../outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json)
-- 统一硬泄露审计：[leakage_audit.md](../outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md)
+- 统一论文主结果：[accepted_mainline](outputs/reports/accepted_mainline/summary.json)
+- 统一硬泄露审计：[leakage_audit.md](outputs/reports/accepted_mainline/leakage_audit.md)
 
 ## Unified Architecture, Separate Tuning
 
@@ -77,35 +77,35 @@ conda run -n Graph --no-capture-output python3 experiment/suite.py \
 
 输出：
 
-- `experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json`
+- `experiment/outputs/reports/suites/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json`
 
 ### 3. Audit Hard Leakage For The Final Suite
 
 ```bash
 conda run -n Graph --no-capture-output python3 experiment/audit.py \
-  --suite-summary experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
+  --suite-summary experiment/outputs/reports/suites/thesis_dyrift_gnn_trgt_deploy_pure_v1/summary.json
 ```
 
 输出：
 
-- `experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md`
-- `experiment/outputs/thesis_suite/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json`
+- `experiment/outputs/reports/suites/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.md`
+- `experiment/outputs/reports/suites/thesis_dyrift_gnn_trgt_deploy_pure_v1/leakage_audit.json`
 
 ## Current Recommended Metrics
 
 当前最终主结果验证集 AUC：
 
-- XinYe: `0.7904545115949035`
+- XinYe: `0.7928507856954765`
 - Elliptic: `0.821329087693758`
 - Elliptic++: `0.821953270227715`
-- Macro: `0.8112456231721256`
+- Macro: `0.8120443812056498`
 
 这组结果说明：
 
 - 统一纯 GNN 主线已经超过历史强 GNN 的宏平均
 - 当前主线是可部署的单模型路径
 - 论文叙事可以完全围绕纯 GNN 展开
-- 三数据集训练日志和逐 epoch 指标已经汇总到 `../../docs/results/`
+- 三数据集训练日志和逐 epoch 指标已经汇总到 `../docs/results/`
 
 ## File Hotspots
 
