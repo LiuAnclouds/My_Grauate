@@ -1,0 +1,97 @@
+{
+  "suite_name": "dyrift_gnn_accepted_mainline",
+  "suite_type": "pure_gnn_mainline",
+  "hard_leakage_detected": false,
+  "datasets": [
+    {
+      "dataset": "xinye_dgraph",
+      "eda_root": "outputs/eda",
+      "training_root": "outputs/training",
+      "split_sizes": {
+        "train": 661334,
+        "val": 166013,
+        "test_pool": 354578,
+        "external": 0
+      },
+      "split_overlaps": {
+        "train__val": 0,
+        "train__test_pool": 0,
+        "train__external": 0,
+        "val__test_pool": 0,
+        "val__external": 0,
+        "test_pool__external": 0
+      },
+      "run_dir": "outputs/training/models/dyrift_gnn/full_xinye_repro_v1",
+      "checks": {
+        "split_pairwise_disjoint": true,
+        "phase1_train_matches_split_train": true,
+        "phase1_val_matches_split_val": true,
+        "test_pool_matches_split_test_pool": true,
+        "dataset_scoped_paths_only": true,
+        "suite_declares_dataset_isolation": true,
+        "suite_declares_no_cross_dataset_training": true,
+        "single_gnn_deployment_path": true
+      }
+    },
+    {
+      "dataset": "elliptic_transactions",
+      "eda_root": "outputs/elliptic_transactions/eda",
+      "training_root": "outputs/elliptic_transactions/training",
+      "split_sizes": {
+        "train": 36591,
+        "val": 9973,
+        "test_pool": 157205,
+        "external": 0
+      },
+      "split_overlaps": {
+        "train__val": 0,
+        "train__test_pool": 0,
+        "train__external": 0,
+        "val__test_pool": 0,
+        "val__external": 0,
+        "test_pool__external": 0
+      },
+      "run_dir": "outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
+      "checks": {
+        "split_pairwise_disjoint": true,
+        "phase1_train_matches_split_train": true,
+        "phase1_val_matches_split_val": true,
+        "test_pool_matches_split_test_pool": true,
+        "dataset_scoped_paths_only": true,
+        "suite_declares_dataset_isolation": true,
+        "suite_declares_no_cross_dataset_training": true,
+        "single_gnn_deployment_path": true
+      }
+    },
+    {
+      "dataset": "ellipticpp_transactions",
+      "eda_root": "outputs/ellipticpp_transactions/eda",
+      "training_root": "outputs/ellipticpp_transactions/training",
+      "split_sizes": {
+        "train": 36591,
+        "val": 9973,
+        "test_pool": 157205,
+        "external": 0
+      },
+      "split_overlaps": {
+        "train__val": 0,
+        "train__test_pool": 0,
+        "train__external": 0,
+        "val__test_pool": 0,
+        "val__external": 0,
+        "test_pool__external": 0
+      },
+      "run_dir": "outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1",
+      "checks": {
+        "split_pairwise_disjoint": true,
+        "phase1_train_matches_split_train": true,
+        "phase1_val_matches_split_val": true,
+        "test_pool_matches_split_test_pool": true,
+        "dataset_scoped_paths_only": true,
+        "suite_declares_dataset_isolation": true,
+        "suite_declares_no_cross_dataset_training": true,
+        "single_gnn_deployment_path": true
+      }
+    }
+  ]
+}

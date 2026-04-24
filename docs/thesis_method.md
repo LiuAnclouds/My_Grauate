@@ -3,12 +3,9 @@
 ## Quick Links
 
 - [Back to README](../README.md)
-- [Reproducibility Guide](reproducibility.md)
-- [Model Execution Flow](model_execution_flow.md)
+- [Reproducibility](reproducibility.md)
 - [Experiment Table](thesis_experiments.md)
-- [DyRIFT Method Card](dyrift_gnn_method.md)
-- [TRGT Backbone](trgt_backbone.md)
-- [Accepted Leakage Audit](leakage_audit.md)
+- [Accepted Leakage Audit](../outputs/reports/accepted_mainline/leakage_audit.md)
 - [Mainline AUC CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv)
 
 ## 1. Problem Setting
@@ -115,7 +112,7 @@
 
 当前 accepted 主结果已经重新做过一致性审计：
 
-- [leakage_audit.md](leakage_audit.md)
+- [accepted leakage audit](../outputs/reports/accepted_mainline/leakage_audit.md)
 - [leakage_audit.json](results/leakage_audit.json)
 
 结论：
@@ -131,9 +128,9 @@
 
 | Setting | Phase1 Val AUC | Phase2 Train AUC | Phase2 Holdout AUC | Meaning |
 | --- | ---: | ---: | ---: | --- |
-| Joint Phase1+Phase2 Train | 0.791441 | 0.716531 | n/a | from-scratch joint train, phase1 validation |
-| Phase-Aware Balanced | 0.789344 | 0.635207 | 0.636328 | phase indicator plus balanced phase2 subset, phase1 checkpoint |
-| Phase-Aware DualVal | 0.784233 | 0.709306 | 0.706197 | checkpoint selected by phase1 val plus phase2 holdout |
+| Joint Phase1+Phase2 Train | 79.1441% | 71.6531% | n/a | from-scratch joint train, phase1 validation |
+| Phase-Aware Balanced | 78.9344% | 63.5207% | 63.6328% | phase indicator plus balanced phase2 subset, phase1 checkpoint |
+| Phase-Aware DualVal | 78.4233% | 70.9306% | 70.6197% | checkpoint selected by phase1 val plus phase2 holdout |
 
 这些实验说明：
 

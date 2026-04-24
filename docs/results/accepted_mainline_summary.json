@@ -12,23 +12,23 @@
   "maintained_rerun_policy": {
     "max_epochs": 70,
     "min_early_stop_epoch": 30,
-    "policy_path": "experiment/configs/training_policy.json",
+    "policy_path": "configs/training_policy.json",
     "note": "Existing accepted artifacts keep their observed epoch logs; future reruns use this policy."
   },
   "results": [
     {
       "dataset": "xinye_dgraph",
-      "summary_path": "experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1/summary.json",
+      "summary_path": "outputs/training/models/dyrift_gnn/full_xinye_repro_v1/summary.json",
       "val_auc_mean": 0.7928507856954765
     },
     {
       "dataset": "elliptic_transactions",
-      "summary_path": "experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1/summary.json",
+      "summary_path": "outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1/summary.json",
       "val_auc_mean": 0.821329087693758
     },
     {
       "dataset": "ellipticpp_transactions",
-      "summary_path": "experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1/summary.json",
+      "summary_path": "outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1/summary.json",
       "val_auc_mean": 0.821953270227715
     }
   ]

@@ -3,11 +3,9 @@
 ## Quick Links
 
 - [Back to README](../README.md)
-- [Reproducibility Guide](reproducibility.md)
-- [Experiment Reproduction](experiment_reproduction.md)
-- [Model Execution Flow](model_execution_flow.md)
+- [Reproducibility](reproducibility.md)
 - [Method Overview](thesis_method.md)
-- [Accepted Leakage Audit](leakage_audit.md)
+- [Accepted Leakage Audit](../outputs/reports/accepted_mainline/leakage_audit.md)
 - [Mainline AUC CSV](results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv)
 - [Comparison AUC CSV](results/comparison_auc.csv)
 - [Ablation AUC CSV](results/ablation_auc.csv)
@@ -85,7 +83,7 @@
 
 说明：
 
-- 前五行来自 `experiment/outputs/studies/progressive/` 的统一 study 输出。
+- 前五行来自 `outputs/studies/progressive/` 的统一 study 输出。
 - 最后一行使用论文正式主结果，因为它才是最终采用的 full model。
 
 ## 5. Supplementary XinYe Phase1+Phase2 Diagnostics
@@ -109,10 +107,10 @@
 
 输出位置：
 
-- `experiment/outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/summary.json`
-- `experiment/outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/xinye_dgraph/summary.json`
-- `experiment/outputs/studies/supplementary/xinye_phase12_phase_aware_balanced/xinye_dgraph/summary.json`
-- `experiment/outputs/studies/supplementary/xinye_phase12_phase_aware_dualval/xinye_dgraph/summary.json`
+- `outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/summary.json`
+- `outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/xinye_dgraph/summary.json`
+- `outputs/studies/supplementary/xinye_phase12_phase_aware_balanced/xinye_dgraph/summary.json`
+- `outputs/studies/supplementary/xinye_phase12_phase_aware_dualval/xinye_dgraph/summary.json`
 
 ## 6. Historical External Record
 
@@ -138,7 +136,6 @@ CSV: [Historical External Records](results/historical_external_records.csv)
 - [Training Policy Summary JSON](results/training_policy_summary.json)
 - [Historical External Records](results/historical_external_records.csv)
 - [Epoch Log Manifest](results/epoch_log_manifest.csv)
-- [Studies Workspace](../experiment/studies/README.md)
 - [Accepted Leakage Audit JSON](results/leakage_audit.json)
 
 ## 8. Epoch Policy

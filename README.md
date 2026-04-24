@@ -1,20 +1,9 @@
 # DyRIFT-GNN
 
-English | [中文说明](README.zh-CN.md)
+毕业设计项目：面向动态图金融反欺诈的 `DyRIFT-GNN`。当前最终主线使用 `TRGT`
+(`Temporal-Relational Graph Transformer`) 作为图神经网络主干，并在三个数据集上保持同一套纯 GNN 训练与推理路线。
 
-`DyRIFT-GNN` is the thesis mainline in this repository for dynamic-graph financial fraud detection. It uses `TRGT` (`Temporal-Relational Graph Transformer`) as the backbone and keeps one unified pure-GNN architecture across:
-
-- XinYe DGraph
-- Elliptic Transactions
-- Elliptic++ Transactions
-
-Main deployment path:
-
-`dataset-local preprocessing -> UTPM unified feature contract -> TRGT backbone -> DyRIFT modules -> fraud probability`
-
-The final inference route is single-model pure GNN. No external tree model, teacher branch, or second-stage fusion model is used at deployment.
-
-## Mainline Result
+## Main Result
 
 | Dataset | Val AUC |
 | --- | ---: |
@@ -23,121 +12,133 @@ The final inference route is single-model pure GNN. No external tree model, teac
 | Elliptic++ Transactions | 82.1953% |
 | Macro Average | 81.2044% |
 
-Runtime id: `dyrift_gnn`  
-Paper-facing method: `Dynamic Risk-Informed Fraud Graph Neural Network (DyRIFT-GNN)`  
-Backbone name: `Temporal-Relational Graph Transformer (TRGT)`
+核心约束：
 
-## Model Summary
-
-- Backbone: `TRGT`, a temporal-relation graph transformer for dynamic neighborhood message passing.
-- Inference-time modules: target-context bridge, drift expert, internal risk fusion, and dataset-conditional cold-start residual.
-- Training-time methods: prototype memory and pseudo-contrastive temporal mining.
-- Input contract: all datasets are mapped into the same `UTPM` semantic family; only raw preprocessing and hyperparameters remain dataset-local.
-
-## Documentation
-
-| Card | Description |
-| --- | --- |
-| [Chinese README](README.zh-CN.md) | Chinese project overview |
-| [Reproducibility Guide](docs/reproducibility.md) | clone, conda environment, dependency installation, data layout, feature build, and mainline rerun |
-| [Experiment Reproduction](docs/experiment_reproduction.md) | accepted mainline, comparison, ablation, progressive, supplementary, and audit commands |
-| [Model Execution Flow](docs/model_execution_flow.md) | end-to-end engineering flow from raw graph to fraud probability |
-| [Thesis Method](docs/thesis_method.md) | thesis-facing method, constraints, and deployment path |
-| [DyRIFT Method Card](docs/dyrift_gnn_method.md) | compact model identity and method card |
-| [TRGT Backbone](docs/trgt_backbone.md) | backbone structure and temporal-relation attention |
-| [DyRIFT Modules](docs/dyrift_modules.md) | module vs method split and ablation evidence |
-| [Thesis Experiments](docs/thesis_experiments.md) | mainline, comparison, ablation, progressive, and supplementary tables |
-| [Training And Configs](docs/training_and_configs.md) | commands, config files, and output layout |
-| [Code Reference](docs/code_reference.md) | package layout and call chain |
-| [Studies Workspace](experiment/studies/README.md) | isolated comparison, ablation, progressive, and supplementary experiments |
-| [Leakage Audit](docs/leakage_audit.md) | accepted mainline hard-leakage audit |
-| [Training Policy JSON](experiment/configs/training_policy.json) | maintained `70` epoch / min-`30` early-stop policy for future reruns |
-| [Mainline AUC CSV](docs/results/thesis_dyrift_gnn_trgt_deploy_pure_v1_auc.csv) | accepted three-dataset AUC table |
-| [Comparison AUC CSV](docs/results/comparison_auc.csv) | comparison-study AUC table |
-| [Ablation AUC CSV](docs/results/ablation_auc.csv) | subtractive ablation AUC table |
-| [Progressive AUC CSV](docs/results/progressive_auc.csv) | progressive method-building table |
-| [Supplementary AUC CSV](docs/results/supplementary_auc.csv) | XinYe `phase1+phase2` joint-train supplement |
-| [Presentation AUC CSV](docs/results/presentation_auc_percent.csv) | percentage-format AUC and percentage-point deltas for thesis tables |
-| [Experiment Epoch Policy CSV](docs/results/experiment_epoch_policy.csv) | per-study planned max epochs and minimum early-stop epoch |
-| [Historical External Records](docs/results/historical_external_records.csv) | user-provided competition/external evaluation records kept separate from reproducible mainline artifacts |
-| [Epoch Log Manifest](docs/results/epoch_log_manifest.csv) | per-experiment epoch, log, and curve paths |
+- 最终部署路径是 `dataset-local preprocessing -> UTPM features -> TRGT -> DyRIFT-GNN -> fraud probability`。
+- 不使用外部树模型、teacher 分支或二阶段融合器作为最终推理路线。
+- 三个数据集隔离训练，不做跨数据集联合训练。
+- 维护中的 rerun 策略为 `max_epochs=70`、`min_early_stop_epoch=30`。
 
 ## Repository Layout
 
 | Path | Role |
 | --- | --- |
-| [experiment/mainline.py](experiment/mainline.py) | single-dataset feature build and train entry |
-| [experiment/suite.py](experiment/suite.py) | three-dataset mainline rerun entry |
-| [experiment/audit.py](experiment/audit.py) | hard-leakage audit |
-| [experiment/configs/](experiment/configs) | maintained per-dataset rerun configs |
-| [experiment/datasets/](experiment/datasets) | dataset registry, raw-data contract, and preparation scripts |
-| [experiment/features/](experiment/features) | unified feature cache and normalizer utilities |
-| [experiment/models/](experiment/models) | runtime, engine, backbone, model modules, and presets |
-| [experiment/studies/](experiment/studies) | isolated comparison, ablation, progressive, and supplementary studies |
-| [experiment/utils/](experiment/utils) | path, split, IO, and sampling helpers |
-| [docs/](docs) | thesis-facing method, experiment, and code documents |
+| `mainline.py` | 单数据集特征构建与训练入口 |
+| `suite.py` | 三数据集主线 rerun 入口 |
+| `audit.py` | accepted 主结果硬泄露审计 |
+| `sync_results.py` | 从真实 `summary.json` 同步 `docs/results/` 表格 |
+| `configs/` | 主线配置、数据集参数、训练策略和显式 train 参数 |
+| `datasets/` | 数据集注册、原始数据约定、下载与预处理脚本 |
+| `features/` | UTPM 特征构建与图缓存 |
+| `models/` | TRGT、DyRIFT-GNN、训练引擎和预设 |
+| `studies/` | 对比、消融、递进和补充实验入口 |
+| `docs/` | 精简论文说明、复现说明和自动结果表 |
+| `outputs/` | 本地生成 artifact；除 accepted report 外默认不纳入 Git |
 
-## Reproduce
-
-The full checklist is split into two documents:
-
-- [Reproducibility Guide](docs/reproducibility.md): clone the repository, create the conda environment, install dependencies, place datasets, build features, and run the accepted mainline.
-- [Experiment Reproduction](docs/experiment_reproduction.md): rerun comparison, ablation, progressive, supplementary, and leakage-audit studies.
-
-Minimal end-to-end setup from a clean machine:
+## Quick Start
 
 ```bash
-git clone git@github.com:LiuAnclouds/My_Grauate.git
-cd My_Grauate
-
 conda create -n Graph python=3.10 -y
 conda run -n Graph --no-capture-output pip install torch torchvision torchaudio \
   --index-url https://download.pytorch.org/whl/cu128
 conda run -n Graph --no-capture-output pip install -r requirements.txt
-conda run -n Graph --no-capture-output python3 -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu')"
 ```
 
-Build unified features after raw datasets are placed under `experiment/datasets/raw/`:
+放置数据：
+
+| Dataset | Expected location |
+| --- | --- |
+| XinYe DGraph | `datasets/raw/xinye_dgraph/phase1_gdata.npz` and `phase2_gdata.npz` |
+| Elliptic Transactions | `datasets/raw/elliptic_transactions/prepared/` |
+| Elliptic++ Transactions | `datasets/raw/ellipticpp_transactions/prepared/` |
+
+构建特征：
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/mainline.py \
-  build_features \
-  --phase both
+conda run -n Graph --no-capture-output python3 mainline.py build_features --phase both
 ```
 
-Run the current maintained mainline config:
+运行当前主线：
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/suite.py \
+conda run -n Graph --no-capture-output python3 suite.py \
   --suite-name dyrift_mainline_rerun \
   --model dyrift_gnn \
   --preset dyrift_trgt_deploy_v1 \
   --feature-profile utpm_shift_enhanced \
-  --dataset-hparams experiment/configs/dyrift_suite.json \
+  --dataset-hparams configs/dyrift_suite.json \
   --seeds 42
 ```
 
-The maintained rerun policy is `max_epochs=70` with `min_early_stop_epoch=30`. Existing accepted artifacts keep their actual saved epoch logs; rerunning the commands above regenerates curves under suite-scoped names such as `dyrift_mainline_rerun_xy_70e_min30`.
-
-Run one isolated study:
+单数据集显式参数训练：
 
 ```bash
-conda run -n Graph --no-capture-output python3 \
-  experiment/studies/comparisons/tgat_style_reference/run.py
+conda run -n Graph --no-capture-output python3 mainline.py \
+  train \
+  --parameter-file configs/parameters/xinye_dgraph_train.json
 ```
 
-Regenerate the accepted-mainline leakage audit:
+切换当前数据集：
 
 ```bash
-conda run -n Graph --no-capture-output python3 experiment/audit.py \
-  --suite-summary experiment/outputs/reports/dyrift_gnn_accepted_mainline/summary.json
+export GRADPROJ_ACTIVE_DATASET=xinye_dgraph
+export GRADPROJ_ACTIVE_DATASET=elliptic_transactions
+export GRADPROJ_ACTIVE_DATASET=ellipticpp_transactions
 ```
 
-## Integrity
+## Experiments
 
-- `deployment_path=single_gnn_end_to_end`
-- `dataset_isolation=true`
-- `cross_dataset_training=false`
-- `same_architecture_across_datasets=true`
-- `hard_leakage_detected=false`
-- Supplementary XinYe `phase1+phase2` joint training is stored separately and is explicitly not the official leakage-free thesis mainline.
+对比实验：
+
+```bash
+conda run -n Graph --no-capture-output python3 studies/comparisons/plain_trgt_backbone/run.py --device cuda
+conda run -n Graph --no-capture-output python3 studies/comparisons/tgat_style_reference/run.py --device cuda
+conda run -n Graph --no-capture-output python3 studies/comparisons/temporal_graphsage_reference/run.py --device cuda
+conda run -n Graph --no-capture-output python3 studies/comparisons/xgboost_same_input/run.py
+```
+
+消融实验：
+
+```bash
+conda run -n Graph --no-capture-output python3 studies/ablations/without_target_context_bridge/run.py --device cuda
+conda run -n Graph --no-capture-output python3 studies/ablations/without_drift_expert/run.py --device cuda
+conda run -n Graph --no-capture-output python3 studies/ablations/without_prototype_memory/run.py --device cuda
+conda run -n Graph --no-capture-output python3 studies/ablations/without_pseudo_contrastive/run.py --device cuda
+```
+
+递进实验：
+
+```bash
+conda run -n Graph --no-capture-output python3 studies/progressive/trgt_bridge/run.py --device cuda
+conda run -n Graph --no-capture-output python3 studies/progressive/trgt_bridge_drift/run.py --device cuda
+conda run -n Graph --no-capture-output python3 studies/progressive/trgt_bridge_drift_prototype/run.py --device cuda
+conda run -n Graph --no-capture-output python3 studies/progressive/trgt_bridge_drift_prototype_pseudocontrastive/run.py --device cuda
+```
+
+XinYe 补充诊断：
+
+```bash
+conda run -n Graph --no-capture-output python3 studies/supplementary/xinye_phase12_joint_train_phase1_val/run.py --device cuda
+```
+
+同步结果表：
+
+```bash
+python3 sync_results.py
+python3 sync_results.py --check
+```
+
+泄露审计：
+
+```bash
+conda run -n Graph --no-capture-output python3 audit.py \
+  --suite-summary outputs/reports/accepted_mainline/summary.json
+```
+
+## Kept Documents
+
+- `docs/reproducibility.md`: 环境、数据、主线和 study 复现命令。
+- `docs/thesis_method.md`: 方法说明和论文口径。
+- `docs/thesis_experiments.md`: 主结果、对比、消融、递进和补充实验表。
+- `docs/results/`: 自动同步的 CSV/JSON 结果表。
+- `outputs/reports/accepted_mainline/`: 当前 accepted 主结果和泄露审计 artifact。

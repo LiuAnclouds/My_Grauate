@@ -5,8 +5,8 @@
   "datasets": [
     {
       "dataset": "xinye_dgraph",
-      "eda_root": "experiment/outputs/eda",
-      "training_root": "experiment/outputs/training",
+      "eda_root": "outputs/eda",
+      "training_root": "outputs/training",
       "split_sizes": {
         "train": 661334,
         "val": 166013,
@@ -21,7 +21,7 @@
         "val__external": 0,
         "test_pool__external": 0
       },
-      "run_dir": "experiment/outputs/training/models/dyrift_gnn/full_xinye_repro_v1",
+      "run_dir": "outputs/training/models/dyrift_gnn/full_xinye_repro_v1",
       "checks": {
         "split_pairwise_disjoint": true,
         "phase1_train_matches_split_train": true,
@@ -35,8 +35,8 @@
     },
     {
       "dataset": "elliptic_transactions",
-      "eda_root": "experiment/outputs/elliptic_transactions/eda",
-      "training_root": "experiment/outputs/elliptic_transactions/training",
+      "eda_root": "outputs/elliptic_transactions/eda",
+      "training_root": "outputs/elliptic_transactions/training",
       "split_sizes": {
         "train": 36591,
         "val": 9973,
@@ -51,7 +51,7 @@
         "val__external": 0,
         "test_pool__external": 0
       },
-      "run_dir": "experiment/outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
+      "run_dir": "outputs/elliptic_transactions/training/models/dyrift_gnn/probe_et_dyrift_pure_compact_ctx3_h4_delaypc_timew_hl20_f035_v1",
       "checks": {
         "split_pairwise_disjoint": true,
         "phase1_train_matches_split_train": true,
@@ -65,8 +65,8 @@
     },
     {
       "dataset": "ellipticpp_transactions",
-      "eda_root": "experiment/outputs/ellipticpp_transactions/eda",
-      "training_root": "experiment/outputs/ellipticpp_transactions/training",
+      "eda_root": "outputs/ellipticpp_transactions/eda",
+      "training_root": "outputs/ellipticpp_transactions/training",
       "split_sizes": {
         "train": 36591,
         "val": 9973,
@@ -81,7 +81,7 @@
         "val__external": 0,
         "test_pool__external": 0
       },
-      "run_dir": "experiment/outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1",
+      "run_dir": "outputs/ellipticpp_transactions/training/models/dyrift_gnn/probe_epp_dyrift_pure_ap96_mixed120_timew_hl20_f035_coldctx_v1",
       "checks": {
         "split_pairwise_disjoint": true,
         "phase1_train_matches_split_train": true,

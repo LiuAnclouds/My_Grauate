@@ -14,7 +14,7 @@
     "num_boost_round": 70,
     "early_stopping_rounds": 30
   },
-  "machine_readable_config": "experiment/configs/training_policy.json",
+  "machine_readable_config": "configs/training_policy.json",
   "epoch_policy_table": "docs/results/experiment_epoch_policy.csv",
   "actual_artifact_manifest": "docs/results/epoch_log_manifest.csv",
   "artifact_integrity_note": "The epoch policy describes maintained reruns. Existing saved epoch curves and summary metrics remain observed artifacts and are not expanded by synthetic rows."
