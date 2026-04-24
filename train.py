@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -14,6 +15,31 @@ from tqdm.auto import tqdm
 REPO_ROOT = Path(__file__).resolve().parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+
+def _bootstrap_active_dataset_from_parameter_file(argv: list[str]) -> None:
+    dataset_env_var = "GRADPROJ_ACTIVE_DATASET"
+    if os.environ.get(dataset_env_var):
+        return
+    parameter_file = None
+    for idx, value in enumerate(argv):
+        if value == "--parameter-file" and idx + 1 < len(argv):
+            parameter_file = argv[idx + 1]
+            break
+        if value.startswith("--parameter-file="):
+            parameter_file = value.split("=", 1)[1]
+            break
+    if parameter_file is None:
+        return
+    try:
+        payload = json.loads(Path(parameter_file).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if isinstance(payload, dict) and payload.get("dataset"):
+        os.environ[dataset_env_var] = str(payload["dataset"])
+
+
+_bootstrap_active_dataset_from_parameter_file(sys.argv)
 
 from data_processing.core.registry import get_active_dataset_spec
 from config_loader import TrainParameters, resolve_train_parameters
@@ -47,7 +73,6 @@ from utils.common import (
     write_clean_epoch_metrics,
     write_json,
 )
-
 
 ACTIVE_DATASET_SPEC = get_active_dataset_spec()
 
@@ -164,7 +189,13 @@ def parse_args() -> argparse.Namespace:
     )
     train_parser.add_argument(
         "--feature-profile",
-        choices=("utpm_unified", "utpm_shift_compact", "utpm_shift_enhanced"),
+        choices=(
+            "utpm_unified",
+            "utpm_shift_compact",
+            "utpm_shift_enhanced",
+            "utpm_shift_fused",
+            "utpm_diffusion",
+        ),
         default=None,
         help="Unified feature contract used by the training run.",
     )
@@ -214,6 +245,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Optional test_pool node cap for smoke tests.",
+    )
+    train_parser.add_argument(
+        "--skip-final-predictions",
+        action="store_true",
+        help="Skip post-fit train/val/test prediction files and use epoch_metrics.csv for validation AUC.",
     )
     train_parser.add_argument(
         "--max-external-nodes",
@@ -462,6 +498,22 @@ def run_train(args: argparse.Namespace) -> None:
                 test_pool_ids=test_pool_ids,
                 artifact_dir=seed_dir,
             )
+            if args.skip_final_predictions:
+                experiment.save(seed_dir)
+                fit_val_auc = float(experiment.fit_metrics.get("val_auc", float("nan")))
+                seed_pbar.set_postfix(
+                    train_auc="n/a",
+                    val_auc=f"{fit_val_auc:.4f}",
+                    test_auc="n/a",
+                    refresh=False,
+                )
+                tqdm.write(
+                    f"[{args.model}] seed={seed} "
+                    f"best_epoch={int(experiment.fit_metrics.get('best_epoch', -1))} "
+                    f"val_auc={fit_val_auc:.6f} "
+                    f"final_predictions=skipped"
+                )
+                continue
             train_prob = experiment.predict_proba(
                 phase1_context,
                 train_ids,
@@ -542,8 +594,16 @@ def run_train(args: argparse.Namespace) -> None:
                 f"legacy_external_auc={_format_metric(None if external_metrics is None else external_metrics['auc'])}"
             )
 
-    train_avg_path = _save_average_predictions(run_dir, "phase1_train", train_ids, train_labels, train_predictions)
-    val_avg_path = _save_average_predictions(run_dir, "phase1_val", val_ids, val_labels, val_predictions)
+    train_avg_path = (
+        _save_average_predictions(run_dir, "phase1_train", train_ids, train_labels, train_predictions)
+        if train_predictions
+        else None
+    )
+    val_avg_path = (
+        _save_average_predictions(run_dir, "phase1_val", val_ids, val_labels, val_predictions)
+        if val_predictions
+        else None
+    )
     test_avg_path = (
         _save_average_predictions(run_dir, "test_pool", test_pool_ids, test_pool_labels, test_pool_predictions)
         if test_pool_predictions

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "name": "elliptic_transactions_dyrift_diffusion_train_parameters",
+  "dataset": "elliptic_transactions",
+  "notes": "Diffusion-GNN branch: original DyRIFT-GNN/TRGT backbone plus low-weight embedding denoising and diffusion view contrast.",
+  "train": {
+    "model": "dyrift_gnn",
+    "preset": "dyrift_trgt_deploy_v1",
+    "experiment_name": "diffusion_dyrift_gnn",
+    "run_name": "elliptic_transactions_dyrift_diffusion_70e_min30",
+    "feature_profile": "utpm_shift_compact",
+    "feature_dir": "outputs/features/elliptic_transactions/features_ap64",
+    "outdir": "outputs/train",
+    "seeds": [42],
+    "epochs": 70,
+    "batch_size": 512,
+    "hidden_dim": 160,
+    "rel_dim": 48,
+    "fanouts": [20, 15],
+    "dropout": 0.15,
+    "target_context_groups": [
+      "graph_time_detrend",
+      "neighbor_similarity",
+      "activation_early"
+    ],
+    "graph_config_overrides": {
+      "min_early_stop_epoch": 30,
+      "attention_num_heads": 4,
+      "internal_risk_fusion": "none",
+      "message_risk_strength": 0.0,
+      "pseudo_contrastive_weight": 0.0,
+      "prototype_start_epoch": 3,
+      "prototype_loss_weight": 0.03,
+      "target_time_weight_half_life_days": 20,
+      "target_time_weight_floor": 0.35,
+      "embedding_diffusion_weight": 0.001,
+      "embedding_diffusion_start_epoch": 1,
+      "embedding_diffusion_dim": 160,
+      "embedding_diffusion_target": "all",
+      "embedding_diffusion_score_loss_weight": 0.0,
+      "embedding_diffusion_view_weight": 0.001,
+      "embedding_diffusion_view_temperature": 0.2,
+      "embedding_diffusion_view_sigma": 0.5,
+      "embedding_diffusion_view_mode": "infonce",
+      "embedding_diffusion_view_sample_size": 4096
+    }
+  }
+}

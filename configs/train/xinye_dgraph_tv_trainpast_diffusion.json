@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "name": "xinye_dgraph_tv_trainpast_dyrift_diffusion_train_parameters",
+  "dataset": "xinye_dgraph_tv_trainpast",
+  "notes": "Diffusion-GNN on XinYe train/val nodes plus train-anchored pre-threshold one-hop context. Context nodes are unlabeled structure-only nodes.",
+  "train": {
+    "model": "dyrift_gnn",
+    "preset": "dyrift_trgt_diffusion_v1",
+    "experiment_name": "stable_xy_tv_trainpast_diff_detach_ema_d256_score001_blend01_b512_70e",
+    "run_name": "stable_xy_tv_trainpast_diff_detach_ema_d256_score001_blend01_b512_70e",
+    "feature_profile": "utpm_shift_enhanced",
+    "feature_dir": "outputs/features/xinye_dgraph_tv_trainpast/features_ap32",
+    "outdir": "outputs/train",
+    "seeds": [42],
+    "epochs": 70,
+    "batch_size": 512,
+    "hidden_dim": 128,
+    "rel_dim": 32,
+    "fanouts": [15, 10],
+    "dropout": 0.12,
+    "target_context_groups": [
+      "graph_stats",
+      "graph_time_detrend",
+      "neighbor_similarity",
+      "activation_early"
+    ],
+    "graph_config_overrides": {
+      "min_early_stop_epoch": 30,
+      "pseudo_contrastive_weight": 0.02,
+      "embedding_diffusion_weight": 0.001,
+      "embedding_diffusion_start_epoch": 1,
+      "embedding_diffusion_dim": 256,
+      "embedding_diffusion_target": "normal",
+      "embedding_diffusion_score_loss_weight": 0.001,
+      "embedding_diffusion_inference_score_weight": 0.01,
+      "embedding_diffusion_inference_start_epoch": 5,
+      "embedding_diffusion_detach": true,
+      "embedding_diffusion_score_calibration": "ema",
+      "embedding_diffusion_score_calibration_momentum": 0.1,
+      "embedding_diffusion_proto_mode": "none",
+      "embedding_diffusion_proto_alpha": 0.0,
+      "embedding_diffusion_proto_momentum": 0.05,
+      "embedding_diffusion_proto_min_count": 64,
+      "embedding_diffusion_view_weight": 0.0,
+      "embedding_diffusion_view_temperature": 0.2,
+      "embedding_diffusion_view_sigma": 0.5,
+      "embedding_diffusion_view_mode": "infonce",
+      "embedding_diffusion_view_sample_size": 4096
+    }
+  }
+}

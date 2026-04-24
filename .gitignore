@@ -23,3 +23,14 @@ __pycache__/
 *.pyc
 *.pyo
 /*.zip
+
+/reference/**/.git
+/reference/**/__pycache__
+/reference/**/*.pyc
+/reference/**/*.egg-info
+/reference/**/.DS_Store
+/reference/**/ModelPara
+/reference/**/Generation
+/reference/**/tmp
+/reference/**/data
+/reference/DiffGAD/models

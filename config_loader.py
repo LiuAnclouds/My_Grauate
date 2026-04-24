@@ -285,7 +285,13 @@ def _normalize_optional_str_list(values: Any, *, location: str) -> list[str] | N
 
 def _normalize_feature_profile(value: Any, *, location: str) -> str:
     normalized = str(value).strip()
-    allowed = {"utpm_unified", "utpm_shift_compact", "utpm_shift_enhanced"}
+    allowed = {
+        "utpm_unified",
+        "utpm_shift_compact",
+        "utpm_shift_enhanced",
+        "utpm_shift_fused",
+        "utpm_diffusion",
+    }
     if normalized not in allowed:
         raise ValueError(
             f"`{location}` must be one of {', '.join(sorted(allowed))}, got `{value}`."

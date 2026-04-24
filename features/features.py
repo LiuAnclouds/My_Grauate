@@ -64,6 +64,7 @@ UTPM_TEMPORAL_CORE_DIM = 24
 UTPM_TEMPORAL_RISK_DIM = 16
 UTPM_AUX_LABEL_DIM = 8
 UTPM_TEMPORAL_SHIFT_DIM = 16
+UTPM_NEIGHBOR_HIGHPASS_DIM = 16
 
 
 def _set_feature_schema(
@@ -128,6 +129,8 @@ def _feature_schema_payload() -> dict[str, Any]:
         "utpm_shift_enhanced_dim": _feature_profile_dim(utpm_shift_enhanced_feature_groups()),
         "utpm_shift_fused_groups": utpm_shift_fused_feature_groups(),
         "utpm_shift_fused_dim": _feature_profile_dim(utpm_shift_fused_feature_groups()),
+        "utpm_diffusion_groups": utpm_diffusion_feature_groups(),
+        "utpm_diffusion_dim": _feature_profile_dim(utpm_diffusion_feature_groups()),
     }
 
 
@@ -198,6 +201,13 @@ def utpm_shift_fused_feature_groups() -> list[str]:
         "temporal_counterparty_concentration_recent",
         "temporal_counterparty_share_focus",
         "temporal_dual_scale_delta",
+    ]
+
+
+def utpm_diffusion_feature_groups() -> list[str]:
+    return [
+        *utpm_shift_fused_feature_groups(),
+        "neighbor_highpass",
     ]
 
 
@@ -803,6 +813,24 @@ def _group_definition() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
             "in_cosine_mean",
             "out_cosine_max",
             "in_cosine_max",
+        ],
+        "neighbor_highpass": [
+            "out_highpass_l1",
+            "in_highpass_l1",
+            "out_highpass_l2",
+            "in_highpass_l2",
+            "out_highpass_mean_abs",
+            "in_highpass_mean_abs",
+            "out_highpass_signed_mean",
+            "in_highpass_signed_mean",
+            "out_highpass_max_abs",
+            "in_highpass_max_abs",
+            "out_neighbor_norm",
+            "in_neighbor_norm",
+            "out_neighbor_cosine",
+            "in_neighbor_cosine",
+            "out_missing_highpass_l1",
+            "in_missing_highpass_l1",
         ],
         "temporal_bucket_norm": [],
         "temporal_snapshot": [
@@ -2239,6 +2267,92 @@ def _build_neighbor_similarity_feature_block(
     ).astype(np.float32, copy=False)
 
 
+def _build_neighbor_highpass_feature_block(
+    x: np.ndarray,
+    missing_mask: np.ndarray,
+    src: np.ndarray,
+    dst: np.ndarray,
+    indegree: np.ndarray,
+    outdegree: np.ndarray,
+) -> np.ndarray:
+    """SupGCL-style high-pass node signal: center features minus neighbor mean."""
+    num_nodes = int(x.shape[0])
+    invalid_mask = (missing_mask > 0.0) | (~np.isfinite(x))
+    filled = np.where(invalid_mask, 0.0, x).astype(np.float32, copy=False)
+    missing = np.asarray(missing_mask, dtype=np.float32)
+    indegree_f = np.asarray(indegree, dtype=np.float32)
+    outdegree_f = np.asarray(outdegree, dtype=np.float32)
+    in_den = np.maximum(indegree_f, 1.0).reshape(-1, 1)
+    out_den = np.maximum(outdegree_f, 1.0).reshape(-1, 1)
+
+    out_neighbor_sum = np.zeros_like(filled, dtype=np.float32)
+    in_neighbor_sum = np.zeros_like(filled, dtype=np.float32)
+    np.add.at(out_neighbor_sum, src, filled[dst])
+    np.add.at(in_neighbor_sum, dst, filled[src])
+    out_neighbor_mean = out_neighbor_sum / out_den
+    in_neighbor_mean = in_neighbor_sum / in_den
+
+    out_missing_sum = np.zeros_like(filled, dtype=np.float32)
+    in_missing_sum = np.zeros_like(filled, dtype=np.float32)
+    np.add.at(out_missing_sum, src, missing[dst])
+    np.add.at(in_missing_sum, dst, missing[src])
+    out_missing_mean = out_missing_sum / out_den
+    in_missing_mean = in_missing_sum / in_den
+
+    out_highpass = filled - out_neighbor_mean
+    in_highpass = filled - in_neighbor_mean
+    out_highpass[outdegree_f <= 0.0] = 0.0
+    in_highpass[indegree_f <= 0.0] = 0.0
+
+    out_abs = np.abs(out_highpass, dtype=np.float32)
+    in_abs = np.abs(in_highpass, dtype=np.float32)
+    center_norm = np.sqrt(np.sum(filled * filled, axis=1, dtype=np.float32)).astype(np.float32, copy=False)
+    out_neighbor_norm = np.sqrt(
+        np.sum(out_neighbor_mean * out_neighbor_mean, axis=1, dtype=np.float32)
+    ).astype(np.float32, copy=False)
+    in_neighbor_norm = np.sqrt(
+        np.sum(in_neighbor_mean * in_neighbor_mean, axis=1, dtype=np.float32)
+    ).astype(np.float32, copy=False)
+    out_cos = np.sum(filled * out_neighbor_mean, axis=1, dtype=np.float32) / np.maximum(
+        center_norm * out_neighbor_norm,
+        1e-6,
+    )
+    in_cos = np.sum(filled * in_neighbor_mean, axis=1, dtype=np.float32) / np.maximum(
+        center_norm * in_neighbor_norm,
+        1e-6,
+    )
+    out_cos[outdegree_f <= 0.0] = 0.0
+    in_cos[indegree_f <= 0.0] = 0.0
+
+    out_missing_highpass = np.abs(missing - out_missing_mean, dtype=np.float32)
+    in_missing_highpass = np.abs(missing - in_missing_mean, dtype=np.float32)
+    out_missing_highpass[outdegree_f <= 0.0] = 0.0
+    in_missing_highpass[indegree_f <= 0.0] = 0.0
+
+    feature_dim = max(int(filled.shape[1]), 1)
+    block = np.column_stack(
+        [
+            np.sum(out_abs, axis=1, dtype=np.float32),
+            np.sum(in_abs, axis=1, dtype=np.float32),
+            np.sqrt(np.sum(out_highpass * out_highpass, axis=1, dtype=np.float32)),
+            np.sqrt(np.sum(in_highpass * in_highpass, axis=1, dtype=np.float32)),
+            np.mean(out_abs, axis=1, dtype=np.float32),
+            np.mean(in_abs, axis=1, dtype=np.float32),
+            np.sum(out_highpass, axis=1, dtype=np.float32) / float(feature_dim),
+            np.sum(in_highpass, axis=1, dtype=np.float32) / float(feature_dim),
+            np.max(out_abs, axis=1),
+            np.max(in_abs, axis=1),
+            out_neighbor_norm,
+            in_neighbor_norm,
+            out_cos.astype(np.float32, copy=False),
+            in_cos.astype(np.float32, copy=False),
+            np.sum(out_missing_highpass, axis=1, dtype=np.float32),
+            np.sum(in_missing_highpass, axis=1, dtype=np.float32),
+        ]
+    )
+    return _pad_feature_block(_clip_nonfinite(block), UTPM_NEIGHBOR_HIGHPASS_DIM)
+
+
 def apply_hybrid_feature_normalizer(
     features: np.ndarray,
     state: HybridFeatureNormalizerState,
@@ -2643,6 +2757,17 @@ def build_phase_feature_artifacts(
         core[:, col : col + neighbor_similarity_block.shape[1]] = neighbor_similarity_block
         col += neighbor_similarity_block.shape[1]
 
+        neighbor_highpass_block = _build_neighbor_highpass_feature_block(
+            x=x,
+            missing_mask=missing_mask,
+            src=src,
+            dst=dst,
+            indegree=indegree,
+            outdegree=outdegree,
+        )
+        core[:, col : col + neighbor_highpass_block.shape[1]] = neighbor_highpass_block
+        col += neighbor_highpass_block.shape[1]
+
         temporal_bucket_norm_block = _build_temporal_bucket_norm_feature_block(
             x=x,
             missing_mask=missing_mask,
@@ -2872,6 +2997,8 @@ def resolve_feature_groups(
         groups = list(utpm_shift_enhanced_feature_groups())
     elif profile == "utpm_shift_fused":
         groups = list(utpm_shift_fused_feature_groups())
+    elif profile == "utpm_diffusion":
+        groups = list(utpm_diffusion_feature_groups())
     else:
         groups = list(default_feature_groups(model_name))
     for group_name in extra_groups or []:

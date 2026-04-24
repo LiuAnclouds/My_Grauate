@@ -1,61 +1,68 @@
 # Diffusion-GNN Branch Notes
 
-This branch keeps the original DyRIFT-GNN/TRGT training path intact and adds a
-lightweight diffusion regularizer over target embeddings.
+This branch is a copied working branch for diffusion experiments. The original
+baseline project under `/home/moonxkj/Desktop/MyWork/Graduation_Project` is not
+modified.
 
 ## Reference Mapping
 
-- `reference/DiffGAD/diffusion_model.py` inspired the EDM-style denoising loss:
-  random log-normal noise level, EDM preconditioning, and MLP denoiser.
-- `reference/WWW25-Grad` was reviewed as a relation-generation option, but it
-  requires DGL, improved-diffusion, and graph generation plumbing. That is too
-  invasive for a two-week thesis fallback, so it is not copied into this branch.
+| Source | Used part | Branch implementation |
+| --- | --- | --- |
+| `reference/DiffGAD/diffusion_model.py` | EDM loss, log-normal noise, EDM preconditioning, MLP denoiser, reconstruction score | `models/components/diffusion.py` learns to denoise DyRIFT target embeddings and exposes a reconstruction score |
+| `reference/DiffGAD/DiffGAD.py` | prototype-conditioned diffusion over latent embeddings | optional `embedding_diffusion_proto_*` config uses normal-target embedding EMA as the prototype condition |
+| `reference/WWW25-Grad/models/SupGCL.py` | high-pass graph signal, contrastive view idea | `features/features.py::neighbor_highpass` stores center-minus-neighbor residual statistics |
+| `reference/WWW25-Grad/models/GuiDDPM.py` | DDPM over fixed-size adjacency subgraphs | reviewed but not directly copied; generating transaction edges would violate dynamic split semantics |
+| `reference/WWW25-Grad/models/WeightedFusion.py` | relation-wise polynomial/weighted fusion | kept as a later ablation candidate; DyRIFT already has relation-gated attention |
 
-## Implemented Change
+## Implemented Modules
 
-- New module: `models/components/diffusion.py`
-- New config fields under `GraphModelConfig`:
-  - `embedding_diffusion_weight`
-  - `embedding_diffusion_start_epoch`
-  - `embedding_diffusion_dim`
-  - `embedding_diffusion_p_mean`
-  - `embedding_diffusion_p_std`
-  - `embedding_diffusion_sigma_data`
-  - `embedding_diffusion_min_batch_size`
-- New preset: `dyrift_trgt_diffusion_v1`
-- New train parameter file:
-  `configs/train/xinye_dgraph_diffusion.json`
+- `models/components/diffusion.py`: DiffGAD-style EDM embedding denoiser,
+  reconstruction score, prototype-conditioned denoising hook.
+- `models/components/diffusion_runtime.py`: target selection, score loss,
+  EMA score calibration, DE-GAD-style view contrast, prediction score blend,
+  prototype EMA state, and best-epoch runtime-state rollback.
+- `features/features.py`: `utpm_diffusion` now uses fused temporal behavior
+  features plus `neighbor_highpass`.
+- `configs/train/xinye_dgraph_diffusion.json`: XinYE full-run profile using
+  batch size 512, diffusion dim 256, score blend, and the new fused feature
+  foundation.
 
-The loss is only used during training. Inference still uses the DyRIFT-GNN
-network checkpoint, so serving and prediction behavior do not depend on the
-auxiliary denoiser.
+## Method Boundary
 
-## Quick Validation
+The branch separates paper-faithful pieces from engineering adaptations:
 
-Environment:
+- Paper-faithful: latent denoising, reconstruction score, prototype-conditioned
+  denoiser, diffusion-enhanced view contrast.
+- Engineering adaptation: detach mode, EMA score calibration, delayed inference
+  blend, and best-epoch runtime-state rollback.
+- Not used: generated transaction edges or DDPM adjacency synthesis, because
+  those can leak future topology or alter the chronological fraud split.
+
+## Current XinYE Ledger
+
+Historical reference:
+
+| Run | Best val AUC | Note |
+| --- | ---: | --- |
+| `fullsplit_xy_base_5e` | 0.789734 @ epoch 3 | old baseline-style run, b512, pseudo contrast on |
+| `stable_xy_diff_detach_ema_d256_score001_blend01_b512_70e` | 0.791934 @ epoch 6 | best completed diffusion branch run before fused features |
+
+Active full run:
 
 ```bash
-conda run -n Graph python3 train.py train --parameter-file configs/train/xinye_dgraph_diffusion.json --dry-run
+GRADPROJ_ACTIVE_DATASET=xinye_dgraph conda run -n Graph python3 train.py train \
+  --parameter-file configs/train/xinye_dgraph_diffusion.json \
+  --experiment-name stable_xy_utpmdiff_fused_detach_ema_d256_score001_blend01_b512_70e \
+  --run-name stable_xy_utpmdiff_fused_detach_ema_d256_score001_blend01_b512_70e \
+  --epochs 70 --batch-size 512 --skip-final-predictions --device cuda
 ```
 
-Smoke comparison on `xinye_dgraph`, seed `42`, `128` train nodes, `128` val
-nodes, `2` epochs, hidden dim `64`, fanouts `5 3`:
+Early curve:
 
-| Run | Validation AUC | Note |
-| --- | ---: | --- |
-| `deploy_smoke` | 0.552846 | DyRIFT-GNN deploy preset |
-| `diffusion_smoke` | 0.551220 | Diffusion enabled, very small sample |
+| Epoch | Val AUC | Diffusion active |
+| ---: | ---: | --- |
+| 1 | 0.771073 | no |
+| 2 | 0.780869 | no |
 
-Medium comparison on `xinye_dgraph`, seed `42`, `2048` train nodes, `2048` val
-nodes, `5` epochs, hidden dim `64`, fanouts `5 3`:
-
-| Run | Diffusion weight | Validation AUC |
-| --- | ---: | ---: |
-| `deploy_medium` | 0.000 | 0.716258 |
-| `diffusion_medium_w005` | 0.005 | 0.716948 |
-| `diffusion_medium_w010` | 0.010 | 0.716990 |
-
-Interpretation: the medium run shows a small positive validation-AUC change
-when the diffusion denoising regularizer is enabled. It is not yet a full
-paper-level result; the next step is to run the full `70` epoch setting in
-`configs/train/xinye_dgraph_diffusion.json`.
+Diffusion starts at epoch 5 and inference blending starts at epoch 8, so the
+decisive comparison is the best AUC after epoch 8.

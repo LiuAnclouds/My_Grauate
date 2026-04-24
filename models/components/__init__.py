@@ -3,6 +3,8 @@
 __all__ = [
     "backbone",
     "bridge",
+    "diffusion",
+    "diffusion_runtime",
     "memory",
     "model",
     "trainer",

@@ -1,0 +1,26 @@
+{
+  "adapter": "WWW25-Grad original WeightedFusion on our induced graph, relation0 only",
+  "dataset": "xinye_dgraph",
+  "nodes": 827347,
+  "edges": 343471,
+  "train_nodes": 661334,
+  "val_nodes": 166013,
+  "val_pos": 2355,
+  "best_val_auc": 0.6774653899324361,
+  "best_val_ap": 0.024233209806380406,
+  "best_epoch": 10,
+  "last_loss": 0.6162784695625305,
+  "config": {
+    "dataset": "xinye_dgraph",
+    "train_cap": 0,
+    "val_cap": 0,
+    "context_cap": 0,
+    "hidden_dim": 64,
+    "order": 2,
+    "epochs": 10,
+    "lr": 0.003,
+    "weight_decay": 0.01,
+    "seed": 42
+  },
+  "caveat": "This does not include GuiDDPM generated relations. The original Grad pipeline requires training/sampling fixed-size adjacency subgraphs and then merging generated relation files."
+}

@@ -1,0 +1,25 @@
+{
+  "adapter": "WWW25-Grad original WeightedFusion on our induced graph, relation0 only",
+  "dataset": "elliptic_transactions",
+  "nodes": 512,
+  "edges": 11,
+  "train_nodes": 256,
+  "val_nodes": 256,
+  "val_pos": 13,
+  "best_val_auc": 0.7027540360873694,
+  "best_val_ap": 0.08192650637252419,
+  "best_epoch": 1,
+  "last_loss": 0.7066056132316589,
+  "config": {
+    "dataset": "elliptic_transactions",
+    "train_cap": 256,
+    "val_cap": 256,
+    "hidden_dim": 32,
+    "order": 2,
+    "epochs": 1,
+    "lr": 0.003,
+    "weight_decay": 0.01,
+    "seed": 42
+  },
+  "caveat": "This does not include GuiDDPM generated relations. The original Grad pipeline requires training/sampling fixed-size adjacency subgraphs and then merging generated relation files."
+}

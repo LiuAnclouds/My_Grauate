@@ -28,6 +28,7 @@ from models.components.backbone import (
 )
 from models.components.bridge import TargetContextFusionHead
 from models.components.diffusion import EmbeddingDiffusionRegularizer
+from models.components.diffusion_runtime import EmbeddingDiffusionRuntime
 from models.components.memory import (
     PrototypeMemoryBank,
     PrototypeMemoryConfig,
@@ -175,6 +176,25 @@ class GraphModelConfig:
     embedding_diffusion_p_std: float = 1.2
     embedding_diffusion_sigma_data: float = 0.5
     embedding_diffusion_min_batch_size: int = 8
+    embedding_diffusion_target: str = "all"
+    embedding_diffusion_score_loss_weight: float = 0.0
+    embedding_diffusion_score_temperature: float = 1.0
+    embedding_diffusion_score_sigma: float = 0.5
+    embedding_diffusion_score_sign: float = 1.0
+    embedding_diffusion_inference_score_weight: float = 0.0
+    embedding_diffusion_inference_start_epoch: int = 1
+    embedding_diffusion_detach: bool = False
+    embedding_diffusion_score_calibration: str = "batch"
+    embedding_diffusion_score_calibration_momentum: float = 0.1
+    embedding_diffusion_proto_mode: str = "none"
+    embedding_diffusion_proto_alpha: float = 0.0
+    embedding_diffusion_proto_momentum: float = 0.05
+    embedding_diffusion_proto_min_count: int = 16
+    embedding_diffusion_view_weight: float = 0.0
+    embedding_diffusion_view_temperature: float = 0.2
+    embedding_diffusion_view_sigma: float = 0.5
+    embedding_diffusion_view_mode: str = "infonce"
+    embedding_diffusion_view_sample_size: int = 4096
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -286,6 +306,31 @@ class GraphModelConfig:
             "embedding_diffusion_p_std": float(self.embedding_diffusion_p_std),
             "embedding_diffusion_sigma_data": float(self.embedding_diffusion_sigma_data),
             "embedding_diffusion_min_batch_size": int(self.embedding_diffusion_min_batch_size),
+            "embedding_diffusion_target": self.embedding_diffusion_target,
+            "embedding_diffusion_score_loss_weight": float(self.embedding_diffusion_score_loss_weight),
+            "embedding_diffusion_score_temperature": float(self.embedding_diffusion_score_temperature),
+            "embedding_diffusion_score_sigma": float(self.embedding_diffusion_score_sigma),
+            "embedding_diffusion_score_sign": float(self.embedding_diffusion_score_sign),
+            "embedding_diffusion_inference_score_weight": float(
+                self.embedding_diffusion_inference_score_weight
+            ),
+            "embedding_diffusion_inference_start_epoch": int(
+                self.embedding_diffusion_inference_start_epoch
+            ),
+            "embedding_diffusion_detach": bool(self.embedding_diffusion_detach),
+            "embedding_diffusion_score_calibration": self.embedding_diffusion_score_calibration,
+            "embedding_diffusion_score_calibration_momentum": float(
+                self.embedding_diffusion_score_calibration_momentum
+            ),
+            "embedding_diffusion_proto_mode": self.embedding_diffusion_proto_mode,
+            "embedding_diffusion_proto_alpha": float(self.embedding_diffusion_proto_alpha),
+            "embedding_diffusion_proto_momentum": float(self.embedding_diffusion_proto_momentum),
+            "embedding_diffusion_proto_min_count": int(self.embedding_diffusion_proto_min_count),
+            "embedding_diffusion_view_weight": float(self.embedding_diffusion_view_weight),
+            "embedding_diffusion_view_temperature": float(self.embedding_diffusion_view_temperature),
+            "embedding_diffusion_view_sigma": float(self.embedding_diffusion_view_sigma),
+            "embedding_diffusion_view_mode": self.embedding_diffusion_view_mode,
+            "embedding_diffusion_view_sample_size": int(self.embedding_diffusion_view_sample_size),
         }
 
     @classmethod
@@ -415,6 +460,45 @@ class GraphModelConfig:
             embedding_diffusion_p_std=float(payload.get("embedding_diffusion_p_std", 1.2)),
             embedding_diffusion_sigma_data=float(payload.get("embedding_diffusion_sigma_data", 0.5)),
             embedding_diffusion_min_batch_size=int(payload.get("embedding_diffusion_min_batch_size", 8)),
+            embedding_diffusion_target=str(payload.get("embedding_diffusion_target", "all")),
+            embedding_diffusion_score_loss_weight=float(
+                payload.get("embedding_diffusion_score_loss_weight", 0.0)
+            ),
+            embedding_diffusion_score_temperature=float(
+                payload.get("embedding_diffusion_score_temperature", 1.0)
+            ),
+            embedding_diffusion_score_sigma=float(payload.get("embedding_diffusion_score_sigma", 0.5)),
+            embedding_diffusion_score_sign=float(payload.get("embedding_diffusion_score_sign", 1.0)),
+            embedding_diffusion_inference_score_weight=float(
+                payload.get("embedding_diffusion_inference_score_weight", 0.0)
+            ),
+            embedding_diffusion_inference_start_epoch=int(
+                payload.get("embedding_diffusion_inference_start_epoch", 1)
+            ),
+            embedding_diffusion_detach=bool(payload.get("embedding_diffusion_detach", False)),
+            embedding_diffusion_score_calibration=str(
+                payload.get("embedding_diffusion_score_calibration", "batch")
+            ),
+            embedding_diffusion_score_calibration_momentum=float(
+                payload.get("embedding_diffusion_score_calibration_momentum", 0.1)
+            ),
+            embedding_diffusion_proto_mode=str(payload.get("embedding_diffusion_proto_mode", "none")),
+            embedding_diffusion_proto_alpha=float(payload.get("embedding_diffusion_proto_alpha", 0.0)),
+            embedding_diffusion_proto_momentum=float(
+                payload.get("embedding_diffusion_proto_momentum", 0.05)
+            ),
+            embedding_diffusion_proto_min_count=int(
+                payload.get("embedding_diffusion_proto_min_count", 16)
+            ),
+            embedding_diffusion_view_weight=float(payload.get("embedding_diffusion_view_weight", 0.0)),
+            embedding_diffusion_view_temperature=float(
+                payload.get("embedding_diffusion_view_temperature", 0.2)
+            ),
+            embedding_diffusion_view_sigma=float(payload.get("embedding_diffusion_view_sigma", 0.5)),
+            embedding_diffusion_view_mode=str(payload.get("embedding_diffusion_view_mode", "infonce")),
+            embedding_diffusion_view_sample_size=int(
+                payload.get("embedding_diffusion_view_sample_size", 4096)
+            ),
         )
 
     def use_legacy_path(self) -> bool:
@@ -2328,6 +2412,14 @@ class BaseGraphSAGEExperiment:
         self._relation_sampling_weight: np.ndarray | None = None
         self._normal_alignment_regularizer: TemporalNormalAlignmentBank | None = None
         self._normal_bucket_discriminator: nn.Module | None = None
+        self._embedding_diffusion_runtime = EmbeddingDiffusionRuntime(
+            config=self.graph_config,
+            hidden_dim=self.hidden_dim,
+            device=self.device,
+        )
+        self._embedding_diffusion_regularizer: EmbeddingDiffusionRegularizer | None = None
+        self._embedding_diffusion_prediction_ready = False
+        self._embedding_diffusion_loaded_epoch: int | None = None
         self._context_budget_schedule_state: dict[str, float] = {}
         self._prototype_weight_schedule_state: dict[str, float] = {}
 
@@ -2404,22 +2496,6 @@ class BaseGraphSAGEExperiment:
             float(self.graph_config.prototype_loss_weight) > 0.0
             and int(self.graph_config.prototype_multiclass_num_classes) >= 2
         )
-
-    def _embedding_diffusion_enabled(self) -> bool:
-        return float(self.graph_config.embedding_diffusion_weight) > 0.0
-
-    def _build_embedding_diffusion_regularizer(self) -> EmbeddingDiffusionRegularizer | None:
-        if not self._embedding_diffusion_enabled():
-            return None
-        return EmbeddingDiffusionRegularizer(
-            embedding_dim=int(self.hidden_dim),
-            diffusion_dim=int(self.graph_config.embedding_diffusion_dim),
-            dropout=float(self.graph_config.dropout),
-            p_mean=float(self.graph_config.embedding_diffusion_p_mean),
-            p_std=float(self.graph_config.embedding_diffusion_p_std),
-            sigma_data=float(self.graph_config.embedding_diffusion_sigma_data),
-            min_batch_size=int(self.graph_config.embedding_diffusion_min_batch_size),
-        ).to(self.device)
 
     def _pseudo_contrastive_enabled(self) -> bool:
         return float(self.graph_config.pseudo_contrastive_weight) > 0.0
@@ -4236,7 +4312,12 @@ class BaseGraphSAGEExperiment:
         normal_alignment_regularizer = self._normal_alignment_regularizer
         self._normal_bucket_discriminator = self._build_normal_bucket_discriminator(context=context)
         normal_bucket_discriminator = self._normal_bucket_discriminator
-        embedding_diffusion_regularizer = self._build_embedding_diffusion_regularizer()
+        embedding_diffusion_regularizer = self._embedding_diffusion_runtime.build_regularizer()
+        self._embedding_diffusion_regularizer = embedding_diffusion_regularizer
+        self._embedding_diffusion_prediction_ready = False
+        self._embedding_diffusion_loaded_epoch = None
+        self._embedding_diffusion_runtime.reset_score_calibration()
+        self._embedding_diffusion_runtime.reset_prototype()
 
         log_path = None if artifact_dir is None else artifact_dir / "train.log"
         history_jsonl_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.jsonl"
@@ -4372,6 +4453,36 @@ class BaseGraphSAGEExperiment:
                     f"embedding_diffusion_p_std={self.graph_config.embedding_diffusion_p_std:.4f} "
                     f"embedding_diffusion_sigma_data={self.graph_config.embedding_diffusion_sigma_data:.4f} "
                     f"embedding_diffusion_min_batch_size={self.graph_config.embedding_diffusion_min_batch_size} "
+                    f"embedding_diffusion_target={self.graph_config.embedding_diffusion_target} "
+                    f"embedding_diffusion_score_loss_weight="
+                    f"{self.graph_config.embedding_diffusion_score_loss_weight:.4f} "
+                    f"embedding_diffusion_score_temperature="
+                    f"{self.graph_config.embedding_diffusion_score_temperature:.4f} "
+                    f"embedding_diffusion_score_sigma={self.graph_config.embedding_diffusion_score_sigma:.4f} "
+                    f"embedding_diffusion_score_sign={self.graph_config.embedding_diffusion_score_sign:.4f} "
+                    f"embedding_diffusion_inference_score_weight="
+                    f"{self.graph_config.embedding_diffusion_inference_score_weight:.4f} "
+                    f"embedding_diffusion_inference_start_epoch="
+                    f"{self.graph_config.embedding_diffusion_inference_start_epoch} "
+                    f"embedding_diffusion_detach={self.graph_config.embedding_diffusion_detach} "
+                    f"embedding_diffusion_score_calibration="
+                    f"{self.graph_config.embedding_diffusion_score_calibration} "
+                    f"embedding_diffusion_score_calibration_momentum="
+                    f"{self.graph_config.embedding_diffusion_score_calibration_momentum:.4f} "
+                    f"embedding_diffusion_proto_mode={self.graph_config.embedding_diffusion_proto_mode} "
+                    f"embedding_diffusion_proto_alpha="
+                    f"{self.graph_config.embedding_diffusion_proto_alpha:.4f} "
+                    f"embedding_diffusion_proto_momentum="
+                    f"{self.graph_config.embedding_diffusion_proto_momentum:.4f} "
+                    f"embedding_diffusion_proto_min_count="
+                    f"{self.graph_config.embedding_diffusion_proto_min_count} "
+                    f"embedding_diffusion_view_weight={self.graph_config.embedding_diffusion_view_weight:.4f} "
+                    f"embedding_diffusion_view_temperature="
+                    f"{self.graph_config.embedding_diffusion_view_temperature:.4f} "
+                    f"embedding_diffusion_view_sigma={self.graph_config.embedding_diffusion_view_sigma:.4f} "
+                    f"embedding_diffusion_view_mode={self.graph_config.embedding_diffusion_view_mode} "
+                    f"embedding_diffusion_view_sample_size="
+                    f"{self.graph_config.embedding_diffusion_view_sample_size} "
                     f"historical_background_pool="
                     f"{0 if context.historical_background_ids is None else int(context.historical_background_ids.size)} "
                     f"test_pool_size={int(test_pool_ids.size)} "
@@ -4380,6 +4491,8 @@ class BaseGraphSAGEExperiment:
             )
 
         best_state = None
+        best_embedding_diffusion_state = None
+        best_embedding_diffusion_runtime_state = None
         best_val_auc = -math.inf
         best_epoch = -1
         epochs_without_improvement = 0
@@ -4393,6 +4506,8 @@ class BaseGraphSAGEExperiment:
         ) as epoch_pbar:
             for epoch in epoch_pbar:
                 self.network.train()
+                if embedding_diffusion_regularizer is not None:
+                    embedding_diffusion_regularizer.train()
                 normal_bucket_adv_memory_embedding = None
                 normal_bucket_adv_memory_bucket_ids = None
                 context_budget_weight = self._current_context_residual_budget_weight(epoch)
@@ -4408,6 +4523,8 @@ class BaseGraphSAGEExperiment:
                 batch_adapter_regularization_losses: list[float] = []
                 batch_pseudo_contrastive_losses: list[float] = []
                 batch_embedding_diffusion_losses: list[float] = []
+                batch_embedding_diffusion_score_losses: list[float] = []
+                batch_embedding_diffusion_view_losses: list[float] = []
                 batch_subgraph_nodes: list[float] = []
                 batch_subgraph_edges: list[float] = []
                 batch_emb_norm: list[float] = []
@@ -4568,7 +4685,7 @@ class BaseGraphSAGEExperiment:
                                 self._prototype_enabled()
                                 or self._normal_bucket_alignment_enabled()
                                 or self._normal_bucket_adv_enabled()
-                                or self._embedding_diffusion_enabled()
+                                or self._embedding_diffusion_runtime.enabled()
                             ),
                             include_aux=self._aux_multiclass_enabled(),
                         )
@@ -4680,26 +4797,124 @@ class BaseGraphSAGEExperiment:
                                 + float(self.graph_config.pseudo_contrastive_weight) * pseudo_contrastive_loss
                             )
                         embedding_diffusion_loss = forward_output.logits.new_tensor(0.0)
-                        diffusion_start_epoch = max(
-                            int(self.graph_config.embedding_diffusion_start_epoch),
-                            1,
-                        )
+                        diffusion_start_epoch = self._embedding_diffusion_runtime.start_epoch()
+                        diffusion_train_mask = None
+                        diffusion_embedding = None
+                        diffusion_prototype = None
                         if (
                             embedding_diffusion_regularizer is not None
                             and epoch >= diffusion_start_epoch
+                            and forward_output.embedding is not None
+                            and (
+                                self._embedding_diffusion_runtime.denoising_enabled()
+                                or self._embedding_diffusion_runtime.score_loss_enabled()
+                                or self._embedding_diffusion_runtime.view_loss_enabled()
+                            )
+                        ):
+                            diffusion_train_mask = self._embedding_diffusion_runtime.build_train_mask(y_batch)
+                            diffusion_embedding = (
+                                forward_output.embedding.detach()
+                                if self._embedding_diffusion_runtime.detach_enabled()
+                                else forward_output.embedding
+                            )
+                            diffusion_prototype, prototype_diagnostics = (
+                                self._embedding_diffusion_runtime.prototype_condition(
+                                    embedding=diffusion_embedding,
+                                    train_mask=diffusion_train_mask,
+                                    update=True,
+                                )
+                            )
+                            for diag_name, diag_value in prototype_diagnostics.items():
+                                batch_extra_diagnostics.setdefault(str(diag_name), []).append(float(diag_value))
+                        if (
+                            embedding_diffusion_regularizer is not None
+                            and epoch >= diffusion_start_epoch
+                            and self._embedding_diffusion_runtime.denoising_enabled()
                         ):
                             if forward_output.embedding is None:
                                 raise RuntimeError("Embedding diffusion expected target embeddings.")
+                            if diffusion_train_mask is None:
+                                diffusion_train_mask = self._embedding_diffusion_runtime.build_train_mask(y_batch)
+                            if diffusion_embedding is None:
+                                diffusion_embedding = (
+                                    forward_output.embedding.detach()
+                                    if self._embedding_diffusion_runtime.detach_enabled()
+                                    else forward_output.embedding
+                                )
                             embedding_diffusion_loss, diffusion_diagnostics = embedding_diffusion_regularizer(
-                                embedding=forward_output.embedding,
+                                embedding=diffusion_embedding,
                                 sample_weight=sample_weight,
+                                train_mask=diffusion_train_mask,
+                                prototype=diffusion_prototype,
+                                prototype_alpha=self._embedding_diffusion_runtime.prototype_alpha(),
                             )
                             for diag_name, diag_value in diffusion_diagnostics.items():
                                 batch_extra_diagnostics.setdefault(str(diag_name), []).append(float(diag_value))
+                            self._embedding_diffusion_prediction_ready = True
                             loss = (
                                 loss
                                 + float(self.graph_config.embedding_diffusion_weight)
                                 * embedding_diffusion_loss
+                            )
+                        embedding_diffusion_score_loss = forward_output.logits.new_tensor(0.0)
+                        if (
+                            embedding_diffusion_regularizer is not None
+                            and epoch >= diffusion_start_epoch
+                            and self._embedding_diffusion_runtime.score_loss_enabled()
+                            and forward_output.embedding is not None
+                            and not self._primary_multiclass_enabled()
+                        ):
+                            embedding_diffusion_score_loss, score_diagnostics = (
+                                self._embedding_diffusion_runtime.compute_score_loss(
+                                    regularizer=embedding_diffusion_regularizer,
+                                    embedding=(
+                                        forward_output.embedding.detach()
+                                        if self._embedding_diffusion_runtime.detach_enabled()
+                                        else forward_output.embedding
+                                    ),
+                                    targets=y_batch,
+                                    sample_weight=sample_weight,
+                                    primary_multiclass_enabled=self._primary_multiclass_enabled(),
+                                    prototype=diffusion_prototype,
+                                )
+                            )
+                            for diag_name, diag_value in score_diagnostics.items():
+                                batch_extra_diagnostics.setdefault(str(diag_name), []).append(float(diag_value))
+                            self._embedding_diffusion_prediction_ready = True
+                            loss = (
+                                loss
+                                + float(self.graph_config.embedding_diffusion_score_loss_weight)
+                                * embedding_diffusion_score_loss
+                            )
+                        embedding_diffusion_view_loss = forward_output.logits.new_tensor(0.0)
+                        if (
+                            embedding_diffusion_regularizer is not None
+                            and epoch >= diffusion_start_epoch
+                            and self._embedding_diffusion_runtime.view_loss_enabled()
+                            and forward_output.embedding is not None
+                        ):
+                            if diffusion_train_mask is None:
+                                diffusion_train_mask = self._embedding_diffusion_runtime.build_train_mask(y_batch)
+                            embedding_diffusion_view_loss, view_diagnostics = (
+                                self._embedding_diffusion_runtime.compute_view_loss(
+                                    regularizer=embedding_diffusion_regularizer,
+                                    embedding=(
+                                        forward_output.embedding.detach()
+                                        if self._embedding_diffusion_runtime.detach_enabled()
+                                        else forward_output.embedding
+                                    ),
+                                    sample_weight=sample_weight,
+                                    train_mask=diffusion_train_mask,
+                                    prototype=diffusion_prototype,
+                                )
+                            )
+                            for diag_name, diag_value in view_diagnostics.items():
+                                batch_extra_diagnostics.setdefault(str(diag_name), []).append(float(diag_value))
+                            self._embedding_diffusion_prediction_ready = True
+                            loss = (
+                                loss
+                                + float(self.graph_config.embedding_diffusion_view_weight)
+                                * embedding_diffusion_view_loss
                             )
                         loss_parts["prototype_loss"] = float(prototype_loss.detach().item())
                         loss_parts["normal_align_loss"] = float(normal_align_loss.detach().item())
@@ -4715,6 +4930,12 @@ class BaseGraphSAGEExperiment:
                         )
                         loss_parts["embedding_diffusion_loss"] = float(
                             embedding_diffusion_loss.detach().item()
+                        )
+                        loss_parts["embedding_diffusion_score_loss"] = float(
+                            embedding_diffusion_score_loss.detach().item()
+                        )
+                        loss_parts["embedding_diffusion_view_loss"] = float(
+                            embedding_diffusion_view_loss.detach().item()
                         )
                         loss_parts["total_loss"] = float(loss.detach().item())
                         loss.backward()
@@ -4749,6 +4970,12 @@ class BaseGraphSAGEExperiment:
                         batch_embedding_diffusion_losses.append(
                             float(loss_parts["embedding_diffusion_loss"])
                         )
+                        batch_embedding_diffusion_score_losses.append(
+                            float(loss_parts["embedding_diffusion_score_loss"])
+                        )
+                        batch_embedding_diffusion_view_losses.append(
+                            float(loss_parts["embedding_diffusion_view_loss"])
+                        )
                         batch_subgraph_nodes.append(float(subgraph.node_ids.shape[0]))
                         batch_subgraph_edges.append(float(subgraph.edge_src.shape[0]))
                         forward_diagnostics = forward_output.diagnostics or {}
@@ -4771,6 +4998,7 @@ class BaseGraphSAGEExperiment:
                     node_ids=val_ids,
                     batch_seed=self.seed + 1000,
                     progress_desc=f"{self.model_name}:seed{self.seed}:val:{epoch}/{self.epochs}",
+                    prediction_epoch=epoch,
                 )
                 val_metrics = compute_binary_classification_metrics(val_labels, val_prob)
                 val_auc = val_metrics["auc"]
@@ -4781,6 +5009,14 @@ class BaseGraphSAGEExperiment:
                     best_val_auc = val_auc
                     best_epoch = epoch
                     best_state = copy.deepcopy(self.network.state_dict())
+                    best_embedding_diffusion_state = (
+                        None
+                        if embedding_diffusion_regularizer is None
+                        else copy.deepcopy(embedding_diffusion_regularizer.state_dict())
+                    )
+                    best_embedding_diffusion_runtime_state = copy.deepcopy(
+                        self._embedding_diffusion_runtime.state_dict()
+                    )
                     epochs_without_improvement = 0
                 else:
                     epochs_without_improvement += 1
@@ -4810,6 +5046,12 @@ class BaseGraphSAGEExperiment:
                     ),
                     "train_embedding_diffusion_loss": float(
                         np.mean(batch_embedding_diffusion_losses)
+                    ),
+                    "train_embedding_diffusion_score_loss": float(
+                        np.mean(batch_embedding_diffusion_score_losses)
+                    ),
+                    "train_embedding_diffusion_view_loss": float(
+                        np.mean(batch_embedding_diffusion_view_losses)
                     ),
                     "prototype_loss_weight_effective": float(prototype_loss_weight),
                     "prototype_trust_score": float(
@@ -4869,6 +5111,10 @@ class BaseGraphSAGEExperiment:
                     f"train_pseudo_contrastive_loss={epoch_row['train_pseudo_contrastive_loss']:.6f} "
                     f"train_embedding_diffusion_loss="
                     f"{epoch_row['train_embedding_diffusion_loss']:.6f} "
+                    f"train_embedding_diffusion_score_loss="
+                    f"{epoch_row['train_embedding_diffusion_score_loss']:.6f} "
+                    f"train_embedding_diffusion_view_loss="
+                    f"{epoch_row['train_embedding_diffusion_view_loss']:.6f} "
                     f"prototype_loss_weight_effective={epoch_row['prototype_loss_weight_effective']:.6f} "
                     f"prototype_trust_score={epoch_row['prototype_trust_score']:.6f} "
                     f"context_residual_budget_weight_effective="
@@ -4924,6 +5170,13 @@ class BaseGraphSAGEExperiment:
         if best_state is None:
             raise RuntimeError(f"{self.model_name}: failed to capture a best checkpoint.")
         self.network.load_state_dict(best_state)
+        if embedding_diffusion_regularizer is not None and best_embedding_diffusion_state is not None:
+            embedding_diffusion_regularizer.load_state_dict(best_embedding_diffusion_state)
+        if best_embedding_diffusion_runtime_state is not None:
+            self._embedding_diffusion_runtime.load_state_dict(best_embedding_diffusion_runtime_state)
+        if embedding_diffusion_regularizer is not None and best_embedding_diffusion_state is not None:
+            self._embedding_diffusion_prediction_ready = True
+            self._embedding_diffusion_loaded_epoch = int(best_epoch)
         fit_metrics = {
             "val_auc": float(best_val_auc),
             "best_epoch": float(best_epoch),
@@ -4933,6 +5186,40 @@ class BaseGraphSAGEExperiment:
             "negative_sampler": str(self.graph_config.negative_sampler),
             "min_early_stop_epoch": int(self.graph_config.min_early_stop_epoch),
             "embedding_diffusion_weight": float(self.graph_config.embedding_diffusion_weight),
+            "embedding_diffusion_target": str(self.graph_config.embedding_diffusion_target),
+            "embedding_diffusion_score_loss_weight": float(
+                self.graph_config.embedding_diffusion_score_loss_weight
+            ),
+            "embedding_diffusion_inference_score_weight": float(
+                self.graph_config.embedding_diffusion_inference_score_weight
+            ),
+            "embedding_diffusion_inference_start_epoch": int(
+                self.graph_config.embedding_diffusion_inference_start_epoch
+            ),
+            "embedding_diffusion_detach": bool(self.graph_config.embedding_diffusion_detach),
+            "embedding_diffusion_score_calibration": str(
+                self.graph_config.embedding_diffusion_score_calibration
+            ),
+            "embedding_diffusion_score_calibration_momentum": float(
+                self.graph_config.embedding_diffusion_score_calibration_momentum
+            ),
+            "embedding_diffusion_proto_mode": str(self.graph_config.embedding_diffusion_proto_mode),
+            "embedding_diffusion_proto_alpha": float(self.graph_config.embedding_diffusion_proto_alpha),
+            "embedding_diffusion_proto_momentum": float(
+                self.graph_config.embedding_diffusion_proto_momentum
+            ),
+            "embedding_diffusion_proto_min_count": int(
+                self.graph_config.embedding_diffusion_proto_min_count
+            ),
+            "embedding_diffusion_view_weight": float(self.graph_config.embedding_diffusion_view_weight),
+            "embedding_diffusion_view_temperature": float(
+                self.graph_config.embedding_diffusion_view_temperature
+            ),
+            "embedding_diffusion_view_sigma": float(self.graph_config.embedding_diffusion_view_sigma),
+            "embedding_diffusion_view_mode": str(self.graph_config.embedding_diffusion_view_mode),
+            "embedding_diffusion_view_sample_size": int(
+                self.graph_config.embedding_diffusion_view_sample_size
+            ),
         }
         self.fit_metrics = fit_metrics
         if history_csv_path is not None:
@@ -4959,11 +5246,23 @@ class BaseGraphSAGEExperiment:
         progress_desc: str | None = None,
         show_progress: bool = True,
         return_embeddings: bool = False,
+        prediction_epoch: int | None = None,
     ) -> tuple[np.ndarray, np.ndarray | None]:
         self.network.eval()
+        if self._embedding_diffusion_regularizer is not None:
+            self._embedding_diffusion_regularizer.eval()
         self._refresh_message_risk_feature_slice(context)
         node_ids = np.asarray(node_ids, dtype=np.int32)
         rng = np.random.default_rng(self.seed if batch_seed is None else batch_seed)
+        use_diffusion_prediction = self._embedding_diffusion_runtime.prediction_enabled(
+            self._embedding_diffusion_regularizer,
+            ready=self._embedding_diffusion_prediction_ready,
+            epoch=(
+                prediction_epoch
+                if prediction_epoch is not None
+                else self._embedding_diffusion_loaded_epoch
+            ),
+        )
         probabilities = np.zeros(node_ids.shape[0], dtype=np.float32)
         embeddings = (
             np.zeros((node_ids.shape[0], self.hidden_dim), dtype=np.float32)
@@ -5036,19 +5335,26 @@ class BaseGraphSAGEExperiment:
                     node_subgraph_id=node_subgraph_id,
                     edge_subgraph_id=edge_subgraph_id,
                     node_hop_depth=node_hop_depth,
-                    include_embedding=return_embeddings,
+                    include_embedding=return_embeddings or use_diffusion_prediction,
                     include_aux=float(self.graph_config.aux_inference_blend) > 0.0,
                 )
-                batch_prob = (
-                    self._blend_primary_and_aux_probability(
-                        logits=forward_output.logits,
-                        aux_logits=forward_output.aux_logits,
-                    )
-                    .detach()
-                    .cpu()
-                    .numpy()
-                    .astype(np.float32, copy=False)
+                primary_prob = self._blend_primary_and_aux_probability(
+                    logits=forward_output.logits,
+                    aux_logits=forward_output.aux_logits,
                 )
+                if use_diffusion_prediction:
+                    diffusion_prototype, _ = self._embedding_diffusion_runtime.prototype_condition(
+                        embedding=forward_output.embedding,
+                        train_mask=None,
+                        update=False,
+                    )
+                    primary_prob = self._embedding_diffusion_runtime.blend_probability(
+                        regularizer=self._embedding_diffusion_regularizer,
+                        primary_probability=primary_prob,
+                        embedding=forward_output.embedding,
+                        prototype=diffusion_prototype,
+                    )
+                batch_prob = primary_prob.detach().cpu().numpy().astype(np.float32, copy=False)
                 probabilities[batch_positions] = batch_prob
                 if embeddings is not None:
                     embeddings[batch_positions] = (
@@ -5066,6 +5372,7 @@ class BaseGraphSAGEExperiment:
         batch_seed: int | None = None,
         progress_desc: str | None = None,
         show_progress: bool = True,
+        prediction_epoch: int | None = None,
     ) -> np.ndarray:
         probabilities, _ = self._predict_outputs(
             context=context,
@@ -5074,6 +5381,7 @@ class BaseGraphSAGEExperiment:
             progress_desc=progress_desc,
             show_progress=show_progress,
             return_embeddings=False,
+            prediction_epoch=prediction_epoch,
         )
         return probabilities
 

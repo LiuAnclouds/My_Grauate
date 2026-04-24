@@ -1,0 +1,33 @@
+{
+  "adapter": "DiffGAD original modules: GraphAE + diffusion_model.Model",
+  "dataset": "elliptic_transactions",
+  "nodes": 512,
+  "edges": 11,
+  "train_nodes": 256,
+  "val_nodes": 256,
+  "val_pos": 13,
+  "ae_val_auc": 0.16144349477682812,
+  "ae_val_ap": 0.03159135939290373,
+  "diffusion_val_auc": 0.31845520734409627,
+  "diffusion_val_ap": 0.03732747312538288,
+  "ae_last_loss": 58.40157699584961,
+  "diff_last_loss": 1.701776146888733,
+  "config": {
+    "dataset": "elliptic_transactions",
+    "train_cap": 256,
+    "val_cap": 256,
+    "hidden_dim": 32,
+    "diffusion_dim": 64,
+    "ae_layers": 4,
+    "ae_epochs": 1,
+    "diff_epochs": 1,
+    "score_samples": 1,
+    "dropout": 0.2,
+    "ae_lr": 0.005,
+    "diff_lr": 0.004,
+    "weight_decay": 0.01,
+    "ae_alpha": 0.8,
+    "seed": 42
+  },
+  "caveat": "Runs an induced subgraph because the original DiffGAD GraphAE builds a dense N x N adjacency reconstruction."
+}
