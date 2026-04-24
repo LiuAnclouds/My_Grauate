@@ -1,144 +1,64 @@
-# DyRIFT-GNN
+# DyRIFT-GNN Graduation Project
 
-毕业设计项目：面向动态图金融反欺诈的 `DyRIFT-GNN`。当前最终主线使用 `TRGT`
-(`Temporal-Relational Graph Transformer`) 作为图神经网络主干，并在三个数据集上保持同一套纯 GNN 训练与推理路线。
+本仓库是毕设项目代码，面向动态图反欺诈实验。当前版本只保留项目自身实现、单数据集训练入口、对比实验、消融实验和必要复现说明。
 
-## Main Result
+## 目录
 
-| Dataset | Val AUC |
-| --- | ---: |
-| XinYe DGraph | 79.2851% |
-| Elliptic Transactions | 82.1329% |
-| Elliptic++ Transactions | 82.1953% |
-| Macro Average | 81.2044% |
-
-核心约束：
-
-- 最终部署路径是 `dataset-local preprocessing -> UTPM features -> TRGT -> DyRIFT-GNN -> fraud probability`。
-- 不使用外部树模型、teacher 分支或二阶段融合器作为最终推理路线。
-- 三个数据集隔离训练，不做跨数据集联合训练。
-- 维护中的 rerun 策略为 `max_epochs=70`、`min_early_stop_epoch=30`。
-
-## Repository Layout
-
-| Path | Role |
+| 路径 | 内容 |
 | --- | --- |
-| `mainline.py` | 单数据集特征构建与训练入口 |
-| `suite.py` | 三数据集主线 rerun 入口 |
-| `audit.py` | accepted 主结果硬泄露审计 |
-| `sync_results.py` | 从真实 `summary.json` 同步 `docs/results/` 表格 |
-| `configs/` | 主线配置、数据集参数、训练策略和显式 train 参数 |
-| `datasets/` | 数据集注册、原始数据约定、下载与预处理脚本 |
-| `features/` | UTPM 特征构建与图缓存 |
-| `models/` | TRGT、DyRIFT-GNN、训练引擎和预设 |
-| `studies/` | 对比、消融、递进和补充实验入口 |
-| `docs/` | 精简论文说明、复现说明和自动结果表 |
-| `outputs/` | 本地生成 artifact；除 accepted report 外默认不纳入 Git |
+| `train.py` | 单数据集训练入口 |
+| `configs/train/` | 三个数据集各自的训练参数 |
+| `data_processing/` | 数据下载、转换和数据集注册代码 |
+| `data/raw/` | 本地原始/预处理数据，默认不提交 |
+| `analysis/` | 数据分析和划分文件生成 |
+| `features/` | 特征缓存构建 |
+| `models/` | DyRIFT-GNN、TRGT 和基础图模型实现 |
+| `experiments/` | 对比、消融、渐进实验配置和入口 |
+| `outputs/analysis/` | 数据分析输出 |
+| `outputs/features/` | 特征缓存 |
+| `outputs/train/` | 训练结果 |
+| `docs/reproducibility.md` | 复现流程 |
 
-## Quick Start
+## 训练输出
 
-```bash
-conda create -n Graph python=3.10 -y
-conda run -n Graph --no-capture-output pip install torch torchvision torchaudio \
-  --index-url https://download.pytorch.org/whl/cu128
-conda run -n Graph --no-capture-output pip install -r requirements.txt
+训练结果统一放在：
+
+```text
+outputs/train/<实验名称>/<模型名称>/<数据集名称>/epoch_metrics.csv
 ```
 
-放置数据：
+`epoch_metrics.csv` 的列固定为：
 
-| Dataset | Expected location |
-| --- | --- |
-| XinYe DGraph | `datasets/raw/xinye_dgraph/phase1_gdata.npz` and `phase2_gdata.npz` |
-| Elliptic Transactions | `datasets/raw/elliptic_transactions/prepared/` |
-| Elliptic++ Transactions | `datasets/raw/ellipticpp_transactions/prepared/` |
-
-构建特征：
-
-```bash
-conda run -n Graph --no-capture-output python3 mainline.py build_features --phase both
+```text
+epoch,train_loss,train_auc,val_loss,val_auc
 ```
 
-运行当前主线：
+## 单数据集训练
+
+每次只跑一个数据集，通过环境变量指定数据集，再使用对应参数文件：
 
 ```bash
-conda run -n Graph --no-capture-output python3 suite.py \
-  --suite-name dyrift_mainline_rerun \
-  --model dyrift_gnn \
-  --preset dyrift_trgt_deploy_v1 \
-  --feature-profile utpm_shift_enhanced \
-  --dataset-hparams configs/dyrift_suite.json \
-  --seeds 42
+GRADPROJ_ACTIVE_DATASET=xinye_dgraph \
+python3 train.py train --parameter-file configs/train/xinye_dgraph.json
+
+GRADPROJ_ACTIVE_DATASET=xinye_dgraph \
+python3 train.py train --parameter-file configs/train/xinye_dgraph_diffusion.json
+
+GRADPROJ_ACTIVE_DATASET=elliptic_transactions \
+python3 train.py train --parameter-file configs/train/elliptic_transactions.json
+
+GRADPROJ_ACTIVE_DATASET=ellipticpp_transactions \
+python3 train.py train --parameter-file configs/train/ellipticpp_transactions.json
 ```
 
-单数据集显式参数训练：
+## 实验入口
+
+实验也一次只跑一个数据集：
 
 ```bash
-conda run -n Graph --no-capture-output python3 mainline.py \
-  train \
-  --parameter-file configs/parameters/xinye_dgraph_train.json
+python3 experiments/comparisons/xgboost_same_input/run.py --dataset xinye_dgraph
+python3 experiments/ablations/without_prototype_memory/run.py --dataset elliptic_transactions
+python3 experiments/progressive/trgt_bridge_drift/run.py --dataset ellipticpp_transactions
 ```
 
-切换当前数据集：
-
-```bash
-export GRADPROJ_ACTIVE_DATASET=xinye_dgraph
-export GRADPROJ_ACTIVE_DATASET=elliptic_transactions
-export GRADPROJ_ACTIVE_DATASET=ellipticpp_transactions
-```
-
-## Experiments
-
-对比实验：
-
-```bash
-conda run -n Graph --no-capture-output python3 studies/comparisons/plain_trgt_backbone/run.py --device cuda
-conda run -n Graph --no-capture-output python3 studies/comparisons/tgat_style_reference/run.py --device cuda
-conda run -n Graph --no-capture-output python3 studies/comparisons/temporal_graphsage_reference/run.py --device cuda
-conda run -n Graph --no-capture-output python3 studies/comparisons/xgboost_same_input/run.py
-```
-
-消融实验：
-
-```bash
-conda run -n Graph --no-capture-output python3 studies/ablations/without_target_context_bridge/run.py --device cuda
-conda run -n Graph --no-capture-output python3 studies/ablations/without_drift_expert/run.py --device cuda
-conda run -n Graph --no-capture-output python3 studies/ablations/without_prototype_memory/run.py --device cuda
-conda run -n Graph --no-capture-output python3 studies/ablations/without_pseudo_contrastive/run.py --device cuda
-```
-
-递进实验：
-
-```bash
-conda run -n Graph --no-capture-output python3 studies/progressive/trgt_bridge/run.py --device cuda
-conda run -n Graph --no-capture-output python3 studies/progressive/trgt_bridge_drift/run.py --device cuda
-conda run -n Graph --no-capture-output python3 studies/progressive/trgt_bridge_drift_prototype/run.py --device cuda
-conda run -n Graph --no-capture-output python3 studies/progressive/trgt_bridge_drift_prototype_pseudocontrastive/run.py --device cuda
-```
-
-XinYe 补充诊断：
-
-```bash
-conda run -n Graph --no-capture-output python3 studies/supplementary/xinye_phase12_joint_train_phase1_val/run.py --device cuda
-```
-
-同步结果表：
-
-```bash
-python3 sync_results.py
-python3 sync_results.py --check
-```
-
-泄露审计：
-
-```bash
-conda run -n Graph --no-capture-output python3 audit.py \
-  --suite-summary outputs/reports/accepted_mainline/summary.json
-```
-
-## Kept Documents
-
-- `docs/reproducibility.md`: 环境、数据、主线和 study 复现命令。
-- `docs/thesis_method.md`: 方法说明和论文口径。
-- `docs/thesis_experiments.md`: 主结果、对比、消融、递进和补充实验表。
-- `docs/results/`: 自动同步的 CSV/JSON 结果表。
-- `outputs/reports/accepted_mainline/`: 当前 accepted 主结果和泄露审计 artifact。
+更多复现细节见 `docs/reproducibility.md`。

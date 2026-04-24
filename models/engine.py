@@ -21,13 +21,14 @@ from features.features import (
     HybridFeatureNormalizerState,
     default_feature_groups,
 )
-from models.modules.backbone import (
+from models.components.backbone import (
     TRGTInternalRiskEncoder,
     TRGTMeanRelationBlock,
     TRGTTemporalRelationAttentionBlock,
 )
-from models.modules.bridge import TargetContextFusionHead
-from models.modules.memory import (
+from models.components.bridge import TargetContextFusionHead
+from models.components.diffusion import EmbeddingDiffusionRegularizer
+from models.components.memory import (
     PrototypeMemoryBank,
     PrototypeMemoryConfig,
     TemporalNormalAlignmentBank,
@@ -167,6 +168,13 @@ class GraphModelConfig:
     internal_risk_residual_scale: float = 1.0
     internal_risk_short_time_scale: float = 0.12
     internal_risk_long_time_scale: float = 0.45
+    embedding_diffusion_weight: float = 0.0
+    embedding_diffusion_start_epoch: int = 1
+    embedding_diffusion_dim: int = 0
+    embedding_diffusion_p_mean: float = -1.2
+    embedding_diffusion_p_std: float = 1.2
+    embedding_diffusion_sigma_data: float = 0.5
+    embedding_diffusion_min_batch_size: int = 8
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -271,6 +279,13 @@ class GraphModelConfig:
             "internal_risk_residual_scale": float(self.internal_risk_residual_scale),
             "internal_risk_short_time_scale": float(self.internal_risk_short_time_scale),
             "internal_risk_long_time_scale": float(self.internal_risk_long_time_scale),
+            "embedding_diffusion_weight": float(self.embedding_diffusion_weight),
+            "embedding_diffusion_start_epoch": int(self.embedding_diffusion_start_epoch),
+            "embedding_diffusion_dim": int(self.embedding_diffusion_dim),
+            "embedding_diffusion_p_mean": float(self.embedding_diffusion_p_mean),
+            "embedding_diffusion_p_std": float(self.embedding_diffusion_p_std),
+            "embedding_diffusion_sigma_data": float(self.embedding_diffusion_sigma_data),
+            "embedding_diffusion_min_batch_size": int(self.embedding_diffusion_min_batch_size),
         }
 
     @classmethod
@@ -393,6 +408,13 @@ class GraphModelConfig:
             internal_risk_residual_scale=float(payload.get("internal_risk_residual_scale", 1.0)),
             internal_risk_short_time_scale=float(payload.get("internal_risk_short_time_scale", 0.12)),
             internal_risk_long_time_scale=float(payload.get("internal_risk_long_time_scale", 0.45)),
+            embedding_diffusion_weight=float(payload.get("embedding_diffusion_weight", 0.0)),
+            embedding_diffusion_start_epoch=int(payload.get("embedding_diffusion_start_epoch", 1)),
+            embedding_diffusion_dim=int(payload.get("embedding_diffusion_dim", 0)),
+            embedding_diffusion_p_mean=float(payload.get("embedding_diffusion_p_mean", -1.2)),
+            embedding_diffusion_p_std=float(payload.get("embedding_diffusion_p_std", 1.2)),
+            embedding_diffusion_sigma_data=float(payload.get("embedding_diffusion_sigma_data", 0.5)),
+            embedding_diffusion_min_batch_size=int(payload.get("embedding_diffusion_min_batch_size", 8)),
         )
 
     def use_legacy_path(self) -> bool:
@@ -2383,6 +2405,22 @@ class BaseGraphSAGEExperiment:
             and int(self.graph_config.prototype_multiclass_num_classes) >= 2
         )
 
+    def _embedding_diffusion_enabled(self) -> bool:
+        return float(self.graph_config.embedding_diffusion_weight) > 0.0
+
+    def _build_embedding_diffusion_regularizer(self) -> EmbeddingDiffusionRegularizer | None:
+        if not self._embedding_diffusion_enabled():
+            return None
+        return EmbeddingDiffusionRegularizer(
+            embedding_dim=int(self.hidden_dim),
+            diffusion_dim=int(self.graph_config.embedding_diffusion_dim),
+            dropout=float(self.graph_config.dropout),
+            p_mean=float(self.graph_config.embedding_diffusion_p_mean),
+            p_std=float(self.graph_config.embedding_diffusion_p_std),
+            sigma_data=float(self.graph_config.embedding_diffusion_sigma_data),
+            min_batch_size=int(self.graph_config.embedding_diffusion_min_batch_size),
+        ).to(self.device)
+
     def _pseudo_contrastive_enabled(self) -> bool:
         return float(self.graph_config.pseudo_contrastive_weight) > 0.0
 
@@ -4198,12 +4236,13 @@ class BaseGraphSAGEExperiment:
         normal_alignment_regularizer = self._normal_alignment_regularizer
         self._normal_bucket_discriminator = self._build_normal_bucket_discriminator(context=context)
         normal_bucket_discriminator = self._normal_bucket_discriminator
+        embedding_diffusion_regularizer = self._build_embedding_diffusion_regularizer()
 
         log_path = None if artifact_dir is None else artifact_dir / "train.log"
         history_jsonl_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.jsonl"
         history_csv_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.csv"
         curve_path = None if artifact_dir is None else artifact_dir / "training_curves.png"
-        fit_summary_path = None if artifact_dir is None else artifact_dir / "fit_summary.json"
+        fit_metrics_path = None if artifact_dir is None else artifact_dir / "fit_metrics.json"
         if artifact_dir is not None:
             ensure_dir(artifact_dir)
             for path in (log_path, history_jsonl_path):
@@ -4213,6 +4252,8 @@ class BaseGraphSAGEExperiment:
         optimizer_params: list[torch.nn.Parameter] = list(self.network.parameters())
         if normal_bucket_discriminator is not None:
             optimizer_params.extend(list(normal_bucket_discriminator.parameters()))
+        if embedding_diffusion_regularizer is not None:
+            optimizer_params.extend(list(embedding_diffusion_regularizer.parameters()))
         optimizer = torch.optim.AdamW(
             optimizer_params,
             lr=self.graph_config.learning_rate,
@@ -4324,6 +4365,13 @@ class BaseGraphSAGEExperiment:
                     f"pseudo_contrastive_time_balanced={self.graph_config.pseudo_contrastive_time_balanced} "
                     f"pseudo_contrastive_min_confidence_gap="
                     f"{self.graph_config.pseudo_contrastive_min_confidence_gap:.4f} "
+                    f"embedding_diffusion_weight={self.graph_config.embedding_diffusion_weight:.4f} "
+                    f"embedding_diffusion_start_epoch={self.graph_config.embedding_diffusion_start_epoch} "
+                    f"embedding_diffusion_dim={self.graph_config.embedding_diffusion_dim} "
+                    f"embedding_diffusion_p_mean={self.graph_config.embedding_diffusion_p_mean:.4f} "
+                    f"embedding_diffusion_p_std={self.graph_config.embedding_diffusion_p_std:.4f} "
+                    f"embedding_diffusion_sigma_data={self.graph_config.embedding_diffusion_sigma_data:.4f} "
+                    f"embedding_diffusion_min_batch_size={self.graph_config.embedding_diffusion_min_batch_size} "
                     f"historical_background_pool="
                     f"{0 if context.historical_background_ids is None else int(context.historical_background_ids.size)} "
                     f"test_pool_size={int(test_pool_ids.size)} "
@@ -4359,6 +4407,7 @@ class BaseGraphSAGEExperiment:
                 batch_context_regularization_losses: list[float] = []
                 batch_adapter_regularization_losses: list[float] = []
                 batch_pseudo_contrastive_losses: list[float] = []
+                batch_embedding_diffusion_losses: list[float] = []
                 batch_subgraph_nodes: list[float] = []
                 batch_subgraph_edges: list[float] = []
                 batch_emb_norm: list[float] = []
@@ -4519,6 +4568,7 @@ class BaseGraphSAGEExperiment:
                                 self._prototype_enabled()
                                 or self._normal_bucket_alignment_enabled()
                                 or self._normal_bucket_adv_enabled()
+                                or self._embedding_diffusion_enabled()
                             ),
                             include_aux=self._aux_multiclass_enabled(),
                         )
@@ -4629,6 +4679,28 @@ class BaseGraphSAGEExperiment:
                                 loss
                                 + float(self.graph_config.pseudo_contrastive_weight) * pseudo_contrastive_loss
                             )
+                        embedding_diffusion_loss = forward_output.logits.new_tensor(0.0)
+                        diffusion_start_epoch = max(
+                            int(self.graph_config.embedding_diffusion_start_epoch),
+                            1,
+                        )
+                        if (
+                            embedding_diffusion_regularizer is not None
+                            and epoch >= diffusion_start_epoch
+                        ):
+                            if forward_output.embedding is None:
+                                raise RuntimeError("Embedding diffusion expected target embeddings.")
+                            embedding_diffusion_loss, diffusion_diagnostics = embedding_diffusion_regularizer(
+                                embedding=forward_output.embedding,
+                                sample_weight=sample_weight,
+                            )
+                            for diag_name, diag_value in diffusion_diagnostics.items():
+                                batch_extra_diagnostics.setdefault(str(diag_name), []).append(float(diag_value))
+                            loss = (
+                                loss
+                                + float(self.graph_config.embedding_diffusion_weight)
+                                * embedding_diffusion_loss
+                            )
                         loss_parts["prototype_loss"] = float(prototype_loss.detach().item())
                         loss_parts["normal_align_loss"] = float(normal_align_loss.detach().item())
                         loss_parts["normal_bucket_adv_loss"] = float(normal_bucket_adv_loss.detach().item())
@@ -4641,18 +4713,21 @@ class BaseGraphSAGEExperiment:
                         loss_parts["pseudo_contrastive_loss"] = float(
                             pseudo_contrastive_loss.detach().item()
                         )
+                        loss_parts["embedding_diffusion_loss"] = float(
+                            embedding_diffusion_loss.detach().item()
+                        )
                         loss_parts["total_loss"] = float(loss.detach().item())
                         loss.backward()
 
                         if self.graph_config.grad_clip > 0:
                             grad_norm = float(
                                 torch.nn.utils.clip_grad_norm_(
-                                    self.network.parameters(),
+                                    optimizer_params,
                                     self.graph_config.grad_clip,
                                 ).item()
                             )
                         else:
-                            grad_norm = _compute_grad_norm(self.network.parameters())
+                            grad_norm = _compute_grad_norm(optimizer_params)
 
                         optimizer.step()
                         batch_losses.append(float(loss_parts["total_loss"]))
@@ -4670,6 +4745,9 @@ class BaseGraphSAGEExperiment:
                         )
                         batch_pseudo_contrastive_losses.append(
                             float(loss_parts["pseudo_contrastive_loss"])
+                        )
+                        batch_embedding_diffusion_losses.append(
+                            float(loss_parts["embedding_diffusion_loss"])
                         )
                         batch_subgraph_nodes.append(float(subgraph.node_ids.shape[0]))
                         batch_subgraph_edges.append(float(subgraph.edge_src.shape[0]))
@@ -4730,6 +4808,9 @@ class BaseGraphSAGEExperiment:
                     "train_pseudo_contrastive_loss": float(
                         np.mean(batch_pseudo_contrastive_losses)
                     ),
+                    "train_embedding_diffusion_loss": float(
+                        np.mean(batch_embedding_diffusion_losses)
+                    ),
                     "prototype_loss_weight_effective": float(prototype_loss_weight),
                     "prototype_trust_score": float(
                         self._prototype_weight_schedule_state.get("trust_score", 1.0)
@@ -4786,6 +4867,8 @@ class BaseGraphSAGEExperiment:
                     f"train_adapter_regularization_loss="
                     f"{epoch_row['train_adapter_regularization_loss']:.6f} "
                     f"train_pseudo_contrastive_loss={epoch_row['train_pseudo_contrastive_loss']:.6f} "
+                    f"train_embedding_diffusion_loss="
+                    f"{epoch_row['train_embedding_diffusion_loss']:.6f} "
                     f"prototype_loss_weight_effective={epoch_row['prototype_loss_weight_effective']:.6f} "
                     f"prototype_trust_score={epoch_row['prototype_trust_score']:.6f} "
                     f"context_residual_budget_weight_effective="
@@ -4841,7 +4924,7 @@ class BaseGraphSAGEExperiment:
         if best_state is None:
             raise RuntimeError(f"{self.model_name}: failed to capture a best checkpoint.")
         self.network.load_state_dict(best_state)
-        fit_summary = {
+        fit_metrics = {
             "val_auc": float(best_val_auc),
             "best_epoch": float(best_epoch),
             "trained_epochs": int(len(self.training_history)),
@@ -4849,17 +4932,23 @@ class BaseGraphSAGEExperiment:
             "loss_type": str(self.graph_config.loss_type),
             "negative_sampler": str(self.graph_config.negative_sampler),
             "min_early_stop_epoch": int(self.graph_config.min_early_stop_epoch),
+            "embedding_diffusion_weight": float(self.graph_config.embedding_diffusion_weight),
         }
-        self.fit_summary = fit_summary
+        self.fit_metrics = fit_metrics
         if history_csv_path is not None:
             _write_history_csv(history_csv_path, self.training_history)
-        if fit_summary_path is not None:
-            write_json(fit_summary_path, fit_summary)
+        if fit_metrics_path is not None:
+            write_json(fit_metrics_path, fit_metrics)
+        if embedding_diffusion_regularizer is not None and artifact_dir is not None:
+            torch.save(
+                embedding_diffusion_regularizer.state_dict(),
+                artifact_dir / "embedding_diffusion_regularizer.pt",
+            )
         if curve_path is not None:
             plot_error = _plot_training_curves(curve_path, self.training_history)
             if plot_error is not None and log_path is not None:
                 _append_text_line(log_path, f"[{self.model_name}] plot_warning={plot_error}")
-        return fit_summary
+        return fit_metrics
 
     @torch.no_grad()
     def _predict_outputs(

@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from datasets.core.registry import get_active_dataset_spec
+from data_processing.core.registry import get_active_dataset_spec
 from features.features import (
     FeatureStore,
     HybridFeatureNormalizerState,
@@ -18,7 +18,7 @@ from models.engine import (
     TemporalRelationGATExperiment,
     TemporalRelationGraphSAGEExperiment,
 )
-from models.modules.trainer import DyRIFTTrainer
+from models.components.trainer import DyRIFTTrainer
 from models.spec import DYRIFT_GNN_MODEL
 from utils.common import load_phase_arrays
 from utils.sampling import load_or_build_raw_consistency_profile

@@ -1,4 +1,0 @@
-group,setting,study_name,dataset,dataset_key,val_auc,summary_path
-supplementary,XinYe Joint Train on Phase1+Phase2 with Phase1 Validation,xinye_phase12_joint_train_phase1_val,XinYe DGraph,xinye_dgraph,0.7914408494499392,outputs/studies/supplementary/xinye_phase12_joint_train_phase1_val/xinye_dgraph/summary.json
-supplementary,XinYe Phase-Aware Balanced Joint Training,xinye_phase12_phase_aware_balanced,XinYe DGraph,xinye_dgraph,0.7893439724220093,outputs/studies/supplementary/xinye_phase12_phase_aware_balanced/xinye_dgraph/summary.json
-supplementary,XinYe Phase-Aware DualVal Joint Training,xinye_phase12_phase_aware_dualval,XinYe DGraph,xinye_dgraph,0.7842328750450263,outputs/studies/supplementary/xinye_phase12_phase_aware_dualval/xinye_dgraph/summary.json

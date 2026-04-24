@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "name": "xinye_dgraph_dyrift_diffusion_train_parameters",
+  "dataset": "xinye_dgraph",
+  "notes": "Diffusion-GNN branch: DyRIFT-GNN/TRGT plus DiffGAD-style embedding denoising regularizer.",
+  "train": {
+    "model": "dyrift_gnn",
+    "preset": "dyrift_trgt_diffusion_v1",
+    "experiment_name": "diffusion_dyrift_gnn",
+    "run_name": "xinye_dgraph_dyrift_diffusion_70e_min30",
+    "feature_profile": "utpm_shift_enhanced",
+    "feature_dir": "outputs/features/xinye_dgraph/features_ap32",
+    "outdir": "outputs/train",
+    "seeds": [42],
+    "epochs": 70,
+    "batch_size": 512,
+    "hidden_dim": 128,
+    "rel_dim": 32,
+    "fanouts": [15, 10],
+    "dropout": 0.12,
+    "target_context_groups": [
+      "graph_stats",
+      "graph_time_detrend",
+      "neighbor_similarity",
+      "activation_early"
+    ],
+    "graph_config_overrides": {
+      "min_early_stop_epoch": 30,
+      "embedding_diffusion_weight": 0.01,
+      "embedding_diffusion_start_epoch": 2,
+      "embedding_diffusion_dim": 256
+    }
+  }
+}

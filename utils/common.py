@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import random
 from dataclasses import dataclass
@@ -9,15 +10,14 @@ from typing import Any
 import numpy as np
 from sklearn.metrics import average_precision_score, precision_recall_curve, roc_auc_score
 
-from datasets.core.registry import resolve_output_roots
-from eda.data_loader import resolve_dataset_path
+from data_processing.core.registry import resolve_output_roots
+from analysis.data_loader import resolve_dataset_path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EDA_OUTPUT_ROOT, TRAINING_OUTPUT_ROOT = resolve_output_roots(REPO_ROOT)
-FEATURE_OUTPUT_ROOT = TRAINING_OUTPUT_ROOT / "features"
-MODEL_OUTPUT_ROOT = TRAINING_OUTPUT_ROOT / "models"
-BLEND_OUTPUT_ROOT = TRAINING_OUTPUT_ROOT / "blends"
+ANALYSIS_OUTPUT_ROOT, FEATURE_OUTPUT_ROOT = resolve_output_roots(REPO_ROOT)
+TRAIN_OUTPUT_ROOT = REPO_ROOT / "outputs" / "train"
+EPOCH_METRIC_COLUMNS = ("epoch", "train_loss", "train_auc", "val_loss", "val_auc")
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,69 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_clean_epoch_metrics(output_path: Path, source_paths: list[Path]) -> Path:
+    rows_by_epoch: dict[int, list[dict[str, float | None]]] = {}
+    for source_path in source_paths:
+        if not source_path.exists() or source_path.stat().st_size == 0:
+            continue
+        with source_path.open("r", encoding="utf-8-sig", newline="") as handle:
+            for raw_row in csv.DictReader(handle):
+                epoch_raw = raw_row.get("epoch")
+                if epoch_raw is None or str(epoch_raw).strip() == "":
+                    continue
+                epoch = int(float(str(epoch_raw)))
+                rows_by_epoch.setdefault(epoch, []).append(
+                    {
+                        "train_loss": _coerce_metric(raw_row, "train_loss"),
+                        "train_auc": _coerce_metric(raw_row, "train_auc", "train-auc"),
+                        "val_loss": _coerce_metric(raw_row, "val_loss", "val-logloss"),
+                        "val_auc": _coerce_metric(raw_row, "val_auc", "val-auc"),
+                    }
+                )
+
+    clean_rows: list[dict[str, str]] = []
+    for epoch in sorted(rows_by_epoch):
+        epoch_rows = rows_by_epoch[epoch]
+        clean_rows.append(
+            {
+                "epoch": str(epoch),
+                "train_loss": _format_optional_metric(_mean_available(epoch_rows, "train_loss")),
+                "train_auc": _format_optional_metric(_mean_available(epoch_rows, "train_auc")),
+                "val_loss": _format_optional_metric(_mean_available(epoch_rows, "val_loss")),
+                "val_auc": _format_optional_metric(_mean_available(epoch_rows, "val_auc")),
+            }
+        )
+
+    ensure_dir(output_path.parent)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(EPOCH_METRIC_COLUMNS))
+        writer.writeheader()
+        writer.writerows(clean_rows)
+    return output_path
+
+
+def _coerce_metric(row: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        value = row.get(key)
+        if value is None or str(value).strip() == "":
+            continue
+        return float(value)
+    return None
+
+
+def _mean_available(rows: list[dict[str, float | None]], key: str) -> float | None:
+    values = [float(row[key]) for row in rows if row.get(key) is not None]
+    if not values:
+        return None
+    return float(np.mean(values))
+
+
+def _format_optional_metric(value: float | None) -> str:
+    if value is None:
+        return ""
+    return f"{float(value):.6f}"
 
 
 def set_global_seed(seed: int) -> None:
@@ -99,26 +162,26 @@ def compute_binary_classification_metrics(
     }
 
 
-def load_experiment_split(eda_root: Path = EDA_OUTPUT_ROOT) -> ExperimentSplit:
-    summary = read_json(eda_root / "recommended_split.json")
+def load_experiment_split(analysis_root: Path = ANALYSIS_OUTPUT_ROOT) -> ExperimentSplit:
+    summary = read_json(analysis_root / "recommended_split.json")
     if "train_split" in summary and "val_split" in summary:
         train = summary["train_split"]
         val = summary["val_split"]
         test_pool = summary.get("test_pool") or summary.get("unlabeled_pool")
         external = summary.get("external_eval")
         test_pool_ids = (
-            np.load(eda_root / test_pool["id_path"])
+            np.load(analysis_root / test_pool["id_path"])
             if test_pool is not None and test_pool.get("id_path")
             else np.empty(0, dtype=np.int32)
         )
         external_ids = (
-            np.load(eda_root / external["id_path"])
+            np.load(analysis_root / external["id_path"])
             if external is not None and external.get("id_path")
             else np.empty(0, dtype=np.int32)
         )
         return ExperimentSplit(
-            train_ids=np.load(eda_root / train["id_path"]),
-            val_ids=np.load(eda_root / val["id_path"]),
+            train_ids=np.load(analysis_root / train["id_path"]),
+            val_ids=np.load(analysis_root / val["id_path"]),
             test_pool_ids=np.asarray(test_pool_ids, dtype=np.int32),
             external_ids=np.asarray(external_ids, dtype=np.int32),
             threshold_day=int(summary.get("threshold_day", train["threshold_day"])),
@@ -133,13 +196,13 @@ def load_experiment_split(eda_root: Path = EDA_OUTPUT_ROOT) -> ExperimentSplit:
         phase2 = summary.get("phase2_external_eval", {})
         external_path = phase2.get("id_path")
         external_ids = (
-            np.load(eda_root / external_path)
+            np.load(analysis_root / external_path)
             if external_path
             else np.empty(0, dtype=np.int32)
         )
         return ExperimentSplit(
-            train_ids=np.load(eda_root / phase1["train_id_path"]),
-            val_ids=np.load(eda_root / phase1["val_id_path"]),
+            train_ids=np.load(analysis_root / phase1["train_id_path"]),
+            val_ids=np.load(analysis_root / phase1["val_id_path"]),
             test_pool_ids=np.empty(0, dtype=np.int32),
             external_ids=np.asarray(external_ids, dtype=np.int32),
             threshold_day=int(phase1["threshold_day"]),
@@ -148,7 +211,7 @@ def load_experiment_split(eda_root: Path = EDA_OUTPUT_ROOT) -> ExperimentSplit:
             external_phase="phase2" if external_path else None,
             split_style="two_phase",
         )
-    raise KeyError(f"Unsupported recommended_split.json format under {eda_root}")
+    raise KeyError(f"Unsupported recommended_split.json format under {analysis_root}")
 
 
 def load_phase_arrays(

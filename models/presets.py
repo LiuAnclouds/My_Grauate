@@ -10,6 +10,7 @@ from models.spec import (
     TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_PRESET,
     TRANSFORMER_BACKBONE_DEPLOY_PRESET,
+    TRANSFORMER_BACKBONE_DIFFUSION_PRESET,
 )
 
 
@@ -111,6 +112,24 @@ _DYRIFT_PUBLIC_PRESETS: dict[str, dict[str, Any]] = {
         "internal_risk_residual_scale": 0.35,
         "internal_risk_short_time_scale": 0.12,
         "internal_risk_long_time_scale": 0.45,
+    },
+    TRANSFORMER_BACKBONE_DIFFUSION_PRESET: {
+        **_DYRIFT_TRGT_SHARED,
+        **_DYRIFT_TRGT_CONTEXT_BRIDGE,
+        "dropout": 0.12,
+        "attention_num_heads": 8,
+        "message_risk_strength": 0.15,
+        "internal_risk_fusion": "residual",
+        "internal_risk_residual_scale": 0.35,
+        "internal_risk_short_time_scale": 0.12,
+        "internal_risk_long_time_scale": 0.45,
+        "embedding_diffusion_weight": 0.01,
+        "embedding_diffusion_start_epoch": 2,
+        "embedding_diffusion_dim": 256,
+        "embedding_diffusion_p_mean": -1.2,
+        "embedding_diffusion_p_std": 1.2,
+        "embedding_diffusion_sigma_data": 0.5,
+        "embedding_diffusion_min_batch_size": 8,
     },
 }
 
