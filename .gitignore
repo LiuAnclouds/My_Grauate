@@ -12,6 +12,8 @@
 /outputs/train/**
 !/outputs/train/**/
 !/outputs/train/*/*/*/epoch_metrics.csv
+!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/seed_42/model.pt
+!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/seed_42/model_meta.json
 
 /.pytest_cache
 /.mypy_cache
