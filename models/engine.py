@@ -21,13 +21,13 @@ from features.features import (
     HybridFeatureNormalizerState,
     default_feature_groups,
 )
-from models.modules.backbone import (
+from models.components.backbone import (
     TRGTInternalRiskEncoder,
     TRGTMeanRelationBlock,
     TRGTTemporalRelationAttentionBlock,
 )
-from models.modules.bridge import TargetContextFusionHead
-from models.modules.memory import (
+from models.components.bridge import TargetContextFusionHead
+from models.components.memory import (
     PrototypeMemoryBank,
     PrototypeMemoryConfig,
     TemporalNormalAlignmentBank,
@@ -4203,7 +4203,7 @@ class BaseGraphSAGEExperiment:
         history_jsonl_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.jsonl"
         history_csv_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.csv"
         curve_path = None if artifact_dir is None else artifact_dir / "training_curves.png"
-        fit_summary_path = None if artifact_dir is None else artifact_dir / "fit_summary.json"
+        fit_metrics_path = None if artifact_dir is None else artifact_dir / "fit_metrics.json"
         if artifact_dir is not None:
             ensure_dir(artifact_dir)
             for path in (log_path, history_jsonl_path):
@@ -4841,7 +4841,7 @@ class BaseGraphSAGEExperiment:
         if best_state is None:
             raise RuntimeError(f"{self.model_name}: failed to capture a best checkpoint.")
         self.network.load_state_dict(best_state)
-        fit_summary = {
+        fit_metrics = {
             "val_auc": float(best_val_auc),
             "best_epoch": float(best_epoch),
             "trained_epochs": int(len(self.training_history)),
@@ -4850,16 +4850,16 @@ class BaseGraphSAGEExperiment:
             "negative_sampler": str(self.graph_config.negative_sampler),
             "min_early_stop_epoch": int(self.graph_config.min_early_stop_epoch),
         }
-        self.fit_summary = fit_summary
+        self.fit_metrics = fit_metrics
         if history_csv_path is not None:
             _write_history_csv(history_csv_path, self.training_history)
-        if fit_summary_path is not None:
-            write_json(fit_summary_path, fit_summary)
+        if fit_metrics_path is not None:
+            write_json(fit_metrics_path, fit_metrics)
         if curve_path is not None:
             plot_error = _plot_training_curves(curve_path, self.training_history)
             if plot_error is not None and log_path is not None:
                 _append_text_line(log_path, f"[{self.model_name}] plot_warning={plot_error}")
-        return fit_summary
+        return fit_metrics
 
     @torch.no_grad()
     def _predict_outputs(

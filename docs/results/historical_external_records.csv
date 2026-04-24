@@ -1,2 +1,0 @@
-record_type,run_id,timestamp,dataset,metric,value_percent,value_decimal,source,note
-competition_evaluation,XXiRer_47f488,2025-11-13 23:01:21,XinYe DGraph,Val AUC,81.5585%,0.81558477417,user-provided competition evaluation record,Historical external record; not used to overwrite the auditable DyRIFT-GNN mainline summary files.

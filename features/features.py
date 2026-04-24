@@ -10,11 +10,11 @@ import numpy as np
 from sklearn.decomposition import TruncatedSVD
 from tqdm.auto import tqdm
 
-from datasets.core.registry import get_active_dataset_spec
-from eda.analysis import compute_degree_arrays, compute_temporal_core
-from eda.data_loader import PhaseData, load_phase
+from data_processing.core.registry import get_active_dataset_spec
+from analysis.analysis import compute_degree_arrays, compute_temporal_core
+from analysis.data_loader import PhaseData, load_phase
 from utils.common import (
-    EDA_OUTPUT_ROOT,
+    ANALYSIS_OUTPUT_ROOT,
     FEATURE_OUTPUT_ROOT,
     REPO_ROOT,
     ensure_dir,
@@ -229,7 +229,7 @@ def _stable_row_divide(numerator: np.ndarray, denominator: np.ndarray) -> np.nda
 
 
 def _load_projection_train_ids(phase: str, num_nodes: int) -> np.ndarray:
-    split_path = EDA_OUTPUT_ROOT / "recommended_split.json"
+    split_path = ANALYSIS_OUTPUT_ROOT / "recommended_split.json"
     if not split_path.exists():
         return np.arange(min(num_nodes, 250000), dtype=np.int32)
     split_summary = json.loads(split_path.read_text(encoding="utf-8"))
@@ -240,7 +240,7 @@ def _load_projection_train_ids(phase: str, num_nodes: int) -> np.ndarray:
         train_path = train_split.get("id_path")
     if train_phase != phase or not train_path:
         return np.arange(min(num_nodes, 250000), dtype=np.int32)
-    full_path = EDA_OUTPUT_ROOT / str(train_path)
+    full_path = ANALYSIS_OUTPUT_ROOT / str(train_path)
     if not full_path.exists():
         return np.arange(min(num_nodes, 250000), dtype=np.int32)
     train_ids = np.asarray(np.load(full_path), dtype=np.int32)

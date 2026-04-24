@@ -1,0 +1,18 @@
+{
+  "experiment_name": "temporal_graphsage_reference",
+  "display_name": "Temporal GraphSAGE Reference",
+  "experiment_type": "comparison",
+  "runner": "graph",
+  "description": "Time-aware GraphSAGE reference trained on the same unified feature contract.",
+  "dataset_parameters": "../../common/dataset_parameters.json",
+  "seeds": [42],
+  "graph": {
+    "engine_target": "m5_temporal_graphsage",
+    "model_display_name": "Temporal GraphSAGE Reference",
+    "backbone_display_name": "Temporal Relation GraphSAGE",
+    "config_source": "preset",
+    "preset": "unified_baseline",
+    "target_context_groups": [],
+    "graph_config_overrides": []
+  }
+}
