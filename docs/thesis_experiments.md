@@ -77,8 +77,8 @@
 | Setting | XinYe | ET | EPP | Macro Val AUC | Delta vs Full |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Plain TRGT Backbone | 79.0742% | 80.0629% | 78.4006% | 79.1792% | -2.0252 pp |
-| TRGT + Bridge | 78.8639% | 78.4225% | 78.3053% | 78.5306% | -2.6738 pp |
-| TRGT + Bridge + Drift Expert | 78.8363% | 81.1953% | 78.3624% | 79.4647% | -1.7397 pp |
+| TRGT + Bridge | 78.8639% | 78.4225% | 78.3053% | 78.5306% | -2.6739 pp |
+| TRGT + Bridge + Drift Expert | 78.8363% | 81.1953% | 78.3624% | 79.4647% | -1.7398 pp |
 | TRGT + Bridge + Drift Expert + Prototype Memory | 78.9463% | 80.9195% | 78.3048% | 79.3902% | -1.8142 pp |
 | TRGT + Bridge + Drift Expert + Prototype Memory + Pseudo-Contrastive | 79.0680% | 81.6581% | 78.3399% | 79.6886% | -1.5158 pp |
 | Full DyRIFT-GNN | 79.2851% | 82.1329% | 82.1953% | 81.2044% | +0.0000 pp |

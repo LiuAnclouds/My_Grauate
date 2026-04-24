@@ -225,3 +225,14 @@ conda run -n Graph --no-capture-output python3 experiment/audit.py \
 | [results/epoch_log_manifest.csv](results/epoch_log_manifest.csv) | epoch/log/curve manifest for all kept experiments |
 | [results/experiment_epoch_policy.csv](results/experiment_epoch_policy.csv) | planned 70-epoch / min-30 early-stop policy for maintained reruns |
 | [results/training_policy_summary.json](results/training_policy_summary.json) | machine-readable policy summary for thesis reproduction |
+
+## 13. Result Table Sync
+
+Tracked result tables are generated from saved local `summary.json` artifacts:
+
+```bash
+python3 experiment/sync_results.py
+python3 experiment/sync_results.py --check
+```
+
+The sync command updates the decimal CSVs, the percentage presentation table, the study snapshot, the epoch/log manifest, and the machine-readable training-policy summary. It does not synthesize missing epochs or rewrite saved training curves; `docs/results/epoch_log_manifest.csv` remains the observed artifact record, while `docs/results/experiment_epoch_policy.csv` remains the maintained 70/30 rerun policy.

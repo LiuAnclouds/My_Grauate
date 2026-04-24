@@ -10,6 +10,7 @@ This is the compact code map for the current `DyRIFT-GNN / TRGT` route.
 | [../experiment/suite.py](../experiment/suite.py) | three-dataset mainline rerun entry |
 | [../experiment/audit.py](../experiment/audit.py) | hard-leakage audit |
 | [../experiment/config_loader.py](../experiment/config_loader.py) | shared config loading and per-dataset merge |
+| [../experiment/sync_results.py](../experiment/sync_results.py) | regenerate tracked result CSV/JSON tables from saved summaries |
 
 ## 2. Model Package Layout
 

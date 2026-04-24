@@ -51,6 +51,13 @@ Saved summary table: `docs/results/comparison_auc.csv`.
 
 Thesis presentation table: `docs/results/presentation_auc_percent.csv`.
 
+Regenerate tracked result tables after a legitimate rerun updates local `summary.json` artifacts:
+
+```bash
+python3 experiment/sync_results.py
+python3 experiment/sync_results.py --check
+```
+
 Current comparison results:
 
 | Setting | XinYe | ET | EPP | Macro Val AUC | Delta vs Full | Note |
