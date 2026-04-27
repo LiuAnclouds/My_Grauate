@@ -18,12 +18,9 @@
 !/outputs/train/full_dyrift_gnn/dyrift_gnn/
 !/outputs/train/full_dyrift_gnn/dyrift_gnn/*/
 !/outputs/train/full_dyrift_gnn/dyrift_gnn/*/epoch_metrics.csv
-!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/seed_42/
-!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/seed_42/fit_metrics.json
-!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/seed_42/model.pt
-!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/seed_42/best_model.pt
-!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/seed_42/last_model.pt
-!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/seed_42/model_meta.json
+!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/best_model.pt
+!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/last_model.pt
+!/outputs/train/full_dyrift_gnn/dyrift_gnn/*/model.pt
 
 /.pytest_cache
 /.mypy_cache
