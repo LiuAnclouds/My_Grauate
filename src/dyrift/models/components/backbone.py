@@ -150,7 +150,7 @@ class TRGTMeanRelationBlock(nn.Module):
 
 
 class TRGTTemporalRelationAttentionBlock(nn.Module):
-    """TRGT backbone block: temporal relation multi-head attention on sampled subgraphs."""
+    """TGAT-style temporal relation multi-head attention on sampled subgraphs."""
 
     def __init__(
         self,

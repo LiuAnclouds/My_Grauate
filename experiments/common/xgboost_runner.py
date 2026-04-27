@@ -12,7 +12,6 @@ from dyrift.utils.common import (
     compute_binary_classification_metrics,
     ensure_dir,
     load_experiment_split,
-    save_prediction_npz,
     set_global_seed,
     write_clean_epoch_metrics,
     write_json,
@@ -33,7 +32,7 @@ def run_xgboost_dataset(
     include_target_context = bool(xgb_spec.get("include_target_context", False))
     params = _build_xgboost_params(spec=xgb_spec, plan=plan)
     num_boost_round = int(xgb_spec.get("num_boost_round", 400))
-    early_stopping_rounds = int(xgb_spec.get("early_stopping_rounds", 40))
+    early_stopping_rounds = int(xgb_spec.get("early_stopping_rounds", 5))
 
     dataset_analysis_root, _ = resolve_dataset_output_roots(plan.dataset_name)
     split = load_experiment_split(analysis_root=dataset_analysis_root)
@@ -119,11 +118,6 @@ def run_xgboost_dataset(
         else np.empty(0, dtype=np.int8)
     )
 
-    train_predictions: list[np.ndarray] = []
-    val_predictions: list[np.ndarray] = []
-    test_pool_predictions: list[np.ndarray] = []
-    external_predictions: list[np.ndarray] = []
-
     print(
         "[experiment:xgboost] "
         f"experiment={config.experiment_name} "
@@ -156,9 +150,11 @@ def run_xgboost_dataset(
             verbose_eval=False,
         )
 
-        trained_rounds = int(getattr(booster, "best_iteration", -1)) + 1
-        if trained_rounds <= 0:
-            trained_rounds = int(num_boost_round)
+        trained_rounds = _resolve_trained_rounds(
+            booster=booster,
+            evals_result=evals_result,
+            fallback_rounds=int(num_boost_round),
+        )
         epoch_rows = _build_epoch_rows(
             booster=booster,
             train_x=train_x,
@@ -180,13 +176,6 @@ def run_xgboost_dataset(
         test_pool_prob = _predict_round(booster, test_pool_x, best_iteration) if test_pool_ids.size else None
         external_prob = _predict_round(booster, external_x, best_iteration) if external_ids.size else None
 
-        save_prediction_npz(seed_dir / "phase1_train_predictions.npz", train_ids, train_labels, train_prob)
-        save_prediction_npz(seed_dir / "phase1_val_predictions.npz", val_ids, val_labels, val_prob)
-        if test_pool_prob is not None:
-            save_prediction_npz(seed_dir / "test_pool_predictions.npz", test_pool_ids, test_pool_labels, test_pool_prob)
-        if external_prob is not None:
-            save_prediction_npz(seed_dir / "phase2_external_predictions.npz", external_ids, external_labels, external_prob)
-
         fit_metrics = {
             "best_epoch": int(best_iteration),
             "trained_epochs": int(trained_rounds),
@@ -196,13 +185,6 @@ def run_xgboost_dataset(
         }
         write_json(seed_dir / "fit_metrics.json", fit_metrics)
         booster.save_model(str(seed_dir / "model.json"))
-
-        train_predictions.append(train_prob)
-        val_predictions.append(val_prob)
-        if test_pool_prob is not None:
-            test_pool_predictions.append(test_pool_prob)
-        if external_prob is not None:
-            external_predictions.append(external_prob)
 
         test_metrics = None if test_pool_prob is None else _maybe_compute_binary_metrics(test_pool_labels, test_pool_prob)
         external_metrics = None if external_prob is None else _maybe_compute_binary_metrics(external_labels, external_prob)
@@ -214,13 +196,6 @@ def run_xgboost_dataset(
             f"train_auc={train_auc:.6f} val_auc={val_auc:.6f} "
             f"test_auc={_format_metric(None if test_metrics is None else test_metrics['auc'])}"
         )
-
-    _save_average_predictions(dataset_dir, "phase1_train", train_ids, train_labels, train_predictions)
-    _save_average_predictions(dataset_dir, "phase1_val", val_ids, val_labels, val_predictions)
-    if test_pool_predictions:
-        _save_average_predictions(dataset_dir, "test_pool", test_pool_ids, test_pool_labels, test_pool_predictions)
-    if external_predictions:
-        _save_average_predictions(dataset_dir, "phase2_external", external_ids, external_labels, external_predictions)
 
     epoch_metrics_path = write_clean_epoch_metrics(
         dataset_dir / "epoch_metrics.csv",
@@ -246,6 +221,25 @@ def _build_xgboost_params(*, spec: dict[str, Any], plan: DatasetPlan) -> dict[st
     return params
 
 
+def _resolve_trained_rounds(
+    *,
+    booster: xgb.Booster,
+    evals_result: dict[str, dict[str, list[float]]],
+    fallback_rounds: int,
+) -> int:
+    for metric_map in evals_result.values():
+        for values in metric_map.values():
+            if values:
+                return int(len(values))
+
+    num_boosted_rounds = getattr(booster, "num_boosted_rounds", None)
+    if callable(num_boosted_rounds):
+        resolved = int(num_boosted_rounds())
+        if resolved > 0:
+            return resolved
+    return int(fallback_rounds)
+
+
 def _build_epoch_rows(
     *,
     booster: xgb.Booster,
@@ -267,11 +261,15 @@ def _build_epoch_rows(
         external_prob = _predict_round(booster, external_x, epoch) if external_x.size else None
         train_auc = compute_binary_classification_metrics(train_y, train_prob)["auc"]
         val_auc = compute_binary_classification_metrics(val_y, val_prob)["auc"]
+        train_loss = _binary_log_loss(train_y, train_prob)
+        val_loss = _binary_log_loss(val_y, val_prob)
         test_metrics = None if test_prob is None else _maybe_compute_binary_metrics(test_pool_y, test_prob)
         external_metrics = None if external_prob is None else _maybe_compute_binary_metrics(external_y, external_prob)
         rows.append(
             {
                 "epoch": epoch,
+                "train_loss": float(train_loss),
+                "val_loss": float(val_loss),
                 "train_auc": float(train_auc),
                 "val_auc": float(val_auc),
                 "test_auc": None if test_metrics is None else float(test_metrics["auc"]),
@@ -281,24 +279,17 @@ def _build_epoch_rows(
     return rows
 
 
+def _binary_log_loss(labels: np.ndarray, probability: np.ndarray) -> float:
+    y = np.asarray(labels, dtype=np.float64)
+    p = np.clip(np.asarray(probability, dtype=np.float64), 1e-7, 1.0 - 1e-7)
+    return float(np.mean(-(y * np.log(p) + (1.0 - y) * np.log(1.0 - p)), dtype=np.float64))
+
+
 def _predict_round(booster: xgb.Booster, x: np.ndarray, round_count: int) -> np.ndarray:
     return booster.predict(
         xgb.DMatrix(x),
         iteration_range=(0, int(round_count)),
     ).astype(np.float32, copy=False)
-
-
-def _save_average_predictions(
-    run_dir: Path,
-    split_name: str,
-    node_ids: np.ndarray,
-    labels: np.ndarray,
-    predictions: list[np.ndarray],
-) -> Path:
-    mean_pred = np.mean(np.stack(predictions, axis=0), axis=0).astype(np.float32, copy=False)
-    path = run_dir / f"{split_name}_avg_predictions.npz"
-    save_prediction_npz(path, node_ids=node_ids, y_true=labels, probabilities=mean_pred)
-    return path
 
 
 def _maybe_compute_binary_metrics(labels: np.ndarray, probability: np.ndarray) -> dict[str, float] | None:

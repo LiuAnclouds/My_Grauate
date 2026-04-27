@@ -169,7 +169,7 @@ def resolve_train_parameters(
 def _load_train_parameter_payload(parameter_file: Path | None) -> dict[str, Any]:
     if parameter_file is None:
         return {}
-    payload = json.loads(parameter_file.read_text(encoding="utf-8"))
+    payload = json.loads(parameter_file.read_text(encoding="utf-8-sig"))
     if not isinstance(payload, dict):
         raise ValueError(f"Train parameter file `{parameter_file}` must contain a JSON object.")
     for section_name in ("train", "parameters"):
@@ -285,7 +285,14 @@ def _normalize_optional_str_list(values: Any, *, location: str) -> list[str] | N
 
 def _normalize_feature_profile(value: Any, *, location: str) -> str:
     normalized = str(value).strip()
-    allowed = {"utpm_unified", "utpm_shift_compact", "utpm_shift_enhanced"}
+    allowed = {
+        "utpm_unified",
+        "utpm_shift_compact",
+        "utpm_shift_enhanced",
+        "utpm_shift_history",
+        "utpm_shift_fused",
+        "utpm_shift_fused_rawmask",
+    }
     if normalized not in allowed:
         raise ValueError(
             f"`{location}` must be one of {', '.join(sorted(allowed))}, got `{value}`."

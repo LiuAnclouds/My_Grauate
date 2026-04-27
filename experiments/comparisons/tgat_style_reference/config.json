@@ -1,19 +1,19 @@
 {
   "experiment_name": "tgat_style_reference",
-  "display_name": "TGAT-Style Reference",
+  "display_name": "TGAT Backbone Reference",
   "experiment_type": "comparison",
   "runner": "graph",
-  "description": "Temporal graph-attention reference on the same unified cached inputs, without DyRIFT-specific modules.",
+  "description": "TGAT backbone reference on the same unified cached inputs, without DyRIFT-specific modules.",
   "dataset_parameters": "../../common/dataset_parameters.json",
   "seeds": [42],
   "graph": {
     "engine_target": "m6_temporal_gat",
-    "model_display_name": "TGAT-Style Reference",
-    "backbone_display_name": "Temporal Relation Graph Attention",
+    "model_display_name": "TGAT Backbone Reference",
+    "backbone_display_name": "TGAT",
     "config_source": "base_graph",
     "target_context_groups": [],
     "graph_config_overrides": [
-      "early_stop_patience=6",
+      "early_stop_patience=5",
       "loss_type=bce",
       "attention_num_heads=4"
     ]

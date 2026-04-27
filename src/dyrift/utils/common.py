@@ -17,7 +17,7 @@ from dyrift.analysis.data_loader import resolve_dataset_path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ANALYSIS_OUTPUT_ROOT, FEATURE_OUTPUT_ROOT = resolve_output_roots(REPO_ROOT)
 TRAIN_OUTPUT_ROOT = REPO_ROOT / "outputs" / "train"
-EPOCH_METRIC_COLUMNS = ("epoch", "train_loss", "train_auc", "val_loss", "val_auc")
+EPOCH_METRIC_COLUMNS = ("epoch", "train_loss", "val_loss", "train_auc", "val_auc", "best_epoch")
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def read_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def write_clean_epoch_metrics(output_path: Path, source_paths: list[Path]) -> Path:
@@ -61,9 +61,10 @@ def write_clean_epoch_metrics(output_path: Path, source_paths: list[Path]) -> Pa
                 rows_by_epoch.setdefault(epoch, []).append(
                     {
                         "train_loss": _coerce_metric(raw_row, "train_loss"),
+                        "val_loss": _coerce_metric(raw_row, "val_loss"),
                         "train_auc": _coerce_metric(raw_row, "train_auc", "train-auc"),
-                        "val_loss": _coerce_metric(raw_row, "val_loss", "val-logloss"),
                         "val_auc": _coerce_metric(raw_row, "val_auc", "val-auc"),
+                        "best_epoch": _coerce_metric(raw_row, "best_epoch"),
                     }
                 )
 
@@ -74,9 +75,10 @@ def write_clean_epoch_metrics(output_path: Path, source_paths: list[Path]) -> Pa
             {
                 "epoch": str(epoch),
                 "train_loss": _format_optional_metric(_mean_available(epoch_rows, "train_loss")),
-                "train_auc": _format_optional_metric(_mean_available(epoch_rows, "train_auc")),
                 "val_loss": _format_optional_metric(_mean_available(epoch_rows, "val_loss")),
+                "train_auc": _format_optional_metric(_mean_available(epoch_rows, "train_auc")),
                 "val_auc": _format_optional_metric(_mean_available(epoch_rows, "val_auc")),
+                "best_epoch": _format_optional_int(_mean_available(epoch_rows, "best_epoch")),
             }
         )
 
@@ -108,6 +110,12 @@ def _format_optional_metric(value: float | None) -> str:
     if value is None:
         return ""
     return f"{float(value):.6f}"
+
+
+def _format_optional_int(value: float | None) -> str:
+    if value is None:
+        return ""
+    return str(int(round(float(value))))
 
 
 def set_global_seed(seed: int) -> None:
@@ -312,25 +320,31 @@ def align_prediction_bundle(
     if np.array_equal(node_ids, ref_ids):
         return {
             "node_ids": node_ids,
-            "y_true": np.asarray(bundle["y_true"], dtype=np.int8, copy=False),
-            "probability": np.asarray(bundle["probability"], dtype=np.float32, copy=False),
+            "y_true": np.array(bundle["y_true"], dtype=np.int8, copy=False),
+            "probability": np.array(bundle["probability"], dtype=np.float32, copy=False),
         }
 
     position = {int(node_id): idx for idx, node_id in enumerate(node_ids.tolist())}
     aligned_idx = np.asarray([position[int(node_id)] for node_id in ref_ids], dtype=np.int64)
     return {
         "node_ids": ref_ids,
-        "y_true": np.asarray(bundle["y_true"][aligned_idx], dtype=np.int8, copy=False),
-        "probability": np.asarray(bundle["probability"][aligned_idx], dtype=np.float32, copy=False),
+        "y_true": np.array(bundle["y_true"][aligned_idx], dtype=np.int8, copy=False),
+        "probability": np.array(bundle["probability"][aligned_idx], dtype=np.float32, copy=False),
     }
 
 
 def resolve_device(requested: str | None = None) -> str:
-    if requested:
-        return requested
     try:
         import torch
 
+        if requested:
+            requested_text = str(requested)
+            if requested_text.startswith("cuda") and not torch.cuda.is_available():
+                print("[device] requested cuda but this PyTorch build has no CUDA support; falling back to cpu.")
+                return "cpu"
+            return requested_text
         return "cuda" if torch.cuda.is_available() else "cpu"
     except Exception:
+        if requested and not str(requested).startswith("cuda"):
+            return str(requested)
         return "cpu"

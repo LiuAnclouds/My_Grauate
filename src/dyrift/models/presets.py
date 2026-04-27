@@ -6,6 +6,8 @@ from typing import Any
 from dyrift.models.engine import GraphModelConfig
 from dyrift.models.spec import (
     DYRIFT_GNN_MODEL,
+    LEGACY_TRANSFORMER_BACKBONE_DEPLOY_PRESET,
+    LEGACY_TRANSFORMER_BACKBONE_PRESET,
     OFFICIAL_BACKBONE_PRESET,
     TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_PRESET,
@@ -26,7 +28,7 @@ _BASE_GRAPH_CONFIG = GraphModelConfig(
     subgraph_head="meanmax",
     grad_clip=1.0,
     scheduler="plateau",
-    min_early_stop_epoch=30,
+    min_early_stop_epoch=0,
     train_negative_ratio=3.0,
     negative_sampler="mixed",
     neighbor_sampler="consistency_recent",
@@ -41,9 +43,9 @@ _BASE_GRAPH_CONFIG = GraphModelConfig(
     aux_inference_blend=0.0,
 )
 
-_DYRIFT_TRGT_SHARED: dict[str, Any] = {
-    "early_stop_patience": 10,
-    "min_early_stop_epoch": 30,
+_DYRIFT_TGAT_SHARED: dict[str, Any] = {
+    "early_stop_patience": 5,
+    "min_early_stop_epoch": 0,
     "loss_type": "bce",
     "ranking_weight": 0.0,
     "ranking_margin": 0.2,
@@ -84,7 +86,7 @@ _DYRIFT_TRGT_SHARED: dict[str, Any] = {
     "context_residual_budget_release_delay_epochs": 3,
 }
 
-_DYRIFT_TRGT_CONTEXT_BRIDGE: dict[str, Any] = {
+_DYRIFT_TGAT_CONTEXT_BRIDGE: dict[str, Any] = {
     "target_context_fusion": "drift_residual",
     "target_time_adapter_strength": 0.15,
     "target_time_adapter_type": "drift_expert",
@@ -92,40 +94,45 @@ _DYRIFT_TRGT_CONTEXT_BRIDGE: dict[str, Any] = {
     "target_time_expert_entropy_weight": 0.05,
 }
 
+_DYRIFT_TGAT_BASE_PRESET: dict[str, Any] = {
+    **_DYRIFT_TGAT_SHARED,
+    "target_context_fusion": "none",
+    "target_time_adapter_strength": 0.0,
+    "internal_risk_fusion": "residual",
+    "internal_risk_short_time_scale": 0.12,
+    "internal_risk_long_time_scale": 0.45,
+}
+_DYRIFT_TGAT_DEPLOY_PRESET: dict[str, Any] = {
+    **_DYRIFT_TGAT_SHARED,
+    **_DYRIFT_TGAT_CONTEXT_BRIDGE,
+    "dropout": 0.12,
+    "attention_num_heads": 8,
+    "message_risk_strength": 0.15,
+    "internal_risk_fusion": "residual",
+    "internal_risk_residual_scale": 0.35,
+    "internal_risk_short_time_scale": 0.12,
+    "internal_risk_long_time_scale": 0.45,
+}
+
 _DYRIFT_PUBLIC_PRESETS: dict[str, dict[str, Any]] = {
-    TRANSFORMER_BACKBONE_PRESET: {
-        **_DYRIFT_TRGT_SHARED,
-        "target_context_fusion": "none",
-        "target_time_adapter_strength": 0.0,
-        "internal_risk_fusion": "residual",
-        "internal_risk_short_time_scale": 0.12,
-        "internal_risk_long_time_scale": 0.45,
-    },
-    TRANSFORMER_BACKBONE_DEPLOY_PRESET: {
-        **_DYRIFT_TRGT_SHARED,
-        **_DYRIFT_TRGT_CONTEXT_BRIDGE,
-        "dropout": 0.12,
-        "attention_num_heads": 8,
-        "message_risk_strength": 0.15,
-        "internal_risk_fusion": "residual",
-        "internal_risk_residual_scale": 0.35,
-        "internal_risk_short_time_scale": 0.12,
-        "internal_risk_long_time_scale": 0.45,
-    },
+    TRANSFORMER_BACKBONE_PRESET: _DYRIFT_TGAT_BASE_PRESET,
+    TRANSFORMER_BACKBONE_DEPLOY_PRESET: _DYRIFT_TGAT_DEPLOY_PRESET,
+    LEGACY_TRANSFORMER_BACKBONE_PRESET: _DYRIFT_TGAT_BASE_PRESET,
+    LEGACY_TRANSFORMER_BACKBONE_DEPLOY_PRESET: _DYRIFT_TGAT_DEPLOY_PRESET,
 }
 
 _PRESET_UPDATES: dict[str, dict[str, dict[str, Any]]] = {
     "m5_temporal_graphsage": {
         "unified_baseline": {
-            "early_stop_patience": 6,
-            "min_early_stop_epoch": 30,
+            "early_stop_patience": 5,
+            "min_early_stop_epoch": 0,
             "loss_type": "bce",
         },
     },
     "m7_utpm": {
         "utpm_temporal_shift_v4": {
-            "early_stop_patience": 10,
-            "min_early_stop_epoch": 30,
+            "early_stop_patience": 5,
+            "min_early_stop_epoch": 0,
             "loss_type": "bce",
             "ranking_weight": 0.0,
             "ranking_margin": 0.2,

@@ -1,4 +1,4 @@
-"""Neural components used by DyRIFT-GNN and TRGT."""
+"""Neural components used by DyRIFT-TGAT."""
 
 __all__ = [
     "backbone",

@@ -67,7 +67,7 @@ def load_or_build_raw_consistency_profile(
 ) -> np.ndarray:
     profile_path, meta_path = _profile_paths(feature_store)
     if profile_path.exists() and meta_path.exists():
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta = json.loads(meta_path.read_text(encoding="utf-8-sig"))
         if meta.get("version") == RAW_CONSISTENCY_PROFILE_VERSION:
             return np.load(profile_path, mmap_mode="r")
 

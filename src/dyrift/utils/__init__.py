@@ -1,4 +1,4 @@
-"""Shared utilities for DyRIFT-GNN."""
+"""Shared utilities for DyRIFT-TGAT."""
 
 __all__ = [
     "common",

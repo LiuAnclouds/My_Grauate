@@ -1,4 +1,4 @@
-"""Shared utilities for comparison, ablation, and progressive experiments."""
+"""Shared utilities for comparison and ablation experiments."""
 
 from __future__ import annotations
 

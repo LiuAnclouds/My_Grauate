@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "name": "custom_train_parameters",
+  "dataset": "<dataset_name>",
+  "notes": "Fill all core hyperparameters explicitly. The public workflow does not rely on hidden defaults.",
+  "train": {
+    "model": null,
+    "preset": null,
+    "experiment_name": null,
+    "run_name": null,
+    "feature_profile": null,
+    "feature_dir": null,
+    "outdir": null,
+    "seeds": [],
+    "epochs": null,
+    "batch_size": null,
+    "hidden_dim": null,
+    "rel_dim": null,
+    "fanouts": [],
+    "dropout": null,
+    "target_context_groups": [],
+    "graph_config_overrides": {}
+  }
+}

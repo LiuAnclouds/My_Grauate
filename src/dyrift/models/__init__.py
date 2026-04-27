@@ -1,4 +1,4 @@
-"""Model runtime and configuration package for DyRIFT-GNN."""
+"""Model runtime and configuration package for DyRIFT-TGAT."""
 
 __all__ = [
     "engine",

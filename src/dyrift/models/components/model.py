@@ -3,8 +3,8 @@ from __future__ import annotations
 from dyrift.models.engine import GraphModelConfig, RelationGraphSAGENetwork
 
 
-DYRIFT_MODEL_NAME = "DyRIFT-GNN"
-DYRIFT_BACKBONE_NAME = "TRGT"
+DYRIFT_MODEL_NAME = "DyRIFT-TGAT"
+DYRIFT_BACKBONE_NAME = "TGAT"
 
 
 class DyRIFTModel(RelationGraphSAGENetwork):

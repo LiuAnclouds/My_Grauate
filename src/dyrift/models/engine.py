@@ -4,7 +4,6 @@ import csv
 import copy
 import json
 import math
-import os
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -85,6 +84,7 @@ class GraphModelConfig:
     grad_clip: float = 0.0
     scheduler: str = "none"
     early_stop_patience: int = 0
+    early_stop_min_delta: float = 0.0
     min_early_stop_epoch: int = 0
     train_negative_ratio: float = 0.0
     negative_sampler: str = "random"
@@ -183,6 +183,7 @@ class GraphModelConfig:
             "grad_clip": float(self.grad_clip),
             "scheduler": self.scheduler,
             "early_stop_patience": int(self.early_stop_patience),
+            "early_stop_min_delta": float(self.early_stop_min_delta),
             "min_early_stop_epoch": int(self.min_early_stop_epoch),
             "train_negative_ratio": float(self.train_negative_ratio),
             "negative_sampler": self.negative_sampler,
@@ -291,6 +292,7 @@ class GraphModelConfig:
             grad_clip=float(payload.get("grad_clip", 0.0)),
             scheduler=str(payload.get("scheduler", "none")),
             early_stop_patience=int(payload.get("early_stop_patience", 0)),
+            early_stop_min_delta=float(payload.get("early_stop_min_delta", 0.0)),
             min_early_stop_epoch=int(payload.get("min_early_stop_epoch", 0)),
             train_negative_ratio=float(payload.get("train_negative_ratio", 0.0)),
             negative_sampler=str(payload.get("negative_sampler", "random")),
@@ -457,76 +459,46 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
         fp.write("\n")
 
 
-def _write_history_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+SEED_EPOCH_METRIC_COLUMNS = ("epoch", "train_loss", "val_loss", "train_auc", "val_auc", "best_epoch", "lr")
+
+
+def _write_history_csv(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    fieldnames: tuple[str, ...] | None = None,
+) -> None:
     ensure_dir(path.parent)
     if not rows:
         return
-    fieldnames: list[str] = []
-    for row in rows:
-        for key in row.keys():
-            if key not in fieldnames:
-                fieldnames.append(key)
+    if fieldnames is None:
+        resolved_fieldnames: list[str] = []
+        for row in rows:
+            for key in row.keys():
+                if key not in resolved_fieldnames:
+                    resolved_fieldnames.append(key)
+    else:
+        resolved_fieldnames = list(fieldnames)
     with path.open("w", encoding="utf-8-sig", newline="") as fp:
-        writer = csv.DictWriter(fp, fieldnames=fieldnames)
+        writer = csv.DictWriter(fp, fieldnames=resolved_fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        for row in rows:
+            writer.writerow({key: row.get(key, "") for key in resolved_fieldnames})
 
 
-def _plot_training_curves(path: Path, rows: list[dict[str, Any]]) -> str | None:
-    if not rows:
-        return "no training rows collected"
-    try:
-        mpl_cache_dir = path.parent / ".mplconfig"
-        ensure_dir(mpl_cache_dir)
-        os.environ.setdefault("MPLCONFIGDIR", str(mpl_cache_dir))
-        import matplotlib
+def _binary_log_loss_from_probability(labels: np.ndarray, probability: np.ndarray) -> float | None:
+    label_arr = np.asarray(labels, dtype=np.int32)
+    score_arr = np.asarray(probability, dtype=np.float64)
+    valid_mask = np.isin(label_arr, (0, 1))
+    if not np.any(valid_mask):
+        return None
+    y = label_arr[valid_mask].astype(np.float64, copy=False)
+    p = np.clip(score_arr[valid_mask], 1e-7, 1.0 - 1e-7)
+    return float(np.mean(-(y * np.log(p) + (1.0 - y) * np.log(1.0 - p)), dtype=np.float64))
 
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-    except Exception as exc:
-        return f"{type(exc).__name__}: {exc}"
 
-    epochs = [int(row["epoch"]) for row in rows]
-    train_loss = [float(row["train_loss"]) for row in rows]
-    val_auc = [float(row["val_auc"]) for row in rows]
-    val_pr_auc = [float(row["val_pr_auc"]) for row in rows]
-    val_ap = [float(row["val_ap"]) for row in rows]
-    best_epoch = int(max(rows, key=lambda row: float(row["val_auc"]))["epoch"])
-
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
-    ax_loss, ax_auc, ax_ap, ax_pr = axes.flat
-
-    ax_loss.plot(epochs, train_loss, marker="o", linewidth=2.0, color="#1f77b4")
-    ax_loss.set_title("Train Loss")
-    ax_loss.set_xlabel("Epoch")
-    ax_loss.set_ylabel("Loss")
-    ax_loss.grid(alpha=0.25)
-
-    ax_auc.plot(epochs, val_auc, marker="o", linewidth=2.0, color="#d62728")
-    ax_auc.axvline(best_epoch, linestyle="--", linewidth=1.2, color="#444444")
-    ax_auc.set_title("Validation ROC-AUC")
-    ax_auc.set_xlabel("Epoch")
-    ax_auc.set_ylabel("AUC")
-    ax_auc.grid(alpha=0.25)
-
-    ax_ap.plot(epochs, val_ap, marker="o", linewidth=2.0, color="#2ca02c")
-    ax_ap.axvline(best_epoch, linestyle="--", linewidth=1.2, color="#444444")
-    ax_ap.set_title("Validation Average Precision")
-    ax_ap.set_xlabel("Epoch")
-    ax_ap.set_ylabel("AP")
-    ax_ap.grid(alpha=0.25)
-
-    ax_pr.plot(epochs, val_pr_auc, marker="o", linewidth=2.0, color="#9467bd")
-    ax_pr.axvline(best_epoch, linestyle="--", linewidth=1.2, color="#444444")
-    ax_pr.set_title("Validation PR-AUC")
-    ax_pr.set_xlabel("Epoch")
-    ax_pr.set_ylabel("PR-AUC")
-    ax_pr.grid(alpha=0.25)
-
-    ensure_dir(path.parent)
-    fig.savefig(path, dpi=180, bbox_inches="tight")
-    plt.close(fig)
-    return None
+def _format_optional_float(value: float | None) -> str:
+    return "n/a" if value is None else f"{float(value):.6f}"
 
 
 def _sampler_uses_relation_risk(sampler: str) -> bool:
@@ -2556,14 +2528,14 @@ class BaseGraphSAGEExperiment:
         unique_buckets = np.unique(bucket_ids)
         if unique_buckets.size <= 1:
             choice = rng.choice(candidates.size, size=sample_size, replace=False)
-            return np.asarray(candidates[choice], dtype=np.int32, copy=False)
+            return np.array(candidates[choice], dtype=np.int32, copy=False)
 
         base_take = max(sample_size // unique_buckets.size, 1)
         selected_parts: list[np.ndarray] = []
         leftover_parts: list[np.ndarray] = []
         for bucket_id in unique_buckets:
             bucket_mask = bucket_ids == int(bucket_id)
-            bucket_nodes = np.asarray(candidates[bucket_mask], dtype=np.int32, copy=False)
+            bucket_nodes = np.array(candidates[bucket_mask], dtype=np.int32, copy=False)
             if bucket_nodes.size == 0:
                 continue
             permutation = rng.permutation(bucket_nodes.size)
@@ -2583,14 +2555,14 @@ class BaseGraphSAGEExperiment:
             need = sample_size - selected.size
             if leftover.size > need:
                 fill_choice = rng.choice(leftover.size, size=need, replace=False)
-                leftover = np.asarray(leftover[fill_choice], dtype=np.int32, copy=False)
+                leftover = np.array(leftover[fill_choice], dtype=np.int32, copy=False)
             selected = np.concatenate([selected, leftover]).astype(np.int32, copy=False)
         if selected.size > sample_size:
             trim_choice = rng.choice(selected.size, size=sample_size, replace=False)
-            selected = np.asarray(selected[trim_choice], dtype=np.int32, copy=False)
+            selected = np.array(selected[trim_choice], dtype=np.int32, copy=False)
         if selected.size < sample_size:
             remaining_mask = ~np.isin(candidates, selected, assume_unique=False)
-            remaining = np.asarray(candidates[remaining_mask], dtype=np.int32, copy=False)
+            remaining = np.array(candidates[remaining_mask], dtype=np.int32, copy=False)
             if remaining.size:
                 need = min(sample_size - selected.size, remaining.size)
                 fill_choice = rng.choice(remaining.size, size=need, replace=False)
@@ -2629,7 +2601,7 @@ class BaseGraphSAGEExperiment:
             if bool(self.graph_config.pseudo_contrastive_time_balanced):
                 candidate_size = min(pool.size, max(sample_size * 4, sample_size))
                 choice = rng.choice(pool.size, size=candidate_size, replace=False)
-                candidates = np.asarray(pool[choice], dtype=np.int32, copy=False)
+                candidates = np.array(pool[choice], dtype=np.int32, copy=False)
                 sampled_nodes = self._rebalance_pseudo_sample_by_time_bucket(
                     context=context,
                     node_ids=candidates,
@@ -2638,7 +2610,7 @@ class BaseGraphSAGEExperiment:
                 )
             else:
                 choice = rng.choice(pool.size, size=sample_size, replace=False)
-                sampled_nodes = np.asarray(pool[choice], dtype=np.int32, copy=False)
+                sampled_nodes = np.array(pool[choice], dtype=np.int32, copy=False)
         else:
             sampled_nodes = pool
 
@@ -3191,9 +3163,9 @@ class BaseGraphSAGEExperiment:
 
         sample_size = min(pool.size, max(1, int(math.ceil(pos_count * ratio))))
         if pool.size <= sample_size:
-            return np.asarray(pool, dtype=np.int32, copy=False)
+            return np.array(pool, dtype=np.int32, copy=False)
         choice = rng.choice(pool.size, size=sample_size, replace=False)
-        return np.asarray(pool[choice], dtype=np.int32, copy=False)
+        return np.array(pool[choice], dtype=np.int32, copy=False)
 
     def _current_historical_background_negative_ratio(self, epoch: int) -> float:
         target_ratio = max(float(self.graph_config.historical_background_negative_ratio), 0.0)
@@ -4199,16 +4171,12 @@ class BaseGraphSAGEExperiment:
         self._normal_bucket_discriminator = self._build_normal_bucket_discriminator(context=context)
         normal_bucket_discriminator = self._normal_bucket_discriminator
 
-        log_path = None if artifact_dir is None else artifact_dir / "train.log"
-        history_jsonl_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.jsonl"
+        log_path = None
+        history_jsonl_path = None
         history_csv_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.csv"
-        curve_path = None if artifact_dir is None else artifact_dir / "training_curves.png"
         fit_metrics_path = None if artifact_dir is None else artifact_dir / "fit_metrics.json"
         if artifact_dir is not None:
             ensure_dir(artifact_dir)
-            for path in (log_path, history_jsonl_path):
-                if path is not None:
-                    path.write_text("", encoding="utf-8")
 
         optimizer_params: list[torch.nn.Parameter] = list(self.network.parameters())
         if normal_bucket_discriminator is not None:
@@ -4267,6 +4235,7 @@ class BaseGraphSAGEExperiment:
                     f"historical_background_aux_only={self.graph_config.historical_background_aux_only} "
                     f"negative_sampler={self.graph_config.negative_sampler} "
                     f"early_stop_patience={self.graph_config.early_stop_patience} "
+                    f"early_stop_min_delta={self.graph_config.early_stop_min_delta:.6f} "
                     f"min_early_stop_epoch={self.graph_config.min_early_stop_epoch} "
                     f"loss_type={self.graph_config.loss_type} "
                     f"ranking_weight={self.graph_config.ranking_weight:.4f} "
@@ -4333,6 +4302,7 @@ class BaseGraphSAGEExperiment:
 
         best_state = None
         best_val_auc = -math.inf
+        early_stop_reference_auc = -math.inf
         best_epoch = -1
         epochs_without_improvement = 0
         epoch_rng = np.random.default_rng(self.seed)
@@ -4696,6 +4666,16 @@ class BaseGraphSAGEExperiment:
                 )
                 val_metrics = compute_binary_classification_metrics(val_labels, val_prob)
                 val_auc = val_metrics["auc"]
+                val_loss = _binary_log_loss_from_probability(val_labels, val_prob)
+                train_eval_prob = self.predict_proba(
+                    context=context,
+                    node_ids=train_ids,
+                    batch_seed=self.seed + 9000 + epoch,
+                    progress_desc=f"{self.model_name}:seed{self.seed}:train_eval:{epoch}/{self.epochs}",
+                    show_progress=False,
+                )
+                train_eval_metrics = compute_binary_classification_metrics(train_labels, train_eval_prob)
+                train_auc = train_eval_metrics["auc"]
                 if scheduler is not None:
                     scheduler.step(1.0 - val_auc)
 
@@ -4703,6 +4683,9 @@ class BaseGraphSAGEExperiment:
                     best_val_auc = val_auc
                     best_epoch = epoch
                     best_state = copy.deepcopy(self.network.state_dict())
+
+                if val_auc > early_stop_reference_auc + float(self.graph_config.early_stop_min_delta):
+                    early_stop_reference_auc = val_auc
                     epochs_without_improvement = 0
                 else:
                     epochs_without_improvement += 1
@@ -4744,9 +4727,9 @@ class BaseGraphSAGEExperiment:
                     "context_residual_budget_guard_strength": float(
                         self._context_budget_schedule_state.get("guard_strength", 0.0)
                     ),
+                    "val_loss": "" if val_loss is None else float(val_loss),
+                    "train_auc": float(train_auc),
                     "val_auc": float(val_auc),
-                    "val_pr_auc": float(val_metrics["pr_auc"]),
-                    "val_ap": float(val_metrics["ap"]),
                     "train_targets": int(train_batch_stats.target_count),
                     "train_pos": int(train_batch_stats.positive_count),
                     "train_neg": int(train_batch_stats.negative_count),
@@ -4768,60 +4751,26 @@ class BaseGraphSAGEExperiment:
                     if diag_values:
                         epoch_row[diag_name] = float(np.mean(diag_values))
                 self.training_history.append(epoch_row)
-                extra_diag_log = " ".join(
-                    f"{diag_name}={epoch_row[diag_name]:.6f}"
-                    for diag_name in sorted(batch_extra_diagnostics)
-                    if diag_name in epoch_row
-                )
                 epoch_log_line = (
                     f"[{self.model_name}] epoch={epoch} "
                     f"train_loss={epoch_row['train_loss']:.6f} "
-                    f"train_base_loss={epoch_row['train_base_loss']:.6f} "
-                    f"train_ranking_loss={epoch_row['train_ranking_loss']:.6f} "
-                    f"train_prototype_loss={epoch_row['train_prototype_loss']:.6f} "
-                    f"train_normal_align_loss={epoch_row['train_normal_align_loss']:.6f} "
-                    f"train_normal_bucket_adv_loss={epoch_row['train_normal_bucket_adv_loss']:.6f} "
-                    f"train_aux_loss={epoch_row['train_aux_loss']:.6f} "
-                    f"train_context_regularization_loss={epoch_row['train_context_regularization_loss']:.6f} "
-                    f"train_adapter_regularization_loss="
-                    f"{epoch_row['train_adapter_regularization_loss']:.6f} "
-                    f"train_pseudo_contrastive_loss={epoch_row['train_pseudo_contrastive_loss']:.6f} "
-                    f"prototype_loss_weight_effective={epoch_row['prototype_loss_weight_effective']:.6f} "
-                    f"prototype_trust_score={epoch_row['prototype_trust_score']:.6f} "
-                    f"context_residual_budget_weight_effective="
-                    f"{epoch_row['context_residual_budget_weight_effective']:.6f} "
-                    f"context_residual_budget_release_progress="
-                    f"{epoch_row['context_residual_budget_release_progress']:.6f} "
-                    f"context_residual_budget_prototype_readiness="
-                    f"{epoch_row['context_residual_budget_prototype_readiness']:.6f} "
-                    f"context_residual_budget_guard_strength="
-                    f"{epoch_row['context_residual_budget_guard_strength']:.6f} "
+                    f"val_loss={_format_optional_float(val_loss)} "
+                    f"train_auc={train_auc:.6f} "
                     f"val_auc={val_auc:.6f} "
-                    f"val_pr_auc={val_metrics['pr_auc']:.6f} "
-                    f"val_ap={val_metrics['ap']:.6f} "
-                    f"train_targets={train_batch_stats.target_count} "
-                    f"train_pos={train_batch_stats.positive_count} "
-                    f"train_neg={train_batch_stats.negative_count} "
-                    f"train_hard_neg={train_batch_stats.hard_negative_count} "
-                    f"train_bg_neg={train_batch_stats.background_negative_count} "
-                    f"train_pos_rate={train_batch_stats.positive_rate:.4f} "
-                    f"hard_negative_pool_size={self._current_hard_negative_pool_size()} "
-                    f"avg_subgraph_nodes={np.mean(batch_subgraph_nodes):.2f} "
-                    f"avg_subgraph_edges={np.mean(batch_subgraph_edges):.2f} "
-                    f"emb_norm={np.mean(batch_emb_norm):.6f} "
-                    f"dirichlet={np.mean(batch_dirichlet):.6f} "
-                    f"grad_norm={np.mean(batch_grad_norm):.6f} "
                     f"best_epoch={best_epoch} "
-                    f"lr={current_lr:.6g} "
-                    f"loss_pos_weight={float(pos_weight.item()):.4f}"
+                    f"lr={current_lr:.6g}"
                 )
-                if extra_diag_log:
-                    epoch_log_line = f"{epoch_log_line} {extra_diag_log}"
                 tqdm.write(epoch_log_line)
                 if log_path is not None:
                     _append_text_line(log_path, epoch_log_line)
                 if history_jsonl_path is not None:
                     _append_jsonl(history_jsonl_path, epoch_row)
+                if history_csv_path is not None:
+                    _write_history_csv(
+                        history_csv_path,
+                        self.training_history,
+                        fieldnames=SEED_EPOCH_METRIC_COLUMNS,
+                    )
 
                 if (
                     self.graph_config.early_stop_patience > 0
@@ -4831,6 +4780,7 @@ class BaseGraphSAGEExperiment:
                     early_stop_line = (
                         f"[{self.model_name}] early_stop epoch={epoch} "
                         f"patience={self.graph_config.early_stop_patience} "
+                        f"min_delta={self.graph_config.early_stop_min_delta:.6f} "
                         f"min_early_stop_epoch={self.graph_config.min_early_stop_epoch}"
                     )
                     tqdm.write(early_stop_line)
@@ -4840,6 +4790,9 @@ class BaseGraphSAGEExperiment:
 
         if best_state is None:
             raise RuntimeError(f"{self.model_name}: failed to capture a best checkpoint.")
+        last_state = copy.deepcopy(self.network.state_dict())
+        self._best_checkpoint_state = copy.deepcopy(best_state)
+        self._last_checkpoint_state = last_state
         self.network.load_state_dict(best_state)
         fit_metrics = {
             "val_auc": float(best_val_auc),
@@ -4848,17 +4801,22 @@ class BaseGraphSAGEExperiment:
             "loss_pos_weight": float(pos_weight.item()),
             "loss_type": str(self.graph_config.loss_type),
             "negative_sampler": str(self.graph_config.negative_sampler),
+            "early_stop_patience": int(self.graph_config.early_stop_patience),
+            "early_stop_min_delta": float(self.graph_config.early_stop_min_delta),
+            "early_stop_reference_auc": float(early_stop_reference_auc),
             "min_early_stop_epoch": int(self.graph_config.min_early_stop_epoch),
+            "best_checkpoint": "best_model.pt",
+            "last_checkpoint": "last_model.pt",
         }
         self.fit_metrics = fit_metrics
         if history_csv_path is not None:
-            _write_history_csv(history_csv_path, self.training_history)
+            _write_history_csv(
+                history_csv_path,
+                self.training_history,
+                fieldnames=SEED_EPOCH_METRIC_COLUMNS,
+            )
         if fit_metrics_path is not None:
             write_json(fit_metrics_path, fit_metrics)
-        if curve_path is not None:
-            plot_error = _plot_training_curves(curve_path, self.training_history)
-            if plot_error is not None and log_path is not None:
-                _append_text_line(log_path, f"[{self.model_name}] plot_warning={plot_error}")
         return fit_metrics
 
     @torch.no_grad()
@@ -5032,10 +4990,18 @@ class BaseGraphSAGEExperiment:
 
     def save(self, run_dir: Path) -> None:
         ensure_dir(run_dir)
-        torch.save(self.network.state_dict(), run_dir / "model.pt")
+        current_state = self.network.state_dict()
+        best_state = getattr(self, "_best_checkpoint_state", None) or current_state
+        last_state = getattr(self, "_last_checkpoint_state", None) or current_state
+        torch.save(best_state, run_dir / "best_model.pt")
+        torch.save(last_state, run_dir / "last_model.pt")
+        torch.save(best_state, run_dir / "model.pt")
         metadata = {
             "model_name": self.model_name,
             "seed": self.seed,
+            "best_checkpoint": "best_model.pt",
+            "last_checkpoint": "last_model.pt",
+            "compat_checkpoint": "model.pt",
             "feature_groups": self.feature_groups,
             "hidden_dim": self.hidden_dim,
             "num_layers": self.num_layers,
@@ -5073,7 +5039,7 @@ class BaseGraphSAGEExperiment:
         num_relations: int,
         device: str | None = None,
     ) -> "BaseGraphSAGEExperiment":
-        meta = json.loads((run_dir / "model_meta.json").read_text(encoding="utf-8"))
+        meta = json.loads((run_dir / "model_meta.json").read_text(encoding="utf-8-sig"))
         graph_config_payload = meta.get("graph_model_config")
         if graph_config_payload is not None:
             graph_config = GraphModelConfig.from_dict(graph_config_payload)
@@ -5111,8 +5077,11 @@ class BaseGraphSAGEExperiment:
             ),
         )
         instance.eval_batch_size = int(meta.get("eval_batch_size", max(instance.batch_size, 2048)))
+        checkpoint_path = run_dir / "best_model.pt"
+        if not checkpoint_path.exists():
+            checkpoint_path = run_dir / "model.pt"
         state_dict = torch.load(
-            run_dir / "model.pt",
+            checkpoint_path,
             map_location=instance.device,
             weights_only=True,
         )
@@ -5141,7 +5110,7 @@ class TemporalRelationGATExperiment(BaseGraphSAGEExperiment):
         super().__init__(*args, **kwargs)
 
 
-class TRGTExperiment(BaseGraphSAGEExperiment):
+class DyRIFTTGATExperiment(BaseGraphSAGEExperiment):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs["temporal"] = True
         kwargs.setdefault("aggregator_type", "attention")
@@ -5149,4 +5118,5 @@ class TRGTExperiment(BaseGraphSAGEExperiment):
 
 
 # Backward-compatible alias for historical imports and saved metadata readers.
-TemporalRelationGraphTransformerExperiment = TRGTExperiment
+TRGTExperiment = DyRIFTTGATExperiment
+TemporalRelationGraphTransformerExperiment = DyRIFTTGATExperiment

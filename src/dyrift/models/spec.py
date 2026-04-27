@@ -9,12 +9,16 @@ OFFICIAL_BACKBONE_PRESET = "utpm_temporal_shift_v4"
 OFFICIAL_BACKBONE_FEATURE_PROFILE = "utpm_unified"
 DYRIFT_GNN_MODEL = "dyrift_gnn"
 TRANSFORMER_BACKBONE_MODEL = DYRIFT_GNN_MODEL
-TRANSFORMER_BACKBONE_PRESET = "dyrift_trgt_base_v1"
-TRANSFORMER_BACKBONE_DEPLOY_PRESET = "dyrift_trgt_deploy_v1"
-TRGT_BACKBONE_DISPLAY_NAME = "Temporal-Relational Graph Transformer"
-TRGT_BACKBONE_SHORT_NAME = "TRGT"
-DYRIFT_MODEL_DISPLAY_NAME = "Dynamic Risk-Informed Fraud Graph Neural Network"
-DYRIFT_MODEL_SHORT_NAME = "DyRIFT-GNN"
+TRANSFORMER_BACKBONE_PRESET = "dyrift_tgat_base_v1"
+TRANSFORMER_BACKBONE_DEPLOY_PRESET = "dyrift_tgat_deploy_v1"
+LEGACY_TRANSFORMER_BACKBONE_PRESET = "dyrift_trgt_base_v1"
+LEGACY_TRANSFORMER_BACKBONE_DEPLOY_PRESET = "dyrift_trgt_deploy_v1"
+TGAT_BACKBONE_DISPLAY_NAME = "Temporal Graph Attention Network"
+TGAT_BACKBONE_SHORT_NAME = "TGAT"
+TRGT_BACKBONE_DISPLAY_NAME = TGAT_BACKBONE_DISPLAY_NAME
+TRGT_BACKBONE_SHORT_NAME = TGAT_BACKBONE_SHORT_NAME
+DYRIFT_MODEL_DISPLAY_NAME = "Dynamic Risk-Informed Temporal Graph Attention Network"
+DYRIFT_MODEL_SHORT_NAME = "DyRIFT-TGAT"
 OFFICIAL_TARGET_CONTEXT_GROUPS = (
     "graph_time_detrend",
     "neighbor_similarity",
@@ -35,5 +39,5 @@ OFFICIAL_MAINLINE_FANOUTS = (15, 10)
 OFFICIAL_TRAIN_EPOCHS = 70
 OFFICIAL_TRAIN_SEEDS = (42,)
 
-# Primary thesis result: deployable pure DyRIFT-GNN/TRGT with dataset-local tuning.
+# Primary thesis result: deployable pure DyRIFT-TGAT with dataset-local tuning.
 OFFICIAL_FULL_EXPERIMENT_NAME = "full_dyrift_gnn"

@@ -1,2 +1,1 @@
-"""DyRIFT-GNN thesis project package."""
-
+"""DyRIFT-TGAT thesis project package."""

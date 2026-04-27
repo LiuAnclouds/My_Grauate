@@ -1,0 +1,21 @@
+{
+  "experiment_name": "linear_same_feature",
+  "display_name": "Linear Same-Feature Baseline",
+  "experiment_type": "comparison",
+  "runner": "mlp",
+  "description": "Feature-only linear classifier trained on the same cached node features, without graph edges or temporal neighborhood aggregation.",
+  "dataset_parameters": "../../common/dataset_parameters.json",
+  "seeds": [42],
+  "mlp": {
+    "model_name": "linear",
+    "model_display_name": "Linear Same-Feature Baseline",
+    "include_target_context": false,
+    "epochs": 70,
+    "early_stop_patience": 5,
+    "early_stop_min_delta": 0.0001,
+    "hidden_dims": [],
+    "dropout": 0.0,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001
+  }
+}

@@ -1,6 +1,6 @@
 {
   "experiment_name": "without_drift_expert",
-  "display_name": "DyRIFT-GNN Without Drift Expert",
+  "display_name": "DyRIFT-TGAT w/o Drift Expert",
   "experiment_type": "ablation",
   "runner": "graph",
   "description": "Ablation that keeps the target-context bridge but removes the dedicated drift-expert time adapter.",
@@ -8,10 +8,10 @@
   "seeds": [42],
   "graph": {
     "engine_target": "dyrift_gnn",
-    "model_display_name": "DyRIFT-GNN Without Drift Expert",
-    "backbone_display_name": "TRGT",
+    "model_display_name": "DyRIFT-TGAT w/o Drift Expert",
+    "backbone_display_name": "TGAT",
     "config_source": "preset",
-    "preset": "dyrift_trgt_deploy_v1",
+    "preset": "dyrift_tgat_deploy_v1",
     "target_context_groups": "__dataset__",
     "graph_config_overrides": [
       "target_time_adapter_strength=0.0",

@@ -1,0 +1,7 @@
+{
+  "val_auc": 0.821329,
+  "best_epoch": 4,
+  "trained_epochs": 6,
+  "best_checkpoint": "best_model.pt",
+  "last_checkpoint": "model.pt"
+}

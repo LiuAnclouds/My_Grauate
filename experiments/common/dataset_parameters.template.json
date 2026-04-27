@@ -1,0 +1,47 @@
+{
+  "profile_name": "dataset_parameters_template",
+  "datasets": {
+    "xinye_dgraph": {
+      "dataset_short": "xy",
+      "feature_profile": null,
+      "feature_subdir": null,
+      "attr_proj_dim": null,
+      "epochs": null,
+      "batch_size": null,
+      "hidden_dim": null,
+      "rel_dim": null,
+      "fanouts": [],
+      "dropout": null,
+      "target_context_groups": [],
+      "graph_config_overrides": []
+    },
+    "elliptic_transactions": {
+      "dataset_short": "et",
+      "feature_profile": null,
+      "feature_subdir": null,
+      "attr_proj_dim": null,
+      "epochs": null,
+      "batch_size": null,
+      "hidden_dim": null,
+      "rel_dim": null,
+      "fanouts": [],
+      "dropout": null,
+      "target_context_groups": [],
+      "graph_config_overrides": []
+    },
+    "ellipticpp_transactions": {
+      "dataset_short": "epp",
+      "feature_profile": null,
+      "feature_subdir": null,
+      "attr_proj_dim": null,
+      "epochs": null,
+      "batch_size": null,
+      "hidden_dim": null,
+      "rel_dim": null,
+      "fanouts": [],
+      "dropout": null,
+      "target_context_groups": [],
+      "graph_config_overrides": []
+    }
+  }
+}

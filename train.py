@@ -30,7 +30,7 @@ from dyrift.models.spec import (
     DYRIFT_GNN_MODEL,
     DYRIFT_MODEL_SHORT_NAME,
     OFFICIAL_TRAIN_EPOCHS,
-    TRGT_BACKBONE_SHORT_NAME,
+    TGAT_BACKBONE_SHORT_NAME,
     TRANSFORMER_BACKBONE_DEPLOY_PRESET,
     TRANSFORMER_BACKBONE_MODEL,
     TRANSFORMER_BACKBONE_PRESET,
@@ -93,7 +93,7 @@ def parse_args() -> argparse.Namespace:
     default_build_phase = "both" if len(dataset_spec.default_artifacts) > 1 else dataset_spec.default_artifacts[0]
 
     parser = argparse.ArgumentParser(
-        description="Single-dataset DyRIFT-GNN training entrypoint."
+        description="Single-dataset DyRIFT-TGAT training entrypoint."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -140,7 +140,7 @@ def parse_args() -> argparse.Namespace:
             "`m5_temporal_graphsage` is the unified baseline; "
             "`m7_utpm` is the legacy stable GraphSAGE thesis backbone; "
             f"`{DYRIFT_GNN_MODEL}` is the {DYRIFT_MODEL_SHORT_NAME} method with the "
-            f"{TRGT_BACKBONE_SHORT_NAME} backbone."
+            f"{TGAT_BACKBONE_SHORT_NAME} backbone."
         ),
     )
     train_parser.add_argument(
@@ -150,8 +150,8 @@ def parse_args() -> argparse.Namespace:
             "Named thesis preset. "
             "`m5_temporal_graphsage`: unified_baseline. "
             "`m7_utpm`: utpm_temporal_shift_v4 (legacy stable backbone). "
-            f"`{TRANSFORMER_BACKBONE_MODEL}`: {TRANSFORMER_BACKBONE_PRESET} (TRGT base) or "
-            f"`{TRANSFORMER_BACKBONE_DEPLOY_PRESET}` (deployable DyRIFT-GNN/TRGT)."
+            f"`{TRANSFORMER_BACKBONE_MODEL}`: {TRANSFORMER_BACKBONE_PRESET} (TGAT base) or "
+            f"`{TRANSFORMER_BACKBONE_DEPLOY_PRESET}` (deployable DyRIFT-TGAT)."
         ),
     )
     train_parser.add_argument(
@@ -166,7 +166,14 @@ def parse_args() -> argparse.Namespace:
     )
     train_parser.add_argument(
         "--feature-profile",
-        choices=("utpm_unified", "utpm_shift_compact", "utpm_shift_enhanced"),
+        choices=(
+            "utpm_unified",
+            "utpm_shift_compact",
+            "utpm_shift_enhanced",
+            "utpm_shift_history",
+            "utpm_shift_fused",
+            "utpm_shift_fused_rawmask",
+        ),
         default=None,
         help="Unified feature contract used by the training run.",
     )
@@ -288,6 +295,21 @@ def parse_args() -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Resolve train parameters and print them without loading data or training.",
+    )
+    train_parser.add_argument(
+        "--save-predictions",
+        action="store_true",
+        help="Persist per-split prediction NPZ files for optional offline analysis.",
+    )
+    train_parser.add_argument(
+        "--skip-train-predictions",
+        action="store_true",
+        help="When --save-predictions is used, skip phase1_train prediction exports.",
+    )
+    train_parser.add_argument(
+        "--skip-test-pool-predictions",
+        action="store_true",
+        help="When --save-predictions is used, skip test_pool prediction exports.",
     )
     return parser.parse_args()
 
@@ -415,6 +437,7 @@ def run_train(args: argparse.Namespace) -> None:
     val_predictions: list[np.ndarray] = []
     test_pool_predictions: list[np.ndarray] = []
     external_predictions: list[np.ndarray] = []
+    save_predictions = bool(getattr(args, "save_predictions", False))
     experiment_cls = get_experiment_cls(args.model)
 
     print(
@@ -464,12 +487,15 @@ def run_train(args: argparse.Namespace) -> None:
                 test_pool_ids=test_pool_ids,
                 artifact_dir=seed_dir,
             )
-            train_prob = experiment.predict_proba(
-                phase1_context,
-                train_ids,
-                batch_seed=seed + 500,
-                progress_desc=f"{args.model}:seed{seed}:phase1_train",
-            )
+            experiment.save(seed_dir)
+            train_prob = None
+            if save_predictions and not bool(getattr(args, "skip_train_predictions", False)):
+                train_prob = experiment.predict_proba(
+                    phase1_context,
+                    train_ids,
+                    batch_seed=seed + 500,
+                    progress_desc=f"{args.model}:seed{seed}:phase1_train",
+                )
             val_prob = experiment.predict_proba(
                 phase1_context,
                 val_ids,
@@ -483,7 +509,9 @@ def run_train(args: argparse.Namespace) -> None:
                     batch_seed=seed + 1500,
                     progress_desc=f"{args.model}:seed{seed}:test_pool",
                 )
-                if test_pool_ids.size
+                if save_predictions
+                and test_pool_ids.size
+                and not bool(getattr(args, "skip_test_pool_predictions", False))
                 else None
             )
             external_prob = (
@@ -493,11 +521,15 @@ def run_train(args: argparse.Namespace) -> None:
                     batch_seed=seed + 2000,
                     progress_desc=f"{args.model}:seed{seed}:phase2_external",
                 )
-                if external_ids.size
+                if save_predictions and external_ids.size
                 else None
             )
 
-            train_metrics = compute_binary_classification_metrics(train_labels, train_prob)
+            train_metrics = (
+                compute_binary_classification_metrics(train_labels, train_prob)
+                if train_prob is not None
+                else None
+            )
             val_metrics = compute_binary_classification_metrics(val_labels, val_prob)
             test_metrics = (
                 None if test_pool_prob is None else _maybe_compute_binary_metrics(test_pool_labels, test_pool_prob)
@@ -506,49 +538,61 @@ def run_train(args: argparse.Namespace) -> None:
                 None if external_prob is None else _maybe_compute_binary_metrics(external_labels, external_prob)
             )
 
-            experiment.save(seed_dir)
-            save_prediction_npz(seed_dir / "phase1_train_predictions.npz", train_ids, train_labels, train_prob)
-            save_prediction_npz(seed_dir / "phase1_val_predictions.npz", val_ids, val_labels, val_prob)
-            if test_pool_prob is not None:
-                save_prediction_npz(
-                    seed_dir / "test_pool_predictions.npz",
-                    test_pool_ids,
-                    test_pool_labels,
-                    test_pool_prob,
-                )
-            if external_prob is not None:
-                save_prediction_npz(
-                    seed_dir / "phase2_external_predictions.npz",
-                    external_ids,
-                    external_labels,
-                    external_prob,
-                )
+            if save_predictions:
+                if train_prob is not None:
+                    save_prediction_npz(seed_dir / "phase1_train_predictions.npz", train_ids, train_labels, train_prob)
+                save_prediction_npz(seed_dir / "phase1_val_predictions.npz", val_ids, val_labels, val_prob)
+                if test_pool_prob is not None:
+                    save_prediction_npz(
+                        seed_dir / "test_pool_predictions.npz",
+                        test_pool_ids,
+                        test_pool_labels,
+                        test_pool_prob,
+                    )
+                if external_prob is not None:
+                    save_prediction_npz(
+                        seed_dir / "phase2_external_predictions.npz",
+                        external_ids,
+                        external_labels,
+                        external_prob,
+                    )
 
-            train_predictions.append(train_prob)
-            val_predictions.append(val_prob)
-            if test_pool_prob is not None:
+            if save_predictions and train_prob is not None:
+                train_predictions.append(train_prob)
+            if save_predictions:
+                val_predictions.append(val_prob)
+            if save_predictions and test_pool_prob is not None:
                 test_pool_predictions.append(test_pool_prob)
-            if external_prob is not None:
+            if save_predictions and external_prob is not None:
                 external_predictions.append(external_prob)
+            train_auc_str = "skipped" if train_metrics is None else f"{train_metrics['auc']:.6f}"
             seed_pbar.set_postfix(
-                train_auc=f"{train_metrics['auc']:.4f}",
+                train_auc="skipped" if train_metrics is None else f"{train_metrics['auc']:.4f}",
                 val_auc=f"{val_metrics['auc']:.4f}",
                 test_auc=_format_metric(None if test_metrics is None else test_metrics["auc"]),
                 refresh=False,
             )
             tqdm.write(
                 f"[{args.model}] seed={seed} "
-                f"train_auc={train_metrics['auc']:.6f} "
+                f"train_auc={train_auc_str} "
                 f"val_auc={val_metrics['auc']:.6f} "
                 f"test_auc={_format_metric(None if test_metrics is None else test_metrics['auc'])} "
                 f"legacy_external_auc={_format_metric(None if external_metrics is None else external_metrics['auc'])}"
             )
 
-    train_avg_path = _save_average_predictions(run_dir, "phase1_train", train_ids, train_labels, train_predictions)
-    val_avg_path = _save_average_predictions(run_dir, "phase1_val", val_ids, val_labels, val_predictions)
+    train_avg_path = (
+        _save_average_predictions(run_dir, "phase1_train", train_ids, train_labels, train_predictions)
+        if save_predictions and train_predictions
+        else None
+    )
+    val_avg_path = (
+        _save_average_predictions(run_dir, "phase1_val", val_ids, val_labels, val_predictions)
+        if save_predictions and val_predictions
+        else None
+    )
     test_avg_path = (
         _save_average_predictions(run_dir, "test_pool", test_pool_ids, test_pool_labels, test_pool_predictions)
-        if test_pool_predictions
+        if save_predictions and test_pool_predictions
         else None
     )
     external_avg_path = (
@@ -559,7 +603,7 @@ def run_train(args: argparse.Namespace) -> None:
             external_labels,
             external_predictions,
         )
-        if external_predictions
+        if save_predictions and external_predictions
         else None
     )
     clean_epoch_path = write_clean_epoch_metrics(

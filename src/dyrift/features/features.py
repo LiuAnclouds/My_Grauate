@@ -128,6 +128,12 @@ def _feature_schema_payload() -> dict[str, Any]:
         "utpm_shift_enhanced_dim": _feature_profile_dim(utpm_shift_enhanced_feature_groups()),
         "utpm_shift_fused_groups": utpm_shift_fused_feature_groups(),
         "utpm_shift_fused_dim": _feature_profile_dim(utpm_shift_fused_feature_groups()),
+        "utpm_shift_history_groups": utpm_shift_history_feature_groups(),
+        "utpm_shift_history_dim": _feature_profile_dim(utpm_shift_history_feature_groups()),
+        "utpm_shift_fused_rawmask_groups": utpm_shift_fused_rawmask_feature_groups(),
+        "utpm_shift_fused_rawmask_dim": _feature_profile_dim(
+            utpm_shift_fused_rawmask_feature_groups()
+        ),
     }
 
 
@@ -201,6 +207,28 @@ def utpm_shift_fused_feature_groups() -> list[str]:
     ]
 
 
+def utpm_shift_history_feature_groups() -> list[str]:
+    return [
+        *utpm_shift_enhanced_feature_groups(),
+        "temporal_snapshot",
+        "temporal_recent",
+        "temporal_relation_recent",
+    ]
+
+
+def utpm_shift_fused_rawmask_feature_groups() -> list[str]:
+    return [
+        "raw_x",
+        "missing_mask",
+        "missing_summary",
+        "strong_combo",
+        "background",
+        "time",
+        "graph_stats",
+        *utpm_shift_fused_feature_groups(),
+    ]
+
+
 def _clip_nonfinite(values: np.ndarray, fill_value: float = 0.0) -> np.ndarray:
     arr = np.asarray(values, dtype=np.float32)
     if np.all(np.isfinite(arr)):
@@ -232,7 +260,7 @@ def _load_projection_train_ids(phase: str, num_nodes: int) -> np.ndarray:
     split_path = ANALYSIS_OUTPUT_ROOT / "recommended_split.json"
     if not split_path.exists():
         return np.arange(min(num_nodes, 250000), dtype=np.int32)
-    split_summary = json.loads(split_path.read_text(encoding="utf-8"))
+    split_summary = json.loads(split_path.read_text(encoding="utf-8-sig"))
     train_phase = str(split_summary.get("train_phase", "graph"))
     train_path = None
     train_split = split_summary.get("train_split")
@@ -2446,7 +2474,7 @@ def build_phase_feature_artifacts(
         preserved_neighbor_file = None
         preserved_neighbor_spans: dict[str, dict[str, Any]] = {}
         if not build_neighbor and existing_manifest_path.exists():
-            existing_manifest = json.loads(existing_manifest_path.read_text(encoding="utf-8"))
+            existing_manifest = json.loads(existing_manifest_path.read_text(encoding="utf-8-sig"))
             candidate_neighbor_file = existing_manifest.get("neighbor_file")
             candidate_neighbor_spans = existing_manifest.get("neighbor_groups", {})
             if candidate_neighbor_file and (phase_dir / candidate_neighbor_file).exists():
@@ -2805,7 +2833,7 @@ def build_feature_artifacts(
 
 
 def load_feature_manifest(phase: str, outdir: Path = FEATURE_OUTPUT_ROOT) -> dict[str, Any]:
-    return json.loads((outdir / phase / "feature_manifest.json").read_text(encoding="utf-8"))
+    return json.loads((outdir / phase / "feature_manifest.json").read_text(encoding="utf-8-sig"))
 
 
 def load_graph_cache(phase: str, outdir: Path = FEATURE_OUTPUT_ROOT) -> GraphCache:
@@ -2872,6 +2900,10 @@ def resolve_feature_groups(
         groups = list(utpm_shift_enhanced_feature_groups())
     elif profile == "utpm_shift_fused":
         groups = list(utpm_shift_fused_feature_groups())
+    elif profile == "utpm_shift_history":
+        groups = list(utpm_shift_history_feature_groups())
+    elif profile == "utpm_shift_fused_rawmask":
+        groups = list(utpm_shift_fused_rawmask_feature_groups())
     else:
         groups = list(default_feature_groups(model_name))
     for group_name in extra_groups or []:

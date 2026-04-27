@@ -1,0 +1,11 @@
+{
+  "val_auc": 0.8370458443439632,
+  "best_epoch": 6.0,
+  "trained_epochs": 30,
+  "loss_pos_weight": 3.0,
+  "loss_type": "bce",
+  "negative_sampler": "mixed",
+  "min_early_stop_epoch": 30,
+  "best_checkpoint": "best_model.pt",
+  "last_checkpoint": "last_model.pt"
+}

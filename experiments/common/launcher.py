@@ -54,7 +54,7 @@ def run_experiment(experiment_dir: Path) -> None:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run one comparison, ablation, or progressive experiment for one dataset.",
+        description="Run one comparison or ablation experiment for one dataset.",
     )
     parser.add_argument("--dataset", required=True, help="Dataset name to run.")
     parser.add_argument("--device", default="cuda", help="Torch device for graph experiments.")
@@ -91,6 +91,16 @@ def _run_single_dataset(
             plan=plan,
             dataset_dir=dataset_dir,
             seeds=seeds,
+        )
+    elif experiment.runner == "mlp":
+        from .mlp_runner import run_mlp_dataset
+
+        run_mlp_dataset(
+            config=experiment,
+            plan=plan,
+            dataset_dir=dataset_dir,
+            seeds=seeds,
+            device=device,
         )
     else:
         raise ValueError(f"Unsupported experiment runner: {experiment.runner}")

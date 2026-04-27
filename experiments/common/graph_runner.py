@@ -14,7 +14,6 @@ from dyrift.utils.common import (
     compute_binary_classification_metrics,
     ensure_dir,
     load_experiment_split,
-    save_prediction_npz,
     set_global_seed,
     slice_node_ids,
     write_clean_epoch_metrics,
@@ -69,11 +68,6 @@ def run_graph_dataset(
     )
 
     experiment_cls = get_experiment_cls(model_key)
-    train_predictions: list[np.ndarray] = []
-    val_predictions: list[np.ndarray] = []
-    test_pool_predictions: list[np.ndarray] = []
-    external_predictions: list[np.ndarray] = []
-
     print(
         "[experiment:graph] "
         f"experiment={config.experiment_name} "
@@ -126,73 +120,7 @@ def run_graph_dataset(
                 path=seed_dir / "fit_metrics.json",
                 payload={**fit_metrics, "trained_epochs": trained_epochs},
             )
-
-            train_prob = trainer.predict_proba(
-                phase1_context,
-                train_ids,
-                batch_seed=int(seed) + 500,
-                progress_desc=f"{config.experiment_name}:seed{seed}:train",
-            )
-            val_prob = trainer.predict_proba(
-                phase1_context,
-                val_ids,
-                batch_seed=int(seed) + 1000,
-                progress_desc=f"{config.experiment_name}:seed{seed}:val",
-            )
-            test_pool_prob = (
-                trainer.predict_proba(
-                    phase1_context,
-                    test_pool_ids,
-                    batch_seed=int(seed) + 1500,
-                    progress_desc=f"{config.experiment_name}:seed{seed}:test_pool",
-                )
-                if test_pool_ids.size
-                else None
-            )
-            external_prob = (
-                trainer.predict_proba(
-                    phase2_context,
-                    external_ids,
-                    batch_seed=int(seed) + 2000,
-                    progress_desc=f"{config.experiment_name}:seed{seed}:external",
-                )
-                if external_ids.size
-                else None
-            )
-
-            train_metrics = compute_binary_classification_metrics(train_labels, train_prob)
-            val_metrics = compute_binary_classification_metrics(val_labels, val_prob)
-            test_metrics = (
-                None if test_pool_prob is None else _maybe_compute_binary_metrics(test_pool_labels, test_pool_prob)
-            )
-            external_metrics = (
-                None if external_prob is None else _maybe_compute_binary_metrics(external_labels, external_prob)
-            )
-
             trainer.save(seed_dir)
-            save_prediction_npz(seed_dir / "phase1_train_predictions.npz", train_ids, train_labels, train_prob)
-            save_prediction_npz(seed_dir / "phase1_val_predictions.npz", val_ids, val_labels, val_prob)
-            if test_pool_prob is not None:
-                save_prediction_npz(
-                    seed_dir / "test_pool_predictions.npz",
-                    test_pool_ids,
-                    test_pool_labels,
-                    test_pool_prob,
-                )
-            if external_prob is not None:
-                save_prediction_npz(
-                    seed_dir / "phase2_external_predictions.npz",
-                    external_ids,
-                    external_labels,
-                    external_prob,
-                )
-
-            train_predictions.append(train_prob)
-            val_predictions.append(val_prob)
-            if test_pool_prob is not None:
-                test_pool_predictions.append(test_pool_prob)
-            if external_prob is not None:
-                external_predictions.append(external_prob)
 
             metric_row = {
                 "experiment_name": config.experiment_name,
@@ -200,38 +128,16 @@ def run_graph_dataset(
                 "dataset_display_name": plan.dataset_display_name,
                 "model_display_name": model_display_name,
                 "seed": int(seed),
-                "train_auc": float(train_metrics["auc"]),
-                "val_auc": float(val_metrics["auc"]),
-                "test_auc": None if test_metrics is None else float(test_metrics["auc"]),
-                "external_auc": None if external_metrics is None else float(external_metrics["auc"]),
+                "val_auc": float(fit_metrics["val_auc"]),
                 "best_epoch": int(fit_metrics["best_epoch"]),
                 "trained_epochs": trained_epochs,
             }
             seed_pbar.set_postfix(val_auc=f"{metric_row['val_auc']:.4f}", refresh=False)
             tqdm.write(
                 f"[experiment:{config.experiment_name}] dataset={plan.dataset_name} seed={seed} "
-                f"train_auc={metric_row['train_auc']:.6f} val_auc={metric_row['val_auc']:.6f} "
-                f"test_auc={_format_metric(metric_row['test_auc'])}"
+                f"val_auc={metric_row['val_auc']:.6f} "
+                f"best_epoch={metric_row['best_epoch']} trained_epochs={metric_row['trained_epochs']}"
             )
-
-    _save_average_predictions(
-        dataset_dir,
-        "phase1_train",
-        train_ids,
-        train_labels,
-        train_predictions,
-    )
-    _save_average_predictions(
-        dataset_dir,
-        "phase1_val",
-        val_ids,
-        val_labels,
-        val_predictions,
-    )
-    if test_pool_predictions:
-        _save_average_predictions(dataset_dir, "test_pool", test_pool_ids, test_pool_labels, test_pool_predictions)
-    if external_predictions:
-        _save_average_predictions(dataset_dir, "phase2_external", external_ids, external_labels, external_predictions)
 
     epoch_metrics_path = write_clean_epoch_metrics(
         dataset_dir / "epoch_metrics.csv",
@@ -279,19 +185,6 @@ def _resolve_target_context_groups(*, graph_spec: dict[str, Any], plan: DatasetP
 
 def _write_enriched_fit_metrics(path: Path, payload: dict[str, Any]) -> None:
     write_json(path, payload)
-
-
-def _save_average_predictions(
-    run_dir: Path,
-    split_name: str,
-    node_ids: np.ndarray,
-    labels: np.ndarray,
-    predictions: list[np.ndarray],
-) -> Path:
-    mean_pred = np.mean(np.stack(predictions, axis=0), axis=0).astype(np.float32, copy=False)
-    path = run_dir / f"{split_name}_avg_predictions.npz"
-    save_prediction_npz(path, node_ids=node_ids, y_true=labels, probabilities=mean_pred)
-    return path
 
 
 def _maybe_compute_binary_metrics(labels: np.ndarray, probability: np.ndarray) -> dict[str, float] | None:

@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import torch.nn as nn
 
-from dyrift.models.engine import GraphModelConfig, TRGTExperiment
+from dyrift.models.engine import DyRIFTTGATExperiment, GraphModelConfig
 from dyrift.models.components.model import build_model
 
 
-class DyRIFTTrainer(TRGTExperiment):
-    """Training wrapper for the final DyRIFT-GNN method.
+class DyRIFTTrainer(DyRIFTTGATExperiment):
+    """Training wrapper for the final DyRIFT-TGAT method.
 
     The legacy experiment base still owns batching, sampling, losses, metrics, and checkpointing.
     This wrapper isolates the final thesis model construction from the shared engine
     runtime while exposing the public `dyrift_gnn` model id.
     """
 
-    method_display_name = "DyRIFT-GNN"
-    backbone_display_name = "TRGT"
+    method_display_name = "DyRIFT-TGAT"
+    backbone_display_name = "TGAT"
 
     def _build_network(
         self,

@@ -1,4 +1,4 @@
-"""Dataset domain for the DyRIFT-GNN thesis benchmarks."""
+"""Dataset domain for the DyRIFT-TGAT thesis benchmarks."""
 
 from dyrift.data_processing.core.contracts import (
     PreparedGraphContract,

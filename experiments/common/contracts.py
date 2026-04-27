@@ -85,7 +85,7 @@ class ExperimentConfig:
 
 def load_experiment_config(experiment_dir: Path) -> ExperimentConfig:
     config_path = experiment_dir / "config.json"
-    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    payload = json.loads(config_path.read_text(encoding="utf-8-sig"))
     if not isinstance(payload, dict):
         raise ValueError(f"{config_path}: expected a JSON object.")
 
@@ -96,7 +96,7 @@ def load_experiment_config(experiment_dir: Path) -> ExperimentConfig:
 
     dataset_parameters_ref = payload.get("dataset_parameters", "../../common/dataset_parameters.json")
     dataset_parameters_path = (experiment_dir / dataset_parameters_ref).resolve()
-    dataset_parameters = json.loads(dataset_parameters_path.read_text(encoding="utf-8"))
+    dataset_parameters = json.loads(dataset_parameters_path.read_text(encoding="utf-8-sig"))
     if not isinstance(dataset_parameters, dict):
         raise ValueError(f"{dataset_parameters_path}: expected a JSON object.")
 
@@ -180,6 +180,8 @@ def _resolve_model_name(*, runner: str, runner_spec: dict[str, Any]) -> str:
         return str(runner_spec["engine_target"])
     if runner == "xgboost":
         return str(runner_spec.get("model_name") or "xgboost")
+    if runner == "mlp":
+        return str(runner_spec.get("model_name") or "mlp")
     return str(runner)
 
 
