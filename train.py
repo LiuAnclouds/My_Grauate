@@ -439,6 +439,11 @@ def run_train(args: argparse.Namespace) -> None:
     external_predictions: list[np.ndarray] = []
     save_predictions = bool(getattr(args, "save_predictions", False))
     experiment_cls = get_experiment_cls(args.model)
+    if len(args.seeds) != 1:
+        raise ValueError(
+            "Official flat output layout supports exactly one seed per run. "
+            "Use a separate experiment name for multi-seed studies."
+        )
 
     print(
         "[train] "
@@ -459,7 +464,7 @@ def run_train(args: argparse.Namespace) -> None:
     ) as seed_pbar:
         for seed in seed_pbar:
             set_global_seed(seed)
-            seed_dir = ensure_dir(run_dir / f"seed_{seed}")
+            run_artifact_dir = ensure_dir(run_dir)
             experiment = experiment_cls(
                 model_name=args.model,
                 seed=seed,
@@ -485,9 +490,9 @@ def run_train(args: argparse.Namespace) -> None:
                 train_ids=train_ids,
                 val_ids=val_ids,
                 test_pool_ids=test_pool_ids,
-                artifact_dir=seed_dir,
+                artifact_dir=run_artifact_dir,
             )
-            experiment.save(seed_dir)
+            experiment.save(run_artifact_dir)
             train_prob = None
             if save_predictions and not bool(getattr(args, "skip_train_predictions", False)):
                 train_prob = experiment.predict_proba(
@@ -540,18 +545,18 @@ def run_train(args: argparse.Namespace) -> None:
 
             if save_predictions:
                 if train_prob is not None:
-                    save_prediction_npz(seed_dir / "phase1_train_predictions.npz", train_ids, train_labels, train_prob)
-                save_prediction_npz(seed_dir / "phase1_val_predictions.npz", val_ids, val_labels, val_prob)
+                    save_prediction_npz(run_artifact_dir / "phase1_train_predictions.npz", train_ids, train_labels, train_prob)
+                save_prediction_npz(run_artifact_dir / "phase1_val_predictions.npz", val_ids, val_labels, val_prob)
                 if test_pool_prob is not None:
                     save_prediction_npz(
-                        seed_dir / "test_pool_predictions.npz",
+                        run_artifact_dir / "test_pool_predictions.npz",
                         test_pool_ids,
                         test_pool_labels,
                         test_pool_prob,
                     )
                 if external_prob is not None:
                     save_prediction_npz(
-                        seed_dir / "phase2_external_predictions.npz",
+                        run_artifact_dir / "phase2_external_predictions.npz",
                         external_ids,
                         external_labels,
                         external_prob,
@@ -608,7 +613,7 @@ def run_train(args: argparse.Namespace) -> None:
     )
     clean_epoch_path = write_clean_epoch_metrics(
         run_dir / "epoch_metrics.csv",
-        [run_dir / f"seed_{int(seed)}" / "epoch_metrics.csv" for seed in args.seeds],
+        [run_dir / "epoch_metrics.csv"],
     )
 
     print(f"Training finished: {run_dir}")

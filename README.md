@@ -1,6 +1,7 @@
 # DyRIFT-TGAT
 
 本项目用于动态图反欺诈异常检测实验，核心方法为单一纯 GNN 模型 `DyRIFT-TGAT`。模型以 TGAT 时间图注意力主干为基础，加入目标上下文桥接、漂移专家和原型记忆等动态图风险漂移建模模块。最终展示指标统一使用 AUC。
+正式训练以 30 epoch 作为上限，验证集 AUC 连续 5 个 epoch 没有提升即提前停止。
 
 ## AUC 结果
 
@@ -68,11 +69,9 @@ outputs/train/<experiment>/<model>/<dataset>/
 | 文件 | 内容 |
 | --- | --- |
 | `epoch_metrics.csv` | 每个 epoch 的 `train_loss`、`val_loss`、`train_auc`、`val_auc` |
-| `seed_*/best_model.pt` | 最佳 validation AUC epoch 的模型权重 |
-| `seed_*/last_model.pt` | 最后一轮模型权重 |
-| `seed_*/model.pt` | 兼容旧加载逻辑的最佳权重别名 |
-| `seed_*/model_meta.json` | 模型加载所需元信息 |
-| `seed_*/fit_metrics.json` | 最佳 AUC、最佳 epoch、训练轮数等简要结果 |
+| `best_model.pt` | 最佳 validation AUC epoch 的模型权重 |
+| `last_model.pt` | 最后一轮模型权重 |
+| `model.pt` | 兼容旧加载逻辑的最佳权重别名 |
 
 汇总 CSV 可通过下面命令重建：
 

@@ -283,13 +283,8 @@ def _recover_run_from_epoch_metrics(
     best_row = max(rows, key=lambda row: float(row["val_auc"]))
     last_epoch = max(int(row["epoch"]) for row in rows)
 
-    fit_metrics_path = _resolve_first_existing(output_dir, pattern="seed_*/fit_metrics.json")
-    fit_metrics = read_json(fit_metrics_path) if fit_metrics_path is not None else None
-    model_meta_path = _resolve_first_existing(output_dir, pattern="seed_*/model_meta.json")
-    model_meta = read_json(model_meta_path) if model_meta_path is not None else None
-
-    best_epoch = int((fit_metrics or {}).get("best_epoch", best_row["epoch"]))
-    trained_epochs = int((fit_metrics or {}).get("trained_epochs", last_epoch))
+    best_epoch = int(best_row["epoch"])
+    trained_epochs = int(last_epoch)
 
     notes: list[str] = []
     if configured_total_epochs is not None and configured_total_epochs < OFFICIAL_TRAIN_EPOCHS:
@@ -302,18 +297,11 @@ def _recover_run_from_epoch_metrics(
         notes.append("observed_training_stopped_before_policy_floor")
     if best_epoch < POLICY_MIN_EARLY_STOP_EPOCH and trained_epochs >= POLICY_MIN_EARLY_STOP_EPOCH:
         notes.append("best_epoch_before_policy_floor")
-    if model_meta is not None and int(model_meta.get("epochs", trained_epochs)) != trained_epochs:
-        notes.append("model_meta_epoch_count_differs_from_fit_metrics")
-
     observed_policy_compliant = trained_epochs >= POLICY_MIN_EARLY_STOP_EPOCH or (
         configured_total_epochs is not None and trained_epochs >= configured_total_epochs
     )
 
     artifact_paths = {"epoch_metrics": str(epoch_metrics_path)}
-    if fit_metrics_path is not None:
-        artifact_paths["fit_metrics"] = str(fit_metrics_path)
-    if model_meta_path is not None:
-        artifact_paths["model_meta"] = str(model_meta_path)
 
     return RecoveredRun(
         experiment_name=experiment_name,

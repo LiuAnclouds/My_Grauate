@@ -4174,7 +4174,6 @@ class BaseGraphSAGEExperiment:
         log_path = None
         history_jsonl_path = None
         history_csv_path = None if artifact_dir is None else artifact_dir / "epoch_metrics.csv"
-        fit_metrics_path = None if artifact_dir is None else artifact_dir / "fit_metrics.json"
         if artifact_dir is not None:
             ensure_dir(artifact_dir)
 
@@ -4815,8 +4814,6 @@ class BaseGraphSAGEExperiment:
                 self.training_history,
                 fieldnames=SEED_EPOCH_METRIC_COLUMNS,
             )
-        if fit_metrics_path is not None:
-            write_json(fit_metrics_path, fit_metrics)
         return fit_metrics
 
     @torch.no_grad()
@@ -4988,7 +4985,7 @@ class BaseGraphSAGEExperiment:
             raise RuntimeError("Expected embeddings to be returned.")
         return embeddings
 
-    def save(self, run_dir: Path) -> None:
+    def save(self, run_dir: Path, *, write_metadata: bool = False) -> None:
         ensure_dir(run_dir)
         current_state = self.network.state_dict()
         best_state = getattr(self, "_best_checkpoint_state", None) or current_state
@@ -4996,6 +4993,8 @@ class BaseGraphSAGEExperiment:
         torch.save(best_state, run_dir / "best_model.pt")
         torch.save(last_state, run_dir / "last_model.pt")
         torch.save(best_state, run_dir / "model.pt")
+        if not write_metadata:
+            return
         metadata = {
             "model_name": self.model_name,
             "seed": self.seed,

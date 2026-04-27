@@ -17,7 +17,6 @@ from dyrift.utils.common import (
     set_global_seed,
     slice_node_ids,
     write_clean_epoch_metrics,
-    write_json,
 )
 
 from .contracts import DatasetPlan, ExperimentConfig, resolve_dataset_output_roots
@@ -68,6 +67,11 @@ def run_graph_dataset(
     )
 
     experiment_cls = get_experiment_cls(model_key)
+    if len(seeds) != 1:
+        raise ValueError(
+            "Official flat output layout supports exactly one seed per run. "
+            "Use a separate experiment name for multi-seed studies."
+        )
     print(
         "[experiment:graph] "
         f"experiment={config.experiment_name} "
@@ -87,7 +91,7 @@ def run_graph_dataset(
     ) as seed_pbar:
         for seed in seed_pbar:
             set_global_seed(int(seed))
-            seed_dir = ensure_dir(dataset_dir / f"seed_{int(seed)}")
+            run_artifact_dir = ensure_dir(dataset_dir)
             trainer = experiment_cls(
                 model_name=model_display_name,
                 seed=int(seed),
@@ -113,14 +117,10 @@ def run_graph_dataset(
                 train_ids=train_ids,
                 val_ids=val_ids,
                 test_pool_ids=test_pool_ids,
-                artifact_dir=seed_dir,
+                artifact_dir=run_artifact_dir,
             )
             trained_epochs = int(len(trainer.training_history))
-            _write_enriched_fit_metrics(
-                path=seed_dir / "fit_metrics.json",
-                payload={**fit_metrics, "trained_epochs": trained_epochs},
-            )
-            trainer.save(seed_dir)
+            trainer.save(run_artifact_dir)
 
             metric_row = {
                 "experiment_name": config.experiment_name,
@@ -141,7 +141,7 @@ def run_graph_dataset(
 
     epoch_metrics_path = write_clean_epoch_metrics(
         dataset_dir / "epoch_metrics.csv",
-        [dataset_dir / f"seed_{int(seed)}" / "epoch_metrics.csv" for seed in seeds],
+        [dataset_dir / "epoch_metrics.csv"],
     )
     return epoch_metrics_path
 
@@ -181,10 +181,6 @@ def _resolve_target_context_groups(*, graph_spec: dict[str, Any], plan: DatasetP
     if not isinstance(raw_groups, list):
         raise ValueError("graph.target_context_groups must be a list, null, or `__dataset__`.")
     return [str(value) for value in raw_groups]
-
-
-def _write_enriched_fit_metrics(path: Path, payload: dict[str, Any]) -> None:
-    write_json(path, payload)
 
 
 def _maybe_compute_binary_metrics(labels: np.ndarray, probability: np.ndarray) -> dict[str, float] | None:

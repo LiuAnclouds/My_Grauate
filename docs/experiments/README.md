@@ -1,4 +1,5 @@
 # 实验指标与计划
+正式训练以 30 epoch 作为上限；验证集 AUC 达到当前最佳值后，连续 5 个 epoch 没有提升即提前停止。
 
 最终展示指标统一为 AUC。每次训练都会打印 epoch 结果，并将 `train_loss`、`val_loss`、`train_auc`、`val_auc` 保存到 CSV。早停规则为：验证集 AUC 达到当前最佳值后，连续 5 个 epoch 未出现有效提升即停止，不再设置固定最小训练轮数。
 
@@ -55,8 +56,9 @@ python experiments/run_official.py --stage ablations --device cuda
 
 ```text
 outputs/train/<experiment>/<model>/<dataset>/epoch_metrics.csv
-outputs/train/<experiment>/<model>/<dataset>/seed_<seed>/best_model.pt
-outputs/train/<experiment>/<model>/<dataset>/seed_<seed>/last_model.pt
+outputs/train/<experiment>/<model>/<dataset>/best_model.pt
+outputs/train/<experiment>/<model>/<dataset>/last_model.pt
+outputs/train/<experiment>/<model>/<dataset>/model.pt
 ```
 
 汇总结果：

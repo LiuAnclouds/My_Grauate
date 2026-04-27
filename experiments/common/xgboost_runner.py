@@ -14,7 +14,6 @@ from dyrift.utils.common import (
     load_experiment_split,
     set_global_seed,
     write_clean_epoch_metrics,
-    write_json,
 )
 
 from .contracts import DatasetPlan, ExperimentConfig, resolve_dataset_output_roots
@@ -127,9 +126,15 @@ def run_xgboost_dataset(
         f"target_context={'on' if include_target_context and plan.target_context_groups else 'off'}"
     )
 
+    if len(seeds) != 1:
+        raise ValueError(
+            "Official flat output layout supports exactly one seed per run. "
+            "Use a separate experiment name for multi-seed studies."
+        )
+
     for seed in seeds:
         set_global_seed(int(seed))
-        seed_dir = ensure_dir(dataset_dir / f"seed_{int(seed)}")
+        run_artifact_dir = ensure_dir(dataset_dir)
         seed_params = dict(params)
         seed_params["seed"] = int(seed)
 
@@ -167,7 +172,7 @@ def run_xgboost_dataset(
             external_y=external_labels,
             trained_rounds=trained_rounds,
         )
-        _write_csv(seed_dir / "epoch_metrics.csv", epoch_rows)
+        _write_csv(run_artifact_dir / "epoch_metrics.csv", epoch_rows)
 
         best_epoch_row = max(epoch_rows, key=lambda row: float(row["val_auc"]))
         best_iteration = int(best_epoch_row["epoch"])
@@ -176,15 +181,7 @@ def run_xgboost_dataset(
         test_pool_prob = _predict_round(booster, test_pool_x, best_iteration) if test_pool_ids.size else None
         external_prob = _predict_round(booster, external_x, best_iteration) if external_ids.size else None
 
-        fit_metrics = {
-            "best_epoch": int(best_iteration),
-            "trained_epochs": int(trained_rounds),
-            "best_score": float(booster.best_score) if getattr(booster, "best_score", None) is not None else None,
-            "early_stopping_rounds": int(early_stopping_rounds),
-            "params": seed_params,
-        }
-        write_json(seed_dir / "fit_metrics.json", fit_metrics)
-        booster.save_model(str(seed_dir / "model.json"))
+        booster.save_model(str(run_artifact_dir / "model.json"))
 
         test_metrics = None if test_pool_prob is None else _maybe_compute_binary_metrics(test_pool_labels, test_pool_prob)
         external_metrics = None if external_prob is None else _maybe_compute_binary_metrics(external_labels, external_prob)
@@ -199,7 +196,7 @@ def run_xgboost_dataset(
 
     epoch_metrics_path = write_clean_epoch_metrics(
         dataset_dir / "epoch_metrics.csv",
-        [dataset_dir / f"seed_{int(seed)}" / "epoch_metrics.csv" for seed in seeds],
+        [dataset_dir / "epoch_metrics.csv"],
     )
     return epoch_metrics_path
 

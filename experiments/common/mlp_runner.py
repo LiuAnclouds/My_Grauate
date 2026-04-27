@@ -19,7 +19,6 @@ from dyrift.utils.common import (
     resolve_device,
     set_global_seed,
     write_clean_epoch_metrics,
-    write_json,
 )
 
 from .contracts import DatasetPlan, ExperimentConfig, resolve_dataset_output_roots
@@ -80,6 +79,11 @@ def run_mlp_dataset(
         plan=plan,
         include_target_context=include_target_context,
     )
+    if len(seeds) != 1:
+        raise ValueError(
+            "Official flat output layout supports exactly one seed per run. "
+            "Use a separate experiment name for multi-seed studies."
+        )
     print(
         "[experiment:mlp] "
         f"experiment={config.experiment_name} "
@@ -92,7 +96,7 @@ def run_mlp_dataset(
 
     for seed in seeds:
         set_global_seed(int(seed))
-        seed_dir = ensure_dir(dataset_dir / f"seed_{int(seed)}")
+        run_artifact_dir = ensure_dir(dataset_dir)
         model = TabularMLP(
             input_dim=matrices.train_x.shape[1],
             hidden_dims=hidden_dims,
@@ -171,7 +175,7 @@ def run_mlp_dataset(
                 f"val_loss={val_loss:.6f} train_auc={train_auc:.6f} "
                 f"val_auc={val_auc:.6f} best_epoch={best_epoch}"
             )
-            _write_csv(seed_dir / "epoch_metrics.csv", rows)
+            _write_csv(run_artifact_dir / "epoch_metrics.csv", rows)
 
             if patience > 0 and epochs_without_improvement >= patience:
                 print(
@@ -188,39 +192,13 @@ def run_mlp_dataset(
             for key, value in model.state_dict().items()
         }
         model.load_state_dict(best_state)
-        torch.save(best_state, seed_dir / "best_model.pt")
-        torch.save(last_state, seed_dir / "last_model.pt")
-        torch.save(best_state, seed_dir / "model.pt")
-        fit_metrics = {
-            "val_auc": float(best_val_auc),
-            "best_epoch": int(best_epoch),
-            "trained_epochs": int(len(rows)),
-            "early_stop_patience": int(patience),
-            "early_stop_min_delta": float(min_delta),
-            "early_stop_reference_auc": float(early_stop_reference_auc),
-            "best_checkpoint": "best_model.pt",
-            "last_checkpoint": "last_model.pt",
-        }
-        write_json(seed_dir / "fit_metrics.json", fit_metrics)
-        write_json(
-            seed_dir / "model_meta.json",
-            {
-                "model_name": "mlp",
-                "model_display_name": model_display_name,
-                "input_dim": int(matrices.train_x.shape[1]),
-                "hidden_dims": hidden_dims,
-                "dropout": float(dropout),
-                "learning_rate": float(learning_rate),
-                "weight_decay": float(weight_decay),
-                "early_stop_patience": int(patience),
-                "early_stop_min_delta": float(min_delta),
-                "best_epoch": int(best_epoch),
-            },
-        )
+        torch.save(best_state, run_artifact_dir / "best_model.pt")
+        torch.save(last_state, run_artifact_dir / "last_model.pt")
+        torch.save(best_state, run_artifact_dir / "model.pt")
 
     return write_clean_epoch_metrics(
         dataset_dir / "epoch_metrics.csv",
-        [dataset_dir / f"seed_{int(seed)}" / "epoch_metrics.csv" for seed in seeds],
+        [dataset_dir / "epoch_metrics.csv"],
     )
 
 
