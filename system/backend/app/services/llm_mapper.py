@@ -89,6 +89,23 @@ def infer_mapping_with_llm(headers: list[str], sample_rows: list[dict[str, Any]]
     return json.loads(_extract_json_object(content))
 
 
+def infer_mapping(
+    *,
+    headers: list[str],
+    sample_rows: list[dict[str, Any]],
+    use_llm: bool = False,
+) -> tuple[dict[str, Any], str, str]:
+    heuristic = heuristic_mapping(headers)
+    if not use_llm:
+        return heuristic, "heuristic", "字段映射已按规则识别。"
+    try:
+        llm_mapping = infer_mapping_with_llm(headers=headers, sample_rows=sample_rows)
+        mapping = validate_mapping(llm_mapping, headers=headers, fallback=heuristic)
+        return mapping, "llm", "字段映射已由 LLM 识别并通过本地校验。"
+    except Exception as exc:
+        return heuristic, "heuristic_fallback", f"LLM 映射失败，已回退到规则识别：{exc}"
+
+
 def heuristic_mapping(headers: list[str]) -> dict[str, Any]:
     lowered = {header.lower(): header for header in headers}
 
@@ -98,15 +115,26 @@ def heuristic_mapping(headers: list[str]) -> dict[str, Any]:
                 return lowered[candidate]
         return None
 
-    node_id = first("node_id", "txid", "tx_id", "id", "account_id", "user_id") or headers[0]
+    node_id = first("node_id", "txid", "tx_id", "id", "account_id", "user_id", "uid") or headers[0]
     source_id = first("source_id", "src", "src_id", "from", "from_id")
     target_id = first("target_id", "dst", "dst_id", "to", "to_id")
     timestamp = first("timestamp", "time", "time_step", "time_bucket", "date")
     amount = first("amount", "value", "transaction_amount")
+    display_columns = [
+        value
+        for value in (
+            first("display_name", "name", "username", "customer_name", "real_name"),
+            first("id_number", "identity_no", "id_card", "certificate_no"),
+            first("phone", "mobile", "telephone"),
+            first("region", "city", "province", "address"),
+            first("occupation", "job", "profession"),
+        )
+        if value
+    ]
     feature_columns = [
         header
         for header in headers
-        if header not in {node_id, source_id, target_id, timestamp, amount}
+        if header not in {node_id, source_id, target_id, timestamp, amount, *display_columns}
     ]
     return {
         "node_id": node_id,
@@ -116,7 +144,55 @@ def heuristic_mapping(headers: list[str]) -> dict[str, Any]:
         "edge_type": first("edge_type", "relation", "type"),
         "amount": amount,
         "feature_columns": feature_columns,
-        "display_columns": [],
+        "display_columns": display_columns,
+    }
+
+
+def validate_mapping(
+    mapping: dict[str, Any],
+    *,
+    headers: list[str],
+    fallback: dict[str, Any],
+) -> dict[str, Any]:
+    header_set = set(headers)
+
+    def scalar(key: str) -> str | None:
+        value = mapping.get(key)
+        if value is None or value == "":
+            return None
+        text = str(value)
+        return text if text in header_set else fallback.get(key)
+
+    def column_list(key: str) -> list[str]:
+        values = mapping.get(key)
+        if not isinstance(values, list):
+            return list(fallback.get(key) or [])
+        valid = [str(value) for value in values if str(value) in header_set]
+        return valid
+
+    node_id = scalar("node_id") or fallback["node_id"]
+    source_id = scalar("source_id")
+    target_id = scalar("target_id")
+    timestamp = scalar("timestamp")
+    amount = scalar("amount")
+    edge_type = scalar("edge_type")
+    display_columns = column_list("display_columns")
+    feature_columns = [
+        column
+        for column in column_list("feature_columns")
+        if column not in {node_id, source_id, target_id, timestamp, amount, edge_type, *display_columns}
+    ]
+    if not feature_columns:
+        feature_columns = list(fallback.get("feature_columns") or [])
+    return {
+        "node_id": node_id,
+        "source_id": source_id,
+        "target_id": target_id,
+        "timestamp": timestamp,
+        "edge_type": edge_type,
+        "amount": amount,
+        "feature_columns": feature_columns,
+        "display_columns": display_columns,
     }
 
 

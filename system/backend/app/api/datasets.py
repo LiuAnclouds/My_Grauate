@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from app.schemas import (
     GraphResponse,
     InferenceResultItem,
     InferenceRunResponse,
+    MappingResponse,
     TaskResponse,
 )
 from app.services.demo_dataset import OFFICIAL_DATASET_LABELS, seed_official_validation_dataset
@@ -27,7 +28,7 @@ from app.services.inference_runner import (
     run_feature_fallback,
     run_full_model_subprocess,
 )
-from app.services.llm_mapper import heuristic_mapping
+from app.services.llm_mapper import infer_mapping
 from app.services.synthetic_identity import synthetic_person_for_node
 
 
@@ -51,7 +52,11 @@ def list_datasets(db: Session = Depends(get_db)) -> list[DatasetSummary]:
 
 
 @router.post("/upload", response_model=DatasetSummary)
-def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)) -> DatasetSummary:
+def upload_dataset(
+    file: UploadFile = File(...),
+    use_llm: bool = Form(False),
+    db: Session = Depends(get_db),
+) -> DatasetSummary:
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="only csv files are supported")
     UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
@@ -67,7 +72,16 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)) 
     frame = pd.read_csv(storage_path)
     if frame.empty:
         raise HTTPException(status_code=400, detail="csv file is empty")
-    mapping = heuristic_mapping(list(frame.columns))
+    mapping, mapping_method, mapping_message = infer_mapping(
+        headers=list(frame.columns),
+        sample_rows=frame.head(5).to_dict(orient="records"),
+        use_llm=bool(use_llm),
+    )
+    mapping = {
+        **mapping,
+        "mapping_method": mapping_method,
+        "mapping_message": mapping_message,
+    }
     dataset = DatasetUpload(
         name=storage_path.stem,
         original_filename=safe_name,
@@ -99,6 +113,20 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)) 
         row_count=dataset.row_count,
         status=dataset.status,
         created_at=dataset.created_at,
+    )
+
+
+@router.get("/{dataset_id}/mapping", response_model=MappingResponse)
+def get_mapping(dataset_id: int, db: Session = Depends(get_db)) -> MappingResponse:
+    dataset = db.get(DatasetUpload, dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    mapping = dict(dataset.mapping_json or {})
+    return MappingResponse(
+        dataset_id=dataset.id,
+        mapping=mapping,
+        method=str(mapping.get("mapping_method") or mapping.get("source") or "stored"),
+        message=str(mapping.get("mapping_message") or "字段映射已保存。"),
     )
 
 
@@ -313,7 +341,7 @@ def _insert_nodes(*, db: Session, dataset_id: int, frame: pd.DataFrame, mapping:
         if not node_id or node_id in seen:
             continue
         seen.add(node_id)
-        person = synthetic_person_for_node(node_id)
+        person = _person_payload_for_row(row=row, mapping=mapping, node_id=node_id)
         features = {
             column: _json_value(row.get(column))
             for column in feature_columns
@@ -386,3 +414,34 @@ def _json_value(value: Any) -> Any:
     if hasattr(value, "item"):
         return value.item()
     return value
+
+
+def _person_payload_for_row(
+    *,
+    row: dict[str, Any],
+    mapping: dict[str, Any],
+    node_id: str,
+) -> dict[str, str]:
+    synthetic = synthetic_person_for_node(node_id)
+    display_columns = set(mapping.get("display_columns") or [])
+    lowered = {str(key).lower(): key for key in row.keys()}
+
+    def pick(*names: str) -> str | None:
+        for name in names:
+            key = lowered.get(name)
+            if key is None or key not in display_columns:
+                continue
+            value = row.get(key)
+            if value is not None and not pd.isna(value) and str(value).strip():
+                return str(value).strip()
+        return None
+
+    return {
+        "display_name": pick("display_name", "name", "username", "customer_name", "real_name")
+        or synthetic["display_name"],
+        "id_number": pick("id_number", "identity_no", "id_card", "certificate_no")
+        or synthetic["id_number"],
+        "phone": pick("phone", "mobile", "telephone") or synthetic["phone"],
+        "region": pick("region", "city", "province", "address") or synthetic["region"],
+        "occupation": pick("occupation", "job", "profession") or synthetic["occupation"],
+    }

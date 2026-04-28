@@ -7,6 +7,13 @@ export type DatasetSummary = {
   created_at: string;
 };
 
+export type MappingResponse = {
+  dataset_id: number | null;
+  mapping: Record<string, unknown>;
+  method: string;
+  message: string;
+};
+
 export type GraphNode = {
   id: string;
   label: string;
@@ -102,9 +109,10 @@ export function listDatasets() {
   return request<DatasetSummary[]>("/datasets");
 }
 
-export function uploadDataset(file: File) {
+export function uploadDataset(file: File, useLlm = false) {
   const form = new FormData();
   form.append("file", file);
+  form.append("use_llm", String(useLlm));
   return request<DatasetSummary>("/datasets/upload", {
     method: "POST",
     body: form
@@ -117,6 +125,10 @@ export function createDemoDataset(datasetName: string) {
 
 export function fetchGraph(datasetId: number) {
   return request<GraphResponse>(`/datasets/${datasetId}/graph`);
+}
+
+export function fetchMapping(datasetId: number) {
+  return request<MappingResponse>(`/datasets/${datasetId}/mapping`);
 }
 
 export function createFeatureTask(datasetId: number) {

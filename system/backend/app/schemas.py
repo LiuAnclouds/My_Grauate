@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
+from typing import Any
 
 
 class HealthResponse(BaseModel):
@@ -40,6 +41,13 @@ class DatasetSummary(BaseModel):
     row_count: int
     status: str
     created_at: datetime
+
+
+class MappingResponse(BaseModel):
+    dataset_id: int | None = None
+    mapping: dict[str, Any]
+    method: str
+    message: str
 
 
 class GraphNode(BaseModel):

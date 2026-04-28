@@ -113,6 +113,10 @@ input {
   width: 100%;
 }
 
+input[type="checkbox"] {
+  width: auto;
+}
+
 .segmented {
   border: 1px solid #c9d5df;
   border-radius: 8px;
@@ -150,6 +154,14 @@ input {
   line-height: 1.5;
 }
 
+.inline-check {
+  align-items: center;
+  color: #435366;
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .dataset-list {
   display: grid;
   gap: 8px;
@@ -161,6 +173,25 @@ input {
   gap: 8px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 10px;
+}
+
+.mapping-preview {
+  background: #f7fafc;
+  border: 1px solid #d8e2eb;
+  border-radius: 6px;
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.mapping-preview strong {
+  color: #1f5f8f;
+}
+
+.mapping-preview span,
+.mapping-preview small {
+  color: #5d6f82;
 }
 
 .dataset-item {
