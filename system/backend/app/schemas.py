@@ -49,6 +49,8 @@ class GraphNode(BaseModel):
     occupation: str
     size: int
     color: str
+    risk_score: float | None = None
+    risk_label: str | None = None
 
 
 class GraphEdgeItem(BaseModel):
@@ -74,3 +76,23 @@ class TaskResponse(BaseModel):
     progress: float
     current_step: str
     message: str
+
+
+class InferenceResultItem(BaseModel):
+    node_id: str
+    display_name: str
+    id_number: str
+    region: str
+    occupation: str
+    risk_score: float
+    risk_label: str
+    reason: str
+
+
+class InferenceRunResponse(BaseModel):
+    dataset_id: int
+    total_nodes: int
+    abnormal_nodes: int
+    normal_nodes: int
+    message: str
+    results: list[InferenceResultItem]

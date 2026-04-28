@@ -4,9 +4,10 @@ import { fetchGraph, GraphResponse } from "../services/api";
 
 type Props = {
   datasetId: number | null;
+  refreshKey: number;
 };
 
-export function GraphWorkspace({ datasetId }: Props) {
+export function GraphWorkspace({ datasetId, refreshKey }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const [graph, setGraph] = useState<GraphResponse | null>(null);
@@ -20,7 +21,7 @@ export function GraphWorkspace({ datasetId }: Props) {
         setMessage(`已加载 ${data.nodes.length} 个节点、${data.edges.length} 条边。`);
       })
       .catch((error) => setMessage(error.message));
-  }, [datasetId]);
+  }, [datasetId, refreshKey]);
 
   useEffect(() => {
     if (!containerRef.current || !graph) return;
@@ -33,7 +34,9 @@ export function GraphWorkspace({ datasetId }: Props) {
             id: node.id,
             label: node.label,
             size: node.size,
-            color: node.color
+            color: node.color,
+            riskScore: node.risk_score,
+            riskLabel: node.risk_label
           }
         })),
         ...graph.edges.map((edge) => ({
@@ -57,6 +60,20 @@ export function GraphWorkspace({ datasetId }: Props) {
             "font-size": 9,
             "text-outline-width": 2,
             "text-outline-color": "#ffffff"
+          }
+        },
+        {
+          selector: "node[?riskScore]",
+          style: {
+            "border-color": "#ffffff",
+            "border-width": 2
+          }
+        },
+        {
+          selector: 'node[riskLabel = "suspicious"]',
+          style: {
+            "border-color": "#8f1d1d",
+            "border-width": 4
           }
         },
         {

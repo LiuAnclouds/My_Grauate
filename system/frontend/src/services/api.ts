@@ -14,6 +14,8 @@ export type GraphNode = {
   occupation: string;
   size: number;
   color: string;
+  risk_score?: number | null;
+  risk_label?: string | null;
 };
 
 export type GraphEdge = {
@@ -39,6 +41,26 @@ export type TaskResponse = {
   progress: number;
   current_step: string;
   message: string;
+};
+
+export type InferenceResultItem = {
+  node_id: string;
+  display_name: string;
+  id_number: string;
+  region: string;
+  occupation: string;
+  risk_score: number;
+  risk_label: string;
+  reason: string;
+};
+
+export type InferenceRunResponse = {
+  dataset_id: number;
+  total_nodes: number;
+  abnormal_nodes: number;
+  normal_nodes: number;
+  message: string;
+  results: InferenceResultItem[];
 };
 
 const API_BASE = "/api";
@@ -89,10 +111,22 @@ export function uploadDataset(file: File) {
   });
 }
 
+export function createDemoDataset(datasetName: string) {
+  return request<DatasetSummary>(`/datasets/demo/${datasetName}`, { method: "POST" });
+}
+
 export function fetchGraph(datasetId: number) {
   return request<GraphResponse>(`/datasets/${datasetId}/graph`);
 }
 
 export function createFeatureTask(datasetId: number) {
   return request<TaskResponse>(`/datasets/${datasetId}/feature-task`, { method: "POST" });
+}
+
+export function runInference(datasetId: number) {
+  return request<InferenceRunResponse>(`/datasets/${datasetId}/infer`, { method: "POST" });
+}
+
+export function listInferenceResults(datasetId: number) {
+  return request<InferenceResultItem[]>(`/datasets/${datasetId}/inference-results`);
 }

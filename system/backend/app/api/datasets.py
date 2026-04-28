@@ -11,8 +11,22 @@ from sqlalchemy.orm import Session
 
 from app.core.config import UPLOAD_ROOT
 from app.database import get_db
-from app.models import DatasetUpload, GraphEdge, PersonNode, ProcessingTask
-from app.schemas import DatasetSummary, GraphEdgeItem, GraphNode, GraphResponse, TaskResponse
+from app.models import DatasetUpload, GraphEdge, InferenceResult, PersonNode, ProcessingTask
+from app.schemas import (
+    DatasetSummary,
+    GraphEdgeItem,
+    GraphNode,
+    GraphResponse,
+    InferenceResultItem,
+    InferenceRunResponse,
+    TaskResponse,
+)
+from app.services.demo_dataset import OFFICIAL_DATASET_LABELS, seed_official_validation_dataset
+from app.services.inference_runner import (
+    replace_inference_results,
+    run_feature_fallback,
+    run_full_model_subprocess,
+)
 from app.services.llm_mapper import heuristic_mapping
 from app.services.synthetic_identity import synthetic_person_for_node
 
@@ -88,6 +102,32 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)) 
     )
 
 
+@router.post("/demo/{dataset_name}", response_model=DatasetSummary)
+def create_demo_dataset(
+    dataset_name: str,
+    limit: int = 120,
+    db: Session = Depends(get_db),
+) -> DatasetSummary:
+    if dataset_name not in OFFICIAL_DATASET_LABELS:
+        raise HTTPException(status_code=404, detail="official demo dataset not found")
+    try:
+        dataset = seed_official_validation_dataset(
+            db=db,
+            dataset_name=dataset_name,
+            limit=max(20, min(int(limit), 180)),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return DatasetSummary(
+        id=dataset.id,
+        name=dataset.name,
+        original_filename=dataset.original_filename,
+        row_count=dataset.row_count,
+        status=dataset.status,
+        created_at=dataset.created_at,
+    )
+
+
 @router.get("/{dataset_id}/graph", response_model=GraphResponse)
 def get_graph(dataset_id: int, db: Session = Depends(get_db)) -> GraphResponse:
     dataset = db.get(DatasetUpload, dataset_id)
@@ -95,15 +135,12 @@ def get_graph(dataset_id: int, db: Session = Depends(get_db)) -> GraphResponse:
         raise HTTPException(status_code=404, detail="dataset not found")
     nodes = db.scalars(select(PersonNode).where(PersonNode.dataset_id == dataset_id).limit(300)).all()
     edges = db.scalars(select(GraphEdge).where(GraphEdge.dataset_id == dataset_id).limit(600)).all()
+    inference_records = db.scalars(
+        select(InferenceResult).where(InferenceResult.dataset_id == dataset_id)
+    ).all()
+    inference_by_node = {record.node_id: record for record in inference_records}
     graph_nodes = [
-        GraphNode(
-            id=node.node_id,
-            label=node.display_name,
-            region=node.region,
-            occupation=node.occupation,
-            size=max(18, min(42, 18 + len(node.feature_json))),
-            color="#2f80ed",
-        )
+        _graph_node_from_record(node=node, inference=inference_by_node.get(node.node_id))
         for node in nodes
     ]
     graph_edges = [
@@ -144,6 +181,127 @@ def create_feature_task(dataset_id: int, db: Session = Depends(get_db)) -> TaskR
         current_step=task.current_step,
         message=task.message,
     )
+
+
+@router.post("/{dataset_id}/infer", response_model=InferenceRunResponse)
+def run_inference(dataset_id: int, db: Session = Depends(get_db)) -> InferenceRunResponse:
+    dataset = db.get(DatasetUpload, dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    nodes = db.scalars(select(PersonNode).where(PersonNode.dataset_id == dataset_id)).all()
+    if not nodes:
+        raise HTTPException(status_code=400, detail="dataset has no nodes")
+
+    mapping = dict(dataset.mapping_json or {})
+    source_dataset = mapping.get("source_dataset")
+    source_node_ids = [str(value) for value in mapping.get("source_node_ids") or []]
+    try:
+        if mapping.get("source") == "official_validation" and source_dataset and source_node_ids:
+            raw_scores = run_full_model_subprocess(
+                dataset_name=str(source_dataset),
+                node_ids=source_node_ids,
+            )
+        else:
+            raw_scores = run_feature_fallback(nodes)
+        stored = replace_inference_results(db=db, dataset_id=dataset_id, scores=raw_scores)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    db.add(
+        ProcessingTask(
+            dataset_id=dataset_id,
+            task_type="inference",
+            status="completed",
+            progress=1.0,
+            current_step="full_model_inference",
+            message="DyRIFT-TGAT inference finished and results were saved.",
+        )
+    )
+    db.commit()
+    return _build_inference_response(db=db, dataset_id=dataset_id, records=stored)
+
+
+@router.get("/{dataset_id}/inference-results", response_model=list[InferenceResultItem])
+def list_inference_results(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+) -> list[InferenceResultItem]:
+    if db.get(DatasetUpload, dataset_id) is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    records = db.scalars(
+        select(InferenceResult)
+        .where(InferenceResult.dataset_id == dataset_id)
+        .order_by(InferenceResult.risk_score.desc())
+    ).all()
+    return _result_items(db=db, dataset_id=dataset_id, records=records)
+
+
+def _graph_node_from_record(node: PersonNode, inference: InferenceResult | None) -> GraphNode:
+    color = "#2f80ed"
+    risk_score = None
+    risk_label = None
+    if inference is not None:
+        risk_score = float(inference.risk_score)
+        risk_label = inference.risk_label
+        color = "#d83b3b" if inference.risk_label == "suspicious" else "#2e9d57"
+    return GraphNode(
+        id=node.node_id,
+        label=node.display_name,
+        region=node.region,
+        occupation=node.occupation,
+        size=max(18, min(48, 18 + len(node.feature_json) + int((risk_score or 0.0) * 12))),
+        color=color,
+        risk_score=risk_score,
+        risk_label=risk_label,
+    )
+
+
+def _build_inference_response(
+    *,
+    db: Session,
+    dataset_id: int,
+    records: list[InferenceResult],
+) -> InferenceRunResponse:
+    items = _result_items(db=db, dataset_id=dataset_id, records=records)
+    abnormal = sum(1 for item in items if item.risk_label == "suspicious")
+    normal = len(items) - abnormal
+    return InferenceRunResponse(
+        dataset_id=dataset_id,
+        total_nodes=len(items),
+        abnormal_nodes=abnormal,
+        normal_nodes=normal,
+        message=f"Inference finished: {abnormal} suspicious nodes, {normal} normal nodes.",
+        results=items[:30],
+    )
+
+
+def _result_items(
+    *,
+    db: Session,
+    dataset_id: int,
+    records: list[InferenceResult],
+) -> list[InferenceResultItem]:
+    node_map = {
+        node.node_id: node
+        for node in db.scalars(select(PersonNode).where(PersonNode.dataset_id == dataset_id)).all()
+    }
+    items: list[InferenceResultItem] = []
+    for record in sorted(records, key=lambda item: item.risk_score, reverse=True):
+        node = node_map.get(record.node_id)
+        explanation = dict(record.explanation_json or {})
+        items.append(
+            InferenceResultItem(
+                node_id=record.node_id,
+                display_name=node.display_name if node is not None else record.node_id,
+                id_number=node.id_number if node is not None else "",
+                region=node.region if node is not None else "",
+                occupation=node.occupation if node is not None else "",
+                risk_score=float(record.risk_score),
+                risk_label=record.risk_label,
+                reason=str(explanation.get("reason") or ""),
+            )
+        )
+    return items
 
 
 def _insert_nodes(*, db: Session, dataset_id: int, frame: pd.DataFrame, mapping: dict[str, Any]) -> None:

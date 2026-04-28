@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DatasetSummary, listDatasets, uploadDataset } from "../services/api";
+import { createDemoDataset, DatasetSummary, listDatasets, uploadDataset } from "../services/api";
 
 type Props = {
   selectedDatasetId: number | null;
@@ -22,6 +22,13 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
     onSelect(dataset.id);
   }
 
+  async function handleDemo(datasetName: string) {
+    const dataset = await createDemoDataset(datasetName);
+    setMessage(`已载入官方验证集：${dataset.original_filename}，共 ${dataset.row_count} 个节点。`);
+    await refresh();
+    onSelect(dataset.id);
+  }
+
   useEffect(() => {
     refresh().catch((error) => setMessage(error.message));
   }, []);
@@ -35,6 +42,11 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
         </div>
       </div>
       <input type="file" accept=".csv" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} />
+      <div className="demo-buttons">
+        <button onClick={() => handleDemo("xinye_dgraph")}>XinYe 验证集</button>
+        <button onClick={() => handleDemo("elliptic_transactions")}>ET 验证集</button>
+        <button onClick={() => handleDemo("ellipticpp_transactions")}>EPP 验证集</button>
+      </div>
       <p className="hint">{message}</p>
       <div className="dataset-list">
         {datasets.map((dataset) => (

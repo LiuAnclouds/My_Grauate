@@ -27,6 +27,8 @@ class Settings(BaseSettings):
 
     verification_code_ttl_minutes: int = 10
     demo_mode: bool = True
+    inference_device: str = "cpu"
+    inference_timeout_seconds: int = 900
 
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_ROOT / ".env"),

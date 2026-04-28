@@ -8,6 +8,7 @@ import { PipelinePanel } from "./components/PipelinePanel";
 export default function App() {
   const [email, setEmail] = useState<string | null>(null);
   const [selectedDatasetId, setSelectedDatasetId] = useState<number | null>(null);
+  const [inferenceVersion, setInferenceVersion] = useState(0);
 
   return (
     <main>
@@ -24,10 +25,13 @@ export default function App() {
           <DataUpload selectedDatasetId={selectedDatasetId} onSelect={setSelectedDatasetId} />
         </aside>
         <section className="workspace">
-          <GraphWorkspace datasetId={selectedDatasetId} />
+          <GraphWorkspace datasetId={selectedDatasetId} refreshKey={inferenceVersion} />
           <div className="two-column">
-            <PipelinePanel datasetId={selectedDatasetId} />
-            <InferenceResults />
+            <PipelinePanel
+              datasetId={selectedDatasetId}
+              onInferenceComplete={() => setInferenceVersion((value) => value + 1)}
+            />
+            <InferenceResults datasetId={selectedDatasetId} refreshKey={inferenceVersion} />
           </div>
         </section>
       </div>
