@@ -1215,6 +1215,9 @@ tbody tr:hover {
 .auth-shell {
   width: min(1320px, 100%);
   min-height: calc(100vh - 64px);
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  gap: clamp(16px, 2.8vh, 28px);
 }
 
 .auth-topbar {
@@ -1243,6 +1246,14 @@ tbody tr:hover {
   grid-template-columns: minmax(160px, 220px) minmax(390px, 440px) minmax(160px, 220px);
   gap: clamp(16px, 2.6vw, 30px);
   padding-top: 4px;
+}
+
+.auth-footer-facts {
+  width: min(520px, 100%);
+  justify-self: center;
+  align-self: start;
+  margin-top: clamp(2px, 1vh, 12px);
+  padding-bottom: 0;
 }
 
 .auth-form-card {
@@ -1887,8 +1898,363 @@ tbody tr:hover {
   mix-blend-mode: soft-light;
 }
 
+/* SVG mascots: colorful, responsive and pointer-aware. */
+.mascot-stage {
+  --look-x: 0px;
+  --look-y: 0px;
+  --look-rot: 0deg;
+  --char-rot: 0deg;
+  --body-rot: 0deg;
+  --pupil-x: 0px;
+  --pupil-y: 0px;
+  --lean-x: 0px;
+  --lean-y: 0px;
+  --neck-x: 0px;
+  --neck-y: 0px;
+  --body-x: 0px;
+  --body-y: 0px;
+  min-height: clamp(250px, 32vh, 330px);
+  isolation: isolate;
+}
+
+.mascot-stage::before {
+  content: "";
+  position: absolute;
+  width: clamp(160px, 16vw, 220px);
+  aspect-ratio: 1;
+  border-radius: 45% 55% 58% 42%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.88), transparent 0 24%),
+    linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(45, 212, 191, 0.16));
+  filter: blur(1px);
+  transform: translateY(18px) rotate(-10deg);
+  z-index: -1;
+}
+
+.mascot-right::before {
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.9), transparent 0 24%),
+    linear-gradient(135deg, rgba(250, 204, 21, 0.22), rgba(45, 212, 191, 0.16));
+  transform: translateY(18px) rotate(10deg);
+}
+
+.mascot-svg {
+  width: clamp(172px, 18vw, 230px);
+  height: auto;
+  overflow: visible;
+  transform: translate(var(--lean-x), var(--lean-y));
+  transition: transform 0.22s ease;
+}
+
+.mascot-character {
+  transform-origin: 110px 214px;
+  animation: mascotFloat 5s ease-in-out infinite;
+  transition: transform 0.28s ease;
+}
+
+.mascot-right .mascot-character {
+  animation-delay: -1.4s;
+}
+
+.mascot-stage:not(.mascot-cover) .mascot-character {
+  transform: rotate(var(--char-rot));
+}
+
+.mascot-ground {
+  fill: rgba(42, 71, 109, 0.16);
+  filter: blur(2px);
+}
+
+.mascot-sparkles {
+  fill: #f8c84d;
+  opacity: 0.9;
+  transform-origin: 176px 58px;
+  animation: sparklePulse 2.8s ease-in-out infinite;
+}
+
+.mascot-right .mascot-sparkles {
+  fill: #39c4f0;
+  animation-delay: -1s;
+}
+
+.mascot-head-svg,
+.mascot-neck-svg,
+.mascot-body-svg,
+.mascot-arm-svg,
+.mascot-eye-svg,
+.mascot-pupil {
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.18s ease;
+  transform-box: fill-box;
+}
+
+.mascot-head-svg {
+  transform-origin: 110px 108px;
+  transform: translate(var(--look-x), var(--look-y)) rotate(var(--look-rot));
+}
+
+.mascot-neck-svg {
+  transform-origin: center bottom;
+  transform: translate(var(--neck-x), var(--neck-y));
+}
+
+.mascot-body-svg {
+  transform-origin: 110px 212px;
+  transform: translate(var(--body-x), var(--body-y)) rotate(var(--body-rot));
+}
+
+.target-account .mascot-head-svg {
+  transform: translate(var(--look-x), calc(var(--look-y) - 5px)) rotate(var(--look-rot));
+}
+
+.target-account .mascot-neck-svg {
+  transform: translate(var(--neck-x), -9px) scaleY(1.14);
+}
+
+.target-captcha .mascot-head-svg {
+  transform: translate(var(--look-x), calc(var(--look-y) + 6px)) rotate(var(--look-rot));
+}
+
+.target-captcha .mascot-neck-svg {
+  transform: translate(var(--neck-x), 5px) scaleY(1.18);
+}
+
+.mascot-cover .mascot-head-svg {
+  transform: translate(0, 0) rotate(0deg);
+}
+
+.mascot-cover .mascot-character {
+  animation: none;
+  transform: translateY(-2px);
+}
+
+.panda-ear,
+.panda-mask,
+.panda-leg,
+.panda-arm,
+.panda-hand {
+  fill: #2c4777;
+  stroke: #213552;
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.panda-head {
+  fill: #fffaf1;
+  stroke: #213552;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.panda-torso {
+  stroke: #213552;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.panda-belly {
+  fill: rgba(234, 249, 255, 0.82);
+}
+
+.panda-neck {
+  fill: #fff3dd;
+  stroke: #213552;
+  stroke-width: 4;
+}
+
+.panda-nose {
+  fill: #213552;
+}
+
+.panda-mouth,
+.face-blush {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.panda-mouth {
+  stroke: #213552;
+  stroke-width: 3.2;
+}
+
+.face-blush {
+  stroke: rgba(244, 114, 182, 0.66);
+  stroke-width: 3;
+}
+
+.buddy-head {
+  fill: #ffe8a6;
+  stroke: #284260;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.buddy-torso,
+.buddy-leg,
+.buddy-arm,
+.buddy-hand,
+.buddy-neck {
+  stroke: #284260;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.buddy-leg,
+.buddy-arm,
+.buddy-hand {
+  fill: #ffd35d;
+}
+
+.buddy-neck {
+  fill: #ffe18a;
+}
+
+.buddy-panel {
+  fill: rgba(255, 255, 255, 0.7);
+  stroke: rgba(40, 66, 96, 0.65);
+  stroke-width: 2.4;
+}
+
+.buddy-badge {
+  fill: #39c4f0;
+  stroke: #284260;
+  stroke-width: 2.2;
+}
+
+.buddy-goggle {
+  fill: rgba(255, 255, 255, 0.74);
+  stroke: #284260;
+  stroke-width: 3.4;
+}
+
+.buddy-antenna {
+  fill: none;
+  stroke: #284260;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.buddy-antenna-dot {
+  fill: #39c4f0;
+  stroke: #284260;
+  stroke-width: 3;
+}
+
+.buddy-mouth {
+  fill: none;
+  stroke: #284260;
+  stroke-width: 3.4;
+  stroke-linecap: round;
+}
+
+.mascot-eye-svg > circle:first-child {
+  fill: #ffffff;
+  stroke: #213552;
+  stroke-width: 3;
+}
+
+.buddy-character .mascot-eye-svg > circle:first-child {
+  stroke: #284260;
+}
+
+.mascot-pupil {
+  fill: #172640;
+  transform: translate(var(--pupil-x), var(--pupil-y));
+}
+
+.eye-shine {
+  fill: #ffffff;
+  pointer-events: none;
+}
+
+.mascot-arm-svg {
+  transform-origin: 110px 151px;
+}
+
+.mascot-arm-svg path {
+  fill: none;
+}
+
+.mascot-cover .mascot-arm-svg.left {
+  transform: translate(52px, -112px) rotate(-18deg);
+}
+
+.mascot-cover .mascot-arm-svg.right {
+  transform: translate(-52px, -112px) rotate(18deg);
+}
+
+.mascot-cover .mascot-eye-svg {
+  opacity: 0.28;
+}
+
+.mascot-error .mascot-character {
+  animation: mascotShake 0.38s ease 2;
+}
+
+@keyframes sparklePulse {
+  0%,
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.16) rotate(8deg);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 920px) {
+  .auth-footer-facts {
+    width: min(440px, 100%);
+    margin-top: 2px;
+  }
+
+  .mascot-stage {
+    min-height: clamp(170px, 22vh, 220px);
+  }
+
+  .mascot-svg {
+    width: clamp(142px, 23vw, 178px);
+  }
+}
+
+@media (max-width: 780px) {
+  .auth-shell {
+    grid-template-rows: auto auto auto;
+    align-content: center;
+  }
+
+  .mascot-left {
+    display: none;
+  }
+
+  .mascot-right {
+    min-height: 126px;
+    order: 1;
+  }
+
+  .mascot-svg {
+    width: 148px;
+    margin-top: -42px;
+    margin-bottom: -48px;
+  }
+
+  .auth-footer-facts {
+    width: min(420px, 100%);
+    margin-top: 4px;
+    gap: 8px 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .auth-glow,
+  .mascot-character,
+  .mascot-sparkles,
   .mascot-figure,
   .guardian-error,
   .card-shake {
@@ -1899,7 +2265,13 @@ tbody tr:hover {
   .mascot-body,
   .mascot-neck,
   .mascot-arm,
-  .mascot-eye span {
+  .mascot-eye span,
+  .mascot-svg,
+  .mascot-head-svg,
+  .mascot-neck-svg,
+  .mascot-body-svg,
+  .mascot-arm-svg,
+  .mascot-pupil {
     transition: none;
   }
 }

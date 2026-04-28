@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, PointerEvent, useEffect, useMemo, useState } from "react";
 import { AuthResponse, fetchLoginCaptcha, LoginCaptchaResponse, login, register, requestCode } from "../services/api";
 
 type Props = {
@@ -7,6 +7,7 @@ type Props = {
 
 type FocusField = "account" | "password" | "register-code" | "login-captcha" | null;
 type MascotMode = "idle" | "peek" | "cover" | "error";
+type MascotTarget = "idle" | "account" | "password" | "captcha" | "error";
 
 const footerFacts = ["面向交易关系的风险识别", "辅助定位异常用户", "支持数据接入与图谱分析"];
 
@@ -41,44 +42,121 @@ function RefreshIcon() {
   );
 }
 
-function AuthMascot({ side, mode }: { side: "left" | "right"; mode: MascotMode }) {
-  const label = side === "left" ? "账号观察员" : "风险守卫员";
-
+function AuthMascot({
+  side,
+  mode,
+  target,
+  style
+}: {
+  side: "left" | "right";
+  mode: MascotMode;
+  target: MascotTarget;
+  style: CSSProperties;
+}) {
   return (
-    <aside className={`mascot-stage mascot-${side} mascot-${mode}`} aria-hidden="true">
-      <div className="mascot-orbit">
-        <span />
-        <span />
-        <span />
-      </div>
-      <div className="mascot-figure">
-        <div className="mascot-neck" />
-        <div className="mascot-head">
-          <div className="mascot-ear left" />
-          <div className="mascot-ear right" />
-          <div className="mascot-face-shine" />
-          <div className="mascot-eye left">
-            <span />
-          </div>
-          <div className="mascot-eye right">
-            <span />
-          </div>
-          <div className="mascot-nose" />
-          <div className="mascot-mouth" />
-        </div>
-        <div className="mascot-body">
-          <div className="mascot-collar" />
-          <div className="mascot-core" />
-          <div className="mascot-arm left">
-            <span className="mascot-hand" />
-          </div>
-          <div className="mascot-arm right">
-            <span className="mascot-hand" />
-          </div>
-        </div>
-      </div>
-      <div className="mascot-shadow" />
-      <div className="mascot-label">{label}</div>
+    <aside className={`mascot-stage mascot-${side} mascot-${mode} target-${target}`} style={style} aria-hidden="true">
+      <svg className="mascot-svg" viewBox="0 0 220 280">
+        <defs>
+          <linearGradient id={`pandaBody-${side}`} x1="40" x2="178" y1="128" y2="238">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="100%" stopColor="#d8eef9" />
+          </linearGradient>
+          <linearGradient id={`buddyBody-${side}`} x1="48" x2="180" y1="126" y2="238">
+            <stop offset="0%" stopColor="#ffe27a" />
+            <stop offset="54%" stopColor="#fbbf24" />
+            <stop offset="100%" stopColor="#3dd6c6" />
+          </linearGradient>
+          <filter id={`mascotShadow-${side}`} x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="12" stdDeviation="10" floodColor="#244060" floodOpacity="0.18" />
+          </filter>
+        </defs>
+
+        <ellipse className="mascot-ground" cx="110" cy="252" rx="62" ry="16" />
+        <g className="mascot-sparkles">
+          <circle cx="38" cy="62" r="5" />
+          <circle cx="184" cy="80" r="4" />
+          <path d="M176 42l5 10 10 5-10 5-5 10-5-10-10-5 10-5z" />
+        </g>
+
+        {side === "left" ? (
+          <g className="mascot-character panda-character" filter={`url(#mascotShadow-${side})`}>
+            <g className="mascot-body-svg">
+              <path className="panda-leg left" d="M62 224c-14 4-25 14-22 25 4 13 27 12 41 0 8-7 3-29-19-25z" />
+              <path className="panda-leg right" d="M158 224c14 4 25 14 22 25-4 13-27 12-41 0-8-7-3-29 19-25z" />
+              <path className="panda-torso" d="M56 139c-18 25-20 74 5 96 23 21 74 21 98 0 25-22 23-71 5-96-19-26-89-26-108 0z" fill={`url(#pandaBody-${side})`} />
+              <path className="panda-belly" d="M82 170c-15 16-14 48 0 61 14 13 42 13 56 0 14-13 15-45 0-61-14-15-42-15-56 0z" />
+            </g>
+            <path className="mascot-neck-svg panda-neck" d="M94 125c2 18 30 18 32 0v32c-4 13-28 13-32 0z" />
+            <g className="mascot-head-svg">
+              <circle className="panda-ear left" cx="67" cy="74" r="25" />
+              <circle className="panda-ear right" cx="153" cy="74" r="25" />
+              <path className="panda-head" d="M52 89c0-39 29-66 58-66s58 27 58 66c0 42-27 67-58 67s-58-25-58-67z" />
+              <path className="panda-mask left" d="M65 88c-6-18 10-35 27-27 13 6 17 25 6 37-10 12-28 7-33-10z" />
+              <path className="panda-mask right" d="M155 88c6-18-10-35-27-27-13 6-17 25-6 37 10 12 28 7 33-10z" />
+              <g className="mascot-eye-svg left">
+                <circle cx="84" cy="86" r="10" />
+                <circle className="mascot-pupil" cx="84" cy="86" r="4" />
+                <circle className="eye-shine" cx="81" cy="82" r="2" />
+              </g>
+              <g className="mascot-eye-svg right">
+                <circle cx="136" cy="86" r="10" />
+                <circle className="mascot-pupil" cx="136" cy="86" r="4" />
+                <circle className="eye-shine" cx="133" cy="82" r="2" />
+              </g>
+              <path className="panda-nose" d="M103 111c4-5 10-5 14 0-1 7-13 7-14 0z" />
+              <path className="panda-mouth" d="M110 119c-2 8-11 10-17 3M110 119c2 8 11 10 17 3" />
+              <path className="face-blush left" d="M66 111c10-6 20-4 26 4" />
+              <path className="face-blush right" d="M154 111c-10-6-20-4-26 4" />
+            </g>
+            <g className="mascot-arm-svg left">
+              <path className="panda-arm" d="M62 153c-26 15-38 39-29 51 10 13 34-2 46-27" />
+              <circle className="panda-hand" cx="32" cy="204" r="18" />
+            </g>
+            <g className="mascot-arm-svg right">
+              <path className="panda-arm" d="M158 153c26 15 38 39 29 51-10 13-34-2-46-27" />
+              <circle className="panda-hand" cx="188" cy="204" r="18" />
+            </g>
+          </g>
+        ) : (
+          <g className="mascot-character buddy-character" filter={`url(#mascotShadow-${side})`}>
+            <g className="mascot-body-svg">
+              <path className="buddy-leg left" d="M67 222c-15 5-24 14-21 25 4 12 26 11 39 0 8-7 3-30-18-25z" />
+              <path className="buddy-leg right" d="M153 222c15 5 24 14 21 25-4 12-26 11-39 0-8-7-3-30 18-25z" />
+              <path className="buddy-torso" d="M57 139c-18 24-20 73 3 96 23 22 77 22 100 0 23-23 21-72 3-96-21-27-85-27-106 0z" fill={`url(#buddyBody-${side})`} />
+              <path className="buddy-panel" d="M77 170c9-12 57-12 66 0 8 12 8 38 0 50-9 12-57 12-66 0-8-12-8-38 0-50z" />
+              <path className="buddy-badge" d="M110 178l12 7v14c0 12-7 19-12 22-5-3-12-10-12-22v-14z" />
+            </g>
+            <path className="mascot-neck-svg buddy-neck" d="M93 125c1 19 33 19 34 0v34c-5 13-29 13-34 0z" />
+            <g className="mascot-head-svg">
+              <path className="buddy-antenna" d="M110 26v-18M96 12h28" />
+              <circle className="buddy-antenna-dot" cx="110" cy="6" r="6" />
+              <path className="buddy-head" d="M47 88c0-37 29-65 63-65s63 28 63 65c0 40-28 67-63 67s-63-27-63-67z" />
+              <path className="buddy-goggle" d="M67 82c0-18 12-31 28-31h30c16 0 28 13 28 31s-12 31-28 31H95c-16 0-28-13-28-31z" />
+              <g className="mascot-eye-svg left">
+                <circle cx="92" cy="83" r="13" />
+                <circle className="mascot-pupil" cx="92" cy="83" r="5" />
+                <circle className="eye-shine" cx="88" cy="78" r="2.4" />
+              </g>
+              <g className="mascot-eye-svg right">
+                <circle cx="128" cy="83" r="13" />
+                <circle className="mascot-pupil" cx="128" cy="83" r="5" />
+                <circle className="eye-shine" cx="124" cy="78" r="2.4" />
+              </g>
+              <path className="buddy-mouth" d="M91 120c10 12 28 12 38 0" />
+              <path className="face-blush left" d="M65 111c10-5 19-3 25 3" />
+              <path className="face-blush right" d="M155 111c-10-5-19-3-25 3" />
+            </g>
+            <g className="mascot-arm-svg left">
+              <path className="buddy-arm" d="M62 153c-27 15-38 39-29 51 10 13 34-2 46-27" />
+              <circle className="buddy-hand" cx="32" cy="204" r="18" />
+            </g>
+            <g className="mascot-arm-svg right">
+              <path className="buddy-arm" d="M158 153c27 15 38 39 29 51-10 13-34-2-46-27" />
+              <circle className="buddy-hand" cx="188" cy="204" r="18" />
+            </g>
+          </g>
+        )}
+      </svg>
     </aside>
   );
 }
@@ -97,6 +175,7 @@ export function AuthPanel({ onAuthed }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [focusField, setFocusField] = useState<FocusField>(null);
   const [shakeError, setShakeError] = useState(false);
+  const [pointerLook, setPointerLook] = useState({ x: 0, y: 0 });
 
   const isLogin = mode === "login";
   const mascotMode: MascotMode = useMemo(() => {
@@ -105,10 +184,52 @@ export function AuthPanel({ onAuthed }: Props) {
     if (focusField) return "peek";
     return "idle";
   }, [focusField, shakeError]);
+  const mascotTarget: MascotTarget = useMemo(() => {
+    if (shakeError) return "error";
+    if (focusField === "account") return "account";
+    if (focusField === "password") return "password";
+    if (focusField === "login-captcha" || focusField === "register-code") return "captcha";
+    return "idle";
+  }, [focusField, shakeError]);
   const captchaChars = useMemo(() => (loginCaptcha?.captcha_text ?? "-----").split(""), [loginCaptcha]);
   const heading = isLogin ? "登录分析平台" : "注册分析账号";
   const passwordLabel = isLogin ? "登录密码" : "设置密码";
   const submitLabel = busy ? "正在验证" : isLogin ? "进入工作台" : "创建账号并进入";
+
+  function getMascotStyle(side: "left" | "right"): CSSProperties {
+    const targetLook: Record<MascotTarget, { x: number; y: number }> = {
+      idle: pointerLook,
+      account: { x: side === "left" ? 0.9 : -0.9, y: -0.58 },
+      password: { x: side === "left" ? 0.35 : -0.35, y: -0.12 },
+      captcha: { x: side === "left" ? 1 : -1, y: 0.55 },
+      error: { x: 0, y: 0.25 }
+    };
+    const look = targetLook[mascotTarget];
+    return {
+      "--look-x": `${look.x * 8}px`,
+      "--look-y": `${look.y * 5}px`,
+      "--look-rot": `${look.x * 6}deg`,
+      "--char-rot": `${look.x * -2.3}deg`,
+      "--body-rot": `${look.x * -1.8}deg`,
+      "--pupil-x": `${look.x * 6}px`,
+      "--pupil-y": `${look.y * 4}px`,
+      "--lean-x": `${look.x * 10}px`,
+      "--lean-y": `${look.y * 5}px`,
+      "--neck-x": `${look.x * 3}px`,
+      "--neck-y": `${look.y * 2}px`,
+      "--body-x": `${look.x * -1.2}px`,
+      "--body-y": `${look.y * 0.8}px`
+    } as CSSProperties;
+  }
+
+  function handleStagePointerMove(event: PointerEvent<HTMLElement>) {
+    if (focusField) return;
+    const width = Math.max(window.innerWidth, 1);
+    const height = Math.max(window.innerHeight, 1);
+    const x = Math.max(-1, Math.min(1, (event.clientX / width - 0.5) * 2));
+    const y = Math.max(-1, Math.min(1, (event.clientY / height - 0.45) * 2));
+    setPointerLook({ x, y });
+  }
 
   useEffect(() => {
     if (!isLogin) return;
@@ -207,7 +328,7 @@ export function AuthPanel({ onAuthed }: Props) {
   }
 
   return (
-    <main className="auth-stage">
+    <main className="auth-stage" onPointerMove={handleStagePointerMove} onPointerLeave={() => setPointerLook({ x: 0, y: 0 })}>
       <div className="auth-background-grid" />
       <div className="auth-noise" />
       <div className="auth-constellation auth-constellation-one" />
@@ -224,7 +345,7 @@ export function AuthPanel({ onAuthed }: Props) {
         </header>
 
         <section className="auth-main-layout">
-          <AuthMascot side="left" mode={mascotMode} />
+          <AuthMascot side="left" mode={mascotMode} target={mascotTarget} style={getMascotStyle("left")} />
 
           <section className={`auth-card auth-form-card glass-panel ${shakeError ? "card-shake" : ""}`}>
             <div className="auth-card-header compact-header">
@@ -346,7 +467,7 @@ export function AuthPanel({ onAuthed }: Props) {
             {message ? <p className="hint auth-feedback minimal-feedback">{message}</p> : null}
           </section>
 
-          <AuthMascot side="right" mode={mascotMode} />
+          <AuthMascot side="right" mode={mascotMode} target={mascotTarget} style={getMascotStyle("right")} />
         </section>
 
         <footer className="auth-footer-facts">
