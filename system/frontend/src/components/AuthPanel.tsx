@@ -2,22 +2,22 @@ import { FormEvent, useState } from "react";
 import { login, register, requestCode } from "../services/api";
 
 type Props = {
-  onAuthed: (email: string) => void;
+  onAuthed: (account: string) => void;
 };
 
 export function AuthPanel({ onAuthed }: Props) {
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("demo@example.com");
-  const [password, setPassword] = useState("dyrift-demo");
+  const [account, setAccount] = useState("root");
+  const [password, setPassword] = useState("root");
   const [code, setCode] = useState("");
   const [captcha, setCaptcha] = useState("点击刷新");
-  const [message, setMessage] = useState("请先获取右侧验证码，再完成登录或注册。");
+  const [message, setMessage] = useState("默认账号 root，密码 root。请先获取右侧验证码。");
   const [busy, setBusy] = useState(false);
 
   async function handleCode() {
     setBusy(true);
     try {
-      const result = await requestCode(email, mode);
+      const result = await requestCode(account, mode);
       setCaptcha(result.code ?? "已发送");
       setCode("");
       setMessage(result.code ? "请按右侧验证码输入。" : result.message);
@@ -32,7 +32,7 @@ export function AuthPanel({ onAuthed }: Props) {
     event.preventDefault();
     setBusy(true);
     try {
-      const result = mode === "register" ? await register(email, password, code) : await login(email, password, code);
+      const result = mode === "register" ? await register(account, password, code) : await login(account, password, code);
       setMessage(result.message);
       onAuthed(result.email);
     } catch (error) {
@@ -46,7 +46,7 @@ export function AuthPanel({ onAuthed }: Props) {
     setMode(nextMode);
     setCode("");
     setCaptcha("点击刷新");
-    setMessage(nextMode === "login" ? "输入已注册账号并按右侧验证码登录。" : "填写邮箱、密码和右侧验证码创建账号。");
+    setMessage(nextMode === "login" ? "输入账号并按右侧验证码登录。" : "填写账号、密码和右侧验证码创建账号。");
   }
 
   return (
@@ -84,8 +84,8 @@ export function AuthPanel({ onAuthed }: Props) {
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
-            邮箱
-            <input value={email} onChange={(event) => setEmail(event.target.value)} />
+            账号
+            <input value={account} onChange={(event) => setAccount(event.target.value)} />
           </label>
           <label>
             密码

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from typing import Any
 
 
@@ -12,25 +12,25 @@ class HealthResponse(BaseModel):
 
 
 class VerificationCodeRequest(BaseModel):
-    email: EmailStr
+    email: str = Field(min_length=1, max_length=255)
     purpose: str = Field(pattern="^(register|login)$")
 
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    email: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
     code: str = Field(min_length=4, max_length=12)
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    email: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
     code: str = Field(min_length=4, max_length=12)
 
 
 class AuthResponse(BaseModel):
     user_id: int
-    email: EmailStr
+    email: str
     message: str
 
 

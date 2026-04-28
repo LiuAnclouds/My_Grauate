@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     demo_mode: bool = True
     inference_device: str = "cpu"
     inference_timeout_seconds: int = 900
-    demo_admin_email: str = "admin@dyrift.local"
-    demo_admin_password: str = "Dyrift@2026"
+    demo_admin_email: str = "root"
+    demo_admin_password: str = "root"
 
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_ROOT / ".env"),
