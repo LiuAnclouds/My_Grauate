@@ -1,5 +1,5 @@
 method,xinye_dgraph,xinye_dgraph_best_epoch,xinye_dgraph_trained_epochs,elliptic_transactions,elliptic_transactions_best_epoch,elliptic_transactions_trained_epochs,ellipticpp_transactions,ellipticpp_transactions_best_epoch,ellipticpp_transactions_trained_epochs
-DyRIFT-TGAT (Full),79.29%,7,8,82.13%,4,6,83.70%,6,30
-DyRIFT-TGAT w/o Target-Context Bridge,78.36% (-0.93%),3,8,81.84% (-0.29%),3,8,78.32% (-5.39%),7,12
-DyRIFT-TGAT w/o Drift Expert,78.54% (-0.75%),3,8,78.62% (-3.52%),2,7,78.35% (-5.35%),8,13
-DyRIFT-TGAT w/o Prototype Memory,78.47% (-0.81%),4,9,81.98% (-0.16%),3,8,78.29% (-5.41%),9,14
+DyRIFT-TGAT (Full),79.82%,7,10,82.13%,4,10,83.70%,6,10
+DyRIFT-TGAT w/o Target-Context Bridge,78.36% (-1.46%),3,8,81.84% (-0.29%),3,8,78.32% (-5.39%),7,12
+DyRIFT-TGAT w/o Drift Expert,78.54% (-1.28%),3,8,78.62% (-3.52%),2,7,78.35% (-5.35%),8,13
+DyRIFT-TGAT w/o Prototype Memory,78.47% (-1.35%),4,9,81.98% (-0.16%),3,8,78.29% (-5.41%),9,14

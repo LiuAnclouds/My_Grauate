@@ -9,6 +9,11 @@
 /configs/private/
 /configs/train/*.json
 /experiments/common/dataset_parameters.json
+/system/backend/.env
+/system/backend/data/
+/system/frontend/node_modules/
+/system/frontend/dist/
+/system/frontend/tsconfig.tsbuildinfo
 
 /outputs/*
 !/outputs/train/

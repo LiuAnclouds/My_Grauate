@@ -1,5 +1,5 @@
 method,xinye_dgraph,xinye_dgraph_best_epoch,xinye_dgraph_trained_epochs,elliptic_transactions,elliptic_transactions_best_epoch,elliptic_transactions_trained_epochs,ellipticpp_transactions,ellipticpp_transactions_best_epoch,ellipticpp_transactions_trained_epochs
-DyRIFT-TGAT (Full),79.29%,7,8,82.13%,4,6,83.70%,6,30
-Linear Same-Feature Baseline,77.00% (-2.29%),5,10,77.24% (-4.90%),30,30,60.24% (-23.46%),27,30
-Temporal GraphSAGE Reference,78.47% (-0.82%),3,8,78.11% (-4.02%),13,18,78.27% (-5.43%),10,15
-TGAT Backbone Reference,78.49% (-0.80%),7,12,81.84% (-0.29%),3,8,78.36% (-5.34%),6,11
+DyRIFT-TGAT (Full),79.82%,7,10,82.13%,4,10,83.70%,6,10
+Linear Same-Feature Baseline,77.00% (-2.82%),5,10,77.24% (-4.90%),30,30,60.24% (-23.46%),27,30
+Temporal GraphSAGE Reference,78.47% (-1.35%),3,8,78.11% (-4.02%),13,18,78.27% (-5.43%),10,15
+TGAT Backbone Reference,78.49% (-1.33%),7,12,81.84% (-0.29%),3,8,78.36% (-5.34%),6,11
