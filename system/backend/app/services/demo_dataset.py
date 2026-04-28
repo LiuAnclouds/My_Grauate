@@ -9,14 +9,32 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import EXPERIMENT_ROOT
-from app.models import DatasetUpload, GraphEdge, PersonNode, ProcessingTask
+from app.models import DatasetUpload, GraphEdge, PersonNode
+from app.services.pipeline_story import build_dataset_summary, create_task
 from app.services.synthetic_identity import synthetic_person_for_node
 
 
+OFFICIAL_DATASET_PROFILES = {
+    "xinye_dgraph": {
+        "business_name": "零售交易网络 A",
+        "source_description": "平台内置高频账户往来样本",
+        "technical_label": "XinYe validation nodes",
+    },
+    "elliptic_transactions": {
+        "business_name": "链路交易网络 B",
+        "source_description": "平台内置跨主体资金转移样本",
+        "technical_label": "Elliptic validation nodes",
+    },
+    "ellipticpp_transactions": {
+        "business_name": "综合关系网络 C",
+        "source_description": "平台内置增强多维关系样本",
+        "technical_label": "Elliptic++ validation nodes",
+    },
+}
+
 OFFICIAL_DATASET_LABELS = {
-    "xinye_dgraph": "XinYe validation nodes",
-    "elliptic_transactions": "Elliptic validation nodes",
-    "ellipticpp_transactions": "Elliptic++ validation nodes",
+    key: str(value["technical_label"])
+    for key, value in OFFICIAL_DATASET_PROFILES.items()
 }
 
 
@@ -33,12 +51,13 @@ def seed_official_validation_dataset(
     existing = db.scalar(
         select(DatasetUpload).where(
             DatasetUpload.name == f"demo_{dataset_name}_validation",
-            DatasetUpload.status == "official_validation",
+            DatasetUpload.status.in_(["official_validation", "feature_ready", "inference_completed"]),
         )
     )
     if existing is not None:
         return existing
 
+    profile = OFFICIAL_DATASET_PROFILES[dataset_name]
     parameter_file = EXPERIMENT_ROOT / "configs" / "train" / f"{dataset_name}.json"
     train_payload = json.loads(parameter_file.read_text(encoding="utf-8-sig"))["train"]
     feature_dir = _resolve_experiment_path(str(train_payload["feature_dir"]))
@@ -59,12 +78,15 @@ def seed_official_validation_dataset(
             "source_node_ids": [int(value) for value in node_ids.tolist()],
             "feature_dir": str(feature_dir),
             "model": "full_dyrift_gnn/dyrift_gnn",
+            "mapping_method": "official_validation",
+            "mapping_message": "平台已从内置样本中装载对象关系与分析特征。",
         },
+        summary_json={},
     )
     db.add(dataset)
     db.flush()
 
-    _insert_validation_nodes(db=db, dataset_id=dataset.id, node_ids=node_ids, feature_dir=feature_dir)
+    inserted_nodes = _insert_validation_nodes(db=db, dataset_id=dataset.id, node_ids=node_ids, feature_dir=feature_dir)
     inserted_edges = _insert_validation_edges(
         db=db,
         dataset_id=dataset.id,
@@ -72,17 +94,32 @@ def seed_official_validation_dataset(
         feature_dir=feature_dir,
     )
     if inserted_edges == 0:
-        _insert_sequence_edges(db=db, dataset_id=dataset.id, node_ids=node_ids)
+        inserted_edges = _insert_sequence_edges(db=db, dataset_id=dataset.id, node_ids=node_ids)
 
-    db.add(
-        ProcessingTask(
-            dataset_id=dataset.id,
-            task_type="feature_processing",
-            status="completed",
-            progress=1.0,
-            current_step="official_feature_cache",
-            message="Official validation nodes were loaded from the existing feature cache.",
-        )
+    dataset.summary_json = build_dataset_summary(
+        node_count=inserted_nodes,
+        edge_count=inserted_edges,
+        mapping=dataset.mapping_json,
+        source="official_validation",
+    )
+    dataset.summary_json.update(
+        {
+            "business_name": profile["business_name"],
+            "source_description": profile["source_description"],
+            "technical_name": dataset_name,
+            "technical_label": profile["technical_label"],
+            "source_file": str(analysis_root / "recommended_split.json"),
+        }
+    )
+    create_task(
+        db=db,
+        dataset_id=dataset.id,
+        task_type="feature_processing",
+        status="completed",
+        progress=1.0,
+        current_step="official_feature_cache",
+        message="平台样本已完成装载，可直接进入风险识别流程。",
+        summary=dataset.summary_json,
     )
     db.commit()
     db.refresh(dataset)
@@ -110,9 +147,10 @@ def _insert_validation_nodes(
     dataset_id: int,
     node_ids: np.ndarray,
     feature_dir: Path,
-) -> None:
+) -> int:
     feature_path = feature_dir / "graph" / "core_features.npy"
     core_features = np.load(feature_path, mmap_mode="r")
+    inserted = 0
     for node_id in node_ids.tolist():
         node_key = str(int(node_id))
         person = synthetic_person_for_node(node_key)
@@ -133,6 +171,8 @@ def _insert_validation_nodes(
                 **person,
             )
         )
+        inserted += 1
+    return inserted
 
 
 def _insert_validation_edges(
@@ -181,8 +221,9 @@ def _insert_validation_edges(
     return inserted
 
 
-def _insert_sequence_edges(*, db: Session, dataset_id: int, node_ids: np.ndarray) -> None:
+def _insert_sequence_edges(*, db: Session, dataset_id: int, node_ids: np.ndarray) -> int:
     values = [str(int(value)) for value in node_ids.tolist()]
+    inserted = 0
     for index in range(max(0, len(values) - 1)):
         db.add(
             GraphEdge(
@@ -192,6 +233,8 @@ def _insert_sequence_edges(*, db: Session, dataset_id: int, node_ids: np.ndarray
                 edge_type="validation_sequence",
             )
         )
+        inserted += 1
+    return inserted
 
 
 def _json_float(value: Any) -> float:

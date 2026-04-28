@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
-from typing import Any
 
 
 class HealthResponse(BaseModel):
@@ -13,7 +13,13 @@ class HealthResponse(BaseModel):
 
 class VerificationCodeRequest(BaseModel):
     email: str = Field(min_length=1, max_length=255)
-    purpose: str = Field(pattern="^(register|login)$")
+    purpose: str = Field(pattern="^(register)$")
+
+
+class LoginCaptchaResponse(BaseModel):
+    captcha_id: str
+    captcha_text: str
+    expires_at: datetime
 
 
 class RegisterRequest(BaseModel):
@@ -25,13 +31,15 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=128)
-    code: str = Field(min_length=4, max_length=12)
+    captcha_id: str = Field(min_length=8, max_length=128)
+    captcha_code: str = Field(min_length=4, max_length=12)
 
 
 class AuthResponse(BaseModel):
     user_id: int
     email: str
     message: str
+    is_admin: bool = False
 
 
 class DatasetSummary(BaseModel):
@@ -41,6 +49,7 @@ class DatasetSummary(BaseModel):
     row_count: int
     status: str
     created_at: datetime
+    summary: dict[str, Any] = {}
 
 
 class MappingResponse(BaseModel):
@@ -59,6 +68,8 @@ class GraphNode(BaseModel):
     color: str
     risk_score: float | None = None
     risk_label: str | None = None
+    source_type: str | None = None
+    feature_count: int = 0
 
 
 class GraphEdgeItem(BaseModel):
@@ -68,12 +79,14 @@ class GraphEdgeItem(BaseModel):
     edge_type: str
     amount: float | None = None
     timestamp: str | None = None
+    highlighted: bool = False
 
 
 class GraphResponse(BaseModel):
     dataset_id: int
     nodes: list[GraphNode]
     edges: list[GraphEdgeItem]
+    summary: dict[str, Any] = {}
 
 
 class TaskResponse(BaseModel):
@@ -84,6 +97,27 @@ class TaskResponse(BaseModel):
     progress: float
     current_step: str
     message: str
+    summary: dict[str, Any] = {}
+
+
+class ProcessingEventItem(BaseModel):
+    id: int
+    stage: str
+    step_key: str
+    title: str
+    detail: str
+    progress: float
+    focus_node_id: str | None = None
+    focus_neighbor_ids: list[str] = []
+    top_features: list[str] = []
+    metrics: dict[str, Any] = {}
+    created_at: datetime
+
+
+class TaskTimelineResponse(BaseModel):
+    dataset_id: int
+    task: TaskResponse | None = None
+    events: list[ProcessingEventItem] = []
 
 
 class InferenceResultItem(BaseModel):
@@ -106,3 +140,4 @@ class InferenceRunResponse(BaseModel):
     normal_nodes: int
     message: str
     results: list[InferenceResultItem]
+    task_id: int | None = None

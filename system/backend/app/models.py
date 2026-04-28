@@ -15,6 +15,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -41,6 +42,7 @@ class DatasetUpload(Base):
     row_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="uploaded", nullable=False)
     mapping_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    summary_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     nodes: Mapped[list["PersonNode"]] = relationship(back_populates="dataset", cascade="all, delete-orphan")
@@ -88,8 +90,32 @@ class ProcessingTask(Base):
     progress: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     current_step: Mapped[str] = mapped_column(String(128), default="", nullable=False)
     message: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    summary_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class ProcessingEvent(Base):
+    __tablename__ = "processing_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dataset_id: Mapped[int] = mapped_column(ForeignKey("dataset_uploads.id"), index=True, nullable=False)
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("processing_tasks.id"), index=True, nullable=True)
+    stage: Mapped[str] = mapped_column(String(64), nullable=False)
+    step_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(128), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    progress: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    focus_node_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    focus_neighbor_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    top_features: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metrics_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class InferenceResult(Base):

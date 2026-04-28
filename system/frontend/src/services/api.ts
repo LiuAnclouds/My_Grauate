@@ -1,3 +1,16 @@
+export type AuthResponse = {
+  user_id: number;
+  email: string;
+  message: string;
+  is_admin: boolean;
+};
+
+export type LoginCaptchaResponse = {
+  captcha_id: string;
+  captcha_text: string;
+  expires_at: string;
+};
+
 export type DatasetSummary = {
   id: number;
   name: string;
@@ -5,6 +18,7 @@ export type DatasetSummary = {
   row_count: number;
   status: string;
   created_at: string;
+  summary: Record<string, unknown>;
 };
 
 export type MappingResponse = {
@@ -23,6 +37,8 @@ export type GraphNode = {
   color: string;
   risk_score?: number | null;
   risk_label?: string | null;
+  source_type?: string | null;
+  feature_count: number;
 };
 
 export type GraphEdge = {
@@ -32,12 +48,14 @@ export type GraphEdge = {
   edge_type: string;
   amount?: number | null;
   timestamp?: string | null;
+  highlighted: boolean;
 };
 
 export type GraphResponse = {
   dataset_id: number;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  summary: Record<string, unknown>;
 };
 
 export type TaskResponse = {
@@ -48,6 +66,27 @@ export type TaskResponse = {
   progress: number;
   current_step: string;
   message: string;
+  summary: Record<string, unknown>;
+};
+
+export type ProcessingEventItem = {
+  id: number;
+  stage: string;
+  step_key: string;
+  title: string;
+  detail: string;
+  progress: number;
+  focus_node_id?: string | null;
+  focus_neighbor_ids: string[];
+  top_features: string[];
+  metrics: Record<string, unknown>;
+  created_at: string;
+};
+
+export type TaskTimelineResponse = {
+  dataset_id: number;
+  task?: TaskResponse | null;
+  events: ProcessingEventItem[];
 };
 
 export type InferenceResultItem = {
@@ -70,6 +109,7 @@ export type InferenceRunResponse = {
   normal_nodes: number;
   message: string;
   results: InferenceResultItem[];
+  task_id?: number | null;
 };
 
 const API_BASE = "/api";
@@ -86,24 +126,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function requestCode(email: string, purpose: "register" | "login") {
+export function requestCode(email: string) {
   return request<{ message: string; code?: string }>("/auth/request-code", {
     method: "POST",
-    body: JSON.stringify({ email, purpose })
+    body: JSON.stringify({ email, purpose: "register" })
   });
+}
+
+export function fetchLoginCaptcha() {
+  return request<LoginCaptchaResponse>("/auth/login-captcha");
 }
 
 export function register(email: string, password: string, code: string) {
-  return request<{ user_id: number; email: string; message: string }>("/auth/register", {
+  return request<AuthResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify({ email, password, code })
   });
 }
 
-export function login(email: string, password: string, code: string) {
-  return request<{ user_id: number; email: string; message: string }>("/auth/login", {
+export function login(email: string, password: string, captchaId: string, captchaCode: string) {
+  return request<AuthResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password, code })
+    body: JSON.stringify({ email, password, captcha_id: captchaId, captcha_code: captchaCode })
   });
 }
 
@@ -135,6 +179,10 @@ export function fetchMapping(datasetId: number) {
 
 export function createFeatureTask(datasetId: number) {
   return request<TaskResponse>(`/datasets/${datasetId}/feature-task`, { method: "POST" });
+}
+
+export function fetchTimeline(datasetId: number) {
+  return request<TaskTimelineResponse>(`/datasets/${datasetId}/timeline`);
 }
 
 export function runInference(datasetId: number) {

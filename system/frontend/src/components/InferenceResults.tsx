@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { InferenceResultItem, listInferenceResults } from "../services/api";
 
 type Props = {
@@ -9,7 +9,8 @@ type Props = {
 
 export function InferenceResults({ datasetId, refreshKey, onNodeFocus }: Props) {
   const [rows, setRows] = useState<InferenceResultItem[]>([]);
-  const [message, setMessage] = useState("完成推理后展示异常节点明细。");
+  const [message, setMessage] = useState("风险识别完成后，这里将生成对象级风险台账。\n");
+  const [keyword, setKeyword] = useState("");
 
   useEffect(() => {
     if (!datasetId) {
@@ -18,51 +19,101 @@ export function InferenceResults({ datasetId, refreshKey, onNodeFocus }: Props) 
     }
     listInferenceResults(datasetId)
       .then((items) => {
-        setRows(items.slice(0, 20));
-        setMessage(items.length ? `已载入 ${items.length} 条推理结果。` : "当前数据集还没有推理结果。");
+        setRows(items);
+        setMessage(items.length ? `已生成 ${items.length} 条风险记录。` : "当前分析资产尚未生成风险记录。");
       })
       .catch((error) => setMessage(error.message));
   }, [datasetId, refreshKey]);
 
+  const filteredRows = useMemo(() => {
+    if (!keyword.trim()) {
+      return rows.slice(0, 30);
+    }
+    const text = keyword.trim().toLowerCase();
+    return rows
+      .filter((row) => {
+        return [row.node_id, row.display_name, row.region, row.occupation, row.risk_label]
+          .join(" ")
+          .toLowerCase()
+          .includes(text);
+      })
+      .slice(0, 30);
+  }, [keyword, rows]);
+
+  const abnormalCount = rows.filter((row) => row.risk_label === "suspicious").length;
+  const normalCount = rows.length - abnormalCount;
+
   return (
-    <section className="panel">
-      <div className="panel-heading">
+    <section className="panel panel-stack result-panel">
+      <div className="panel-heading aligned-start split-heading">
         <div>
-          <p className="eyebrow">Inference Output</p>
-          <h2>异常节点结果</h2>
+          <p className="eyebrow">Risk Ledger</p>
+          <h2>风险结果台账</h2>
+          <p className="section-copy">沉淀对象级风险评分、画像信息与模型解释线索，支持快速定位与复核。</p>
+        </div>
+        <div className="result-summary enterprise-summary">
+          <span>总记录 {rows.length}</span>
+          <span>高风险 {abnormalCount}</span>
+          <span>低风险 {normalCount}</span>
         </div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>节点 ID</th>
-            <th>用户</th>
-            <th>地区</th>
-            <th>异常概率</th>
-            <th>推理依据</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.node_id} onClick={() => onNodeFocus(row.node_id)}>
-              <td>{row.node_id}</td>
-              <td>{row.display_name}</td>
-              <td>{row.region}</td>
-              <td>{row.risk_score.toFixed(4)}</td>
-              <td>
-                <div className="reason-cell">
-                  <span>{row.reason}</span>
-                  <small>
-                    邻居：{row.support_neighbors.slice(0, 3).join(", ") || "-"}；特征：
-                    {row.top_features.slice(0, 3).join(", ") || "-"}
-                  </small>
-                </div>
-              </td>
+
+      <input
+        className="search-input"
+        value={keyword}
+        onChange={(event) => setKeyword(event.target.value)}
+        placeholder="按对象编号、姓名、区域、职业或风险标签筛选"
+      />
+
+      <div className="table-wrap enterprise-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>对象编号</th>
+              <th>对象信息</th>
+              <th>区域 / 职业</th>
+              <th>风险分数</th>
+              <th>风险等级</th>
+              <th>研判依据</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="hint">{message}</p>
+          </thead>
+          <tbody>
+            {filteredRows.map((row) => (
+              <tr key={row.node_id} onClick={() => onNodeFocus(row.node_id)}>
+                <td>{row.node_id}</td>
+                <td>
+                  <div className="reason-cell">
+                    <span>{row.display_name}</span>
+                    <small>{row.id_number}</small>
+                  </div>
+                </td>
+                <td>
+                  <div className="reason-cell">
+                    <span>{row.region}</span>
+                    <small>{row.occupation}</small>
+                  </div>
+                </td>
+                <td>{row.risk_score.toFixed(4)}</td>
+                <td>
+                  <span className={row.risk_label === "suspicious" ? "risk-chip danger" : "risk-chip success"}>
+                    {row.risk_label === "suspicious" ? "高风险" : "低风险"}
+                  </span>
+                </td>
+                <td>
+                  <div className="reason-cell">
+                    <span>{row.reason || "模型已完成关系聚合并生成风险判断。"}</span>
+                    <small>
+                      关联对象：{row.support_neighbors.slice(0, 4).join("、") || "-"}；关键特征：
+                      {row.top_features.slice(0, 4).join("、") || "-"}
+                    </small>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">{message.trim()}</p>
     </section>
   );
 }
