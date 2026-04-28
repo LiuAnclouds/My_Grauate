@@ -87,7 +87,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function requestCode(email: string, purpose: "register" | "login") {
-  return request<{ message: string }>("/auth/request-code", {
+  return request<{ message: string; code?: string }>("/auth/request-code", {
     method: "POST",
     body: JSON.stringify({ email, purpose })
   });

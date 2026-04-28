@@ -29,6 +29,8 @@ def request_code(payload: VerificationCodeRequest, db: Session = Depends(get_db)
     db.add(record)
     db.commit()
     sent = send_verification_email(email=str(payload.email), code=code, purpose=payload.purpose)
+    if settings.demo_mode:
+        return {"message": "verification code generated", "code": code}
     message = "verification code sent" if sent else "verification code logged in backend console"
     return {"message": message}
 

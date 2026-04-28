@@ -16,37 +16,45 @@ export default function App() {
     setHighlightedNodeId(null);
   }
 
+  if (!email) {
+    return <AuthPanel onAuthed={setEmail} />;
+  }
+
   return (
-    <main>
+    <main className="app-shell">
       <header className="topbar">
         <div>
           <p className="eyebrow">DyRIFT-TGAT</p>
           <h1>动态图欺诈节点推理系统</h1>
         </div>
-        <div className="account-pill">{email ?? "未登录"}</div>
+        <div className="topbar-actions">
+          <span className="account-pill">{email}</span>
+          <button className="ghost-button" onClick={() => setEmail(null)}>
+            退出
+          </button>
+        </div>
       </header>
-      <div className="layout">
-        <aside>
-          <AuthPanel onAuthed={setEmail} />
+
+      <div className="dashboard-layout">
+        <aside className="sidebar">
           <DataUpload selectedDatasetId={selectedDatasetId} onSelect={handleDatasetSelect} />
+          <PipelinePanel
+            datasetId={selectedDatasetId}
+            onInferenceComplete={() => setInferenceVersion((value) => value + 1)}
+          />
         </aside>
+
         <section className="workspace">
           <GraphWorkspace
             datasetId={selectedDatasetId}
             refreshKey={inferenceVersion}
             highlightedNodeId={highlightedNodeId}
           />
-          <div className="two-column">
-            <PipelinePanel
-              datasetId={selectedDatasetId}
-              onInferenceComplete={() => setInferenceVersion((value) => value + 1)}
-            />
-            <InferenceResults
-              datasetId={selectedDatasetId}
-              refreshKey={inferenceVersion}
-              onNodeFocus={setHighlightedNodeId}
-            />
-          </div>
+          <InferenceResults
+            datasetId={selectedDatasetId}
+            refreshKey={inferenceVersion}
+            onNodeFocus={setHighlightedNodeId}
+          />
         </section>
       </div>
     </main>
