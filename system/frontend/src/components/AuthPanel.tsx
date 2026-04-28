@@ -8,7 +8,7 @@ type Props = {
 type FocusField = "account" | "password" | "register-code" | "login-captcha" | null;
 type MascotMode = "idle" | "peek" | "cover" | "error";
 
-const footerFacts = ["登录图形码实时刷新", "注册邮箱验证码校验", "关系网络风险分析工作台"];
+const footerFacts = ["面向交易关系的风险识别", "辅助定位异常用户", "支持数据接入与图谱分析"];
 
 function EyeIcon({ open }: { open: boolean }) {
   return (
@@ -26,6 +26,17 @@ function EyeIcon({ open }: { open: boolean }) {
           <path d="M6.5 6.8C3.9 8.5 2.5 12 2.5 12s3.4 7 9.5 7c1.5 0 2.8-.4 4-1" />
         </>
       )}
+    </svg>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M20 11a8.1 8.1 0 0 0-14.4-4.8L4 8" />
+      <path d="M4 4v4h4" />
+      <path d="M4 13a8.1 8.1 0 0 0 14.4 4.8L20 16" />
+      <path d="M20 20v-4h-4" />
     </svg>
   );
 }
@@ -74,13 +85,13 @@ function AuthMascot({ side, mode }: { side: "left" | "right"; mode: MascotMode }
 
 export function AuthPanel({ onAuthed }: Props) {
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [account, setAccount] = useState("root");
-  const [password, setPassword] = useState("root");
+  const [account, setAccount] = useState("");
+  const [password, setPassword] = useState("");
   const [registerCode, setRegisterCode] = useState("");
   const [loginCaptchaCode, setLoginCaptchaCode] = useState("");
   const [loginCaptcha, setLoginCaptcha] = useState<LoginCaptchaResponse | null>(null);
   const [captchaRefreshing, setCaptchaRefreshing] = useState(false);
-  const [message, setMessage] = useState("默认演示账号 root / root；输入右侧登录验证码即可进入。");
+  const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
@@ -102,7 +113,7 @@ export function AuthPanel({ onAuthed }: Props) {
   useEffect(() => {
     if (!isLogin) return;
     refreshLoginCaptcha().catch(() => {
-      setMessage("登录验证码加载失败，请确认后端服务已启动。");
+      setMessage("验证码加载失败，请稍后重试。");
     });
   }, [isLogin]);
 
@@ -132,9 +143,8 @@ export function AuthPanel({ onAuthed }: Props) {
       const result = await fetchLoginCaptcha();
       setLoginCaptcha(result);
       setLoginCaptchaCode("");
-      setMessage("登录图形码已刷新，请输入右侧字符。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "登录验证码加载失败，请确认后端服务已启动。");
+      setMessage(error instanceof Error ? error.message : "验证码加载失败，请稍后重试。");
       triggerMascotError();
       throw error;
     } finally {
@@ -144,7 +154,7 @@ export function AuthPanel({ onAuthed }: Props) {
 
   async function handleRegisterCode() {
     if (!account.trim()) {
-      setMessage("请先输入邮箱账号后再获取注册验证码。");
+      setMessage("请输入邮箱账号。");
       triggerMascotError();
       return;
     }
@@ -152,10 +162,10 @@ export function AuthPanel({ onAuthed }: Props) {
     try {
       const result = await requestCode(account);
       setRegisterCode("");
-      setMessage(result.code ? `注册验证码已生成：${result.code}` : result.message);
+      setMessage(result.code ? "验证码已发送，请查看邮箱。" : result.message);
       setCountdown(60);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "注册验证码发送失败。");
+      setMessage(error instanceof Error ? error.message : "验证码发送失败，请稍后重试。");
       triggerMascotError();
     } finally {
       setBusy(false);
@@ -193,11 +203,7 @@ export function AuthPanel({ onAuthed }: Props) {
     setCountdown(0);
     setFocusField(null);
     setShowPassword(false);
-    setMessage(
-      nextMode === "login"
-        ? "登录验证码为页面图形码，输入一致即可登录。"
-        : "注册验证码通过邮箱发送，与登录图形码互不混用。"
-    );
+    setMessage("");
   }
 
   return (
@@ -213,7 +219,7 @@ export function AuthPanel({ onAuthed }: Props) {
       <section className="auth-shell">
         <header className="auth-topbar">
           <div className="brand-mark auth-brand">星</div>
-          <p className="eyebrow">Graph Fraud Intelligence</p>
+          <p className="eyebrow">异常交易识别与关系图谱分析</p>
           <h1>星枢反欺诈分析平台</h1>
         </header>
 
@@ -223,7 +229,7 @@ export function AuthPanel({ onAuthed }: Props) {
           <section className={`auth-card auth-form-card glass-panel ${shakeError ? "card-shake" : ""}`}>
             <div className="auth-card-header compact-header">
               <div>
-                <p className="auth-card-kicker">Identity Gateway</p>
+                <p className="auth-card-kicker">欢迎使用</p>
                 <h2>{heading}</h2>
               </div>
               <div className="segmented auth-mode-switch" aria-label="认证模式切换">
@@ -247,7 +253,7 @@ export function AuthPanel({ onAuthed }: Props) {
                     onChange={(event) => setAccount(event.target.value)}
                     onFocus={() => setFocusField("account")}
                     onBlur={() => setFocusField(null)}
-                    placeholder="请输入邮箱或业务账号"
+                    placeholder="name@example.com"
                   />
                 </div>
               </label>
@@ -263,7 +269,7 @@ export function AuthPanel({ onAuthed }: Props) {
                     onChange={(event) => setPassword(event.target.value)}
                     onFocus={() => setFocusField("password")}
                     onBlur={() => setFocusField(null)}
-                    placeholder={isLogin ? "请输入登录密码" : "请设置账号密码"}
+                    placeholder={isLogin ? "请输入密码" : "请设置密码"}
                   />
                   <button
                     type="button"
@@ -280,7 +286,7 @@ export function AuthPanel({ onAuthed }: Props) {
               {isLogin ? (
                 <div className="login-captcha-grid">
                   <label htmlFor="login-captcha-code">
-                    输入登录验证码
+                    验证码
                     <div className="input-shell">
                       <input
                         id="login-captcha-code"
@@ -289,22 +295,26 @@ export function AuthPanel({ onAuthed }: Props) {
                         onChange={(event) => setLoginCaptchaCode(event.target.value.toUpperCase())}
                         onFocus={() => setFocusField("login-captcha")}
                         onBlur={() => setFocusField(null)}
-                        placeholder="输入右侧字符"
+                        placeholder="输入字符"
                       />
                     </div>
                   </label>
 
-                  <div className="captcha-card login-captcha-card" aria-label="登录验证码">
-                    <small>登录图形码</small>
-                    <button type="button" className="captcha-code" title="点击刷新验证码" onClick={() => refreshLoginCaptcha()} disabled={captchaRefreshing || busy}>
-                      {captchaChars.map((char, index) => (
-                        <span key={`${char}-${index}`}>{char}</span>
-                      ))}
-                    </button>
-                    <button type="button" className="captcha-refresh" onClick={() => refreshLoginCaptcha()} disabled={captchaRefreshing || busy}>
-                      {captchaRefreshing ? "刷新中" : "刷新"}
-                    </button>
-                  </div>
+                  <button type="button" className="captcha-card captcha-code" title="点击刷新验证码" onClick={() => refreshLoginCaptcha()} disabled={captchaRefreshing || busy} aria-label="登录验证码">
+                    {captchaChars.map((char, index) => (
+                      <span key={`${char}-${index}`}>{char}</span>
+                    ))}
+                  </button>
+                  <button
+                    type="button"
+                    className={`captcha-refresh icon-refresh ${captchaRefreshing ? "spinning" : ""}`}
+                    onClick={() => refreshLoginCaptcha()}
+                    disabled={captchaRefreshing || busy}
+                    aria-label="刷新验证码"
+                    title="刷新验证码"
+                  >
+                    <RefreshIcon />
+                  </button>
                 </div>
               ) : (
                 <div className="captcha-row register-row">
@@ -333,7 +343,7 @@ export function AuthPanel({ onAuthed }: Props) {
               </button>
             </form>
 
-            <p className="hint auth-feedback minimal-feedback">{message}</p>
+            {message ? <p className="hint auth-feedback minimal-feedback">{message}</p> : null}
           </section>
 
           <AuthMascot side="right" mode={mascotMode} />
