@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
+from sqlalchemy import select
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -28,6 +29,18 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    from app import models  # noqa: F401
+    from app import models
+    from app.services.security import hash_secret
 
     Base.metadata.create_all(bind=engine)
+    if settings.demo_mode and settings.demo_admin_email and settings.demo_admin_password:
+        with SessionLocal() as db:
+            existing = db.scalar(select(models.User).where(models.User.email == settings.demo_admin_email))
+            if existing is None:
+                db.add(
+                    models.User(
+                        email=settings.demo_admin_email,
+                        password_hash=hash_secret(settings.demo_admin_password),
+                    )
+                )
+                db.commit()
