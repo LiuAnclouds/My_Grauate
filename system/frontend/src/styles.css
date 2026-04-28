@@ -290,6 +290,23 @@ th {
   text-align: left;
 }
 
+tbody tr {
+  cursor: pointer;
+}
+
+tbody tr:hover {
+  background: #f4f9ff;
+}
+
+.reason-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.reason-cell small {
+  color: #6f8092;
+}
+
 th {
   color: #506174;
   font-size: 13px;

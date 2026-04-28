@@ -95,6 +95,8 @@ class InferenceResultItem(BaseModel):
     risk_score: float
     risk_label: str
     reason: str
+    support_neighbors: list[str] = []
+    top_features: list[str] = []
 
 
 class InferenceRunResponse(BaseModel):

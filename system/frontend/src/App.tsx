@@ -9,6 +9,12 @@ export default function App() {
   const [email, setEmail] = useState<string | null>(null);
   const [selectedDatasetId, setSelectedDatasetId] = useState<number | null>(null);
   const [inferenceVersion, setInferenceVersion] = useState(0);
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
+
+  function handleDatasetSelect(datasetId: number) {
+    setSelectedDatasetId(datasetId);
+    setHighlightedNodeId(null);
+  }
 
   return (
     <main>
@@ -22,16 +28,24 @@ export default function App() {
       <div className="layout">
         <aside>
           <AuthPanel onAuthed={setEmail} />
-          <DataUpload selectedDatasetId={selectedDatasetId} onSelect={setSelectedDatasetId} />
+          <DataUpload selectedDatasetId={selectedDatasetId} onSelect={handleDatasetSelect} />
         </aside>
         <section className="workspace">
-          <GraphWorkspace datasetId={selectedDatasetId} refreshKey={inferenceVersion} />
+          <GraphWorkspace
+            datasetId={selectedDatasetId}
+            refreshKey={inferenceVersion}
+            highlightedNodeId={highlightedNodeId}
+          />
           <div className="two-column">
             <PipelinePanel
               datasetId={selectedDatasetId}
               onInferenceComplete={() => setInferenceVersion((value) => value + 1)}
             />
-            <InferenceResults datasetId={selectedDatasetId} refreshKey={inferenceVersion} />
+            <InferenceResults
+              datasetId={selectedDatasetId}
+              refreshKey={inferenceVersion}
+              onNodeFocus={setHighlightedNodeId}
+            />
           </div>
         </section>
       </div>

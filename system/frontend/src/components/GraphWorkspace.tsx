@@ -5,9 +5,10 @@ import { fetchGraph, GraphResponse } from "../services/api";
 type Props = {
   datasetId: number | null;
   refreshKey: number;
+  highlightedNodeId: string | null;
 };
 
-export function GraphWorkspace({ datasetId, refreshKey }: Props) {
+export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const [graph, setGraph] = useState<GraphResponse | null>(null);
@@ -36,7 +37,8 @@ export function GraphWorkspace({ datasetId, refreshKey }: Props) {
             size: node.size,
             color: node.color,
             riskScore: node.risk_score,
-            riskLabel: node.risk_label
+            riskLabel: node.risk_label,
+            focused: node.id === highlightedNodeId ? "yes" : "no"
           }
         })),
         ...graph.edges.map((edge) => ({
@@ -44,7 +46,8 @@ export function GraphWorkspace({ datasetId, refreshKey }: Props) {
             id: edge.id,
             source: edge.source,
             target: edge.target,
-            label: edge.edge_type
+            label: edge.edge_type,
+            focused: edge.source === highlightedNodeId || edge.target === highlightedNodeId ? "yes" : "no"
           }
         }))
       ],
@@ -77,6 +80,14 @@ export function GraphWorkspace({ datasetId, refreshKey }: Props) {
           }
         },
         {
+          selector: 'node[focused = "yes"]',
+          style: {
+            "background-color": "#1f7aec",
+            "border-color": "#0b3d91",
+            "border-width": 5
+          }
+        },
+        {
           selector: "edge",
           style: {
             width: 1.5,
@@ -84,6 +95,14 @@ export function GraphWorkspace({ datasetId, refreshKey }: Props) {
             "target-arrow-color": "#9aa8b6",
             "target-arrow-shape": "triangle",
             "curve-style": "bezier"
+          }
+        },
+        {
+          selector: 'edge[focused = "yes"]',
+          style: {
+            width: 3,
+            "line-color": "#1f7aec",
+            "target-arrow-color": "#1f7aec"
           }
         },
         {
@@ -106,7 +125,7 @@ export function GraphWorkspace({ datasetId, refreshKey }: Props) {
       cyRef.current?.destroy();
       cyRef.current = null;
     };
-  }, [graph]);
+  }, [graph, highlightedNodeId]);
 
   return (
     <section className="panel graph-panel">

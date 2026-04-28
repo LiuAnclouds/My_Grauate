@@ -327,6 +327,10 @@ def _result_items(
                 risk_score=float(record.risk_score),
                 risk_label=record.risk_label,
                 reason=str(explanation.get("reason") or ""),
+                support_neighbors=[
+                    str(value) for value in (explanation.get("support_neighbors") or [])
+                ],
+                top_features=[str(value) for value in (explanation.get("top_features") or [])],
             )
         )
     return items

@@ -59,6 +59,8 @@ export type InferenceResultItem = {
   risk_score: number;
   risk_label: string;
   reason: string;
+  support_neighbors: string[];
+  top_features: string[];
 };
 
 export type InferenceRunResponse = {
