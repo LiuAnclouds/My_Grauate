@@ -79,6 +79,7 @@ export function AuthPanel({ onAuthed }: Props) {
   const [registerCode, setRegisterCode] = useState("");
   const [loginCaptchaCode, setLoginCaptchaCode] = useState("");
   const [loginCaptcha, setLoginCaptcha] = useState<LoginCaptchaResponse | null>(null);
+  const [captchaRefreshing, setCaptchaRefreshing] = useState(false);
   const [message, setMessage] = useState("默认演示账号 root / root；输入右侧登录验证码即可进入。");
   const [busy, setBusy] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -126,9 +127,19 @@ export function AuthPanel({ onAuthed }: Props) {
   }, [shakeError]);
 
   async function refreshLoginCaptcha() {
-    const result = await fetchLoginCaptcha();
-    setLoginCaptcha(result);
-    setLoginCaptchaCode("");
+    setCaptchaRefreshing(true);
+    try {
+      const result = await fetchLoginCaptcha();
+      setLoginCaptcha(result);
+      setLoginCaptchaCode("");
+      setMessage("登录图形码已刷新，请输入右侧字符。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "登录验证码加载失败，请确认后端服务已启动。");
+      triggerMascotError();
+      throw error;
+    } finally {
+      setCaptchaRefreshing(false);
+    }
   }
 
   async function handleRegisterCode() {
@@ -192,6 +203,7 @@ export function AuthPanel({ onAuthed }: Props) {
   return (
     <main className="auth-stage">
       <div className="auth-background-grid" />
+      <div className="auth-noise" />
       <div className="auth-constellation auth-constellation-one" />
       <div className="auth-constellation auth-constellation-two" />
       <div className="auth-glow auth-glow-one" />
@@ -284,13 +296,13 @@ export function AuthPanel({ onAuthed }: Props) {
 
                   <div className="captcha-card login-captcha-card" aria-label="登录验证码">
                     <small>登录图形码</small>
-                    <button type="button" className="captcha-code" title="点击刷新验证码" onClick={() => refreshLoginCaptcha()}>
+                    <button type="button" className="captcha-code" title="点击刷新验证码" onClick={() => refreshLoginCaptcha()} disabled={captchaRefreshing || busy}>
                       {captchaChars.map((char, index) => (
                         <span key={`${char}-${index}`}>{char}</span>
                       ))}
                     </button>
-                    <button type="button" className="captcha-refresh" onClick={() => refreshLoginCaptcha()} disabled={busy}>
-                      刷新
+                    <button type="button" className="captcha-refresh" onClick={() => refreshLoginCaptcha()} disabled={captchaRefreshing || busy}>
+                      {captchaRefreshing ? "刷新中" : "刷新"}
                     </button>
                   </div>
                 </div>

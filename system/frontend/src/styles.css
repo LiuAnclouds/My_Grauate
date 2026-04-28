@@ -348,7 +348,6 @@ label {
 .secondary:hover,
 .ghost-button:hover,
 .ghost-inline:hover,
-.input-action:hover,
 .segmented button:hover {
   transform: translateY(-1px);
 }
@@ -1143,27 +1142,29 @@ tbody tr:hover {
   isolation: isolate;
   min-height: 100vh;
   background:
-    linear-gradient(120deg, rgba(8, 18, 32, 0.94) 0%, rgba(17, 45, 64, 0.9) 48%, rgba(238, 246, 245, 0.98) 100%),
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 22px);
+    radial-gradient(circle at 14% 18%, rgba(56, 189, 248, 0.2), transparent 0 24%),
+    radial-gradient(circle at 82% 16%, rgba(99, 102, 241, 0.18), transparent 0 26%),
+    radial-gradient(circle at 78% 74%, rgba(250, 204, 21, 0.2), transparent 0 24%),
+    linear-gradient(145deg, #edf5ff 0%, #f8fbff 38%, #eef8f5 100%);
 }
 
 .auth-stage::before {
   inset: 18px;
-  border-radius: 34px;
-  border-color: rgba(255, 255, 255, 0.22);
+  border-radius: 36px;
+  border-color: rgba(255, 255, 255, 0.5);
   background:
-    radial-gradient(circle at 12% 16%, rgba(248, 214, 116, 0.18) 0 10px, transparent 11px),
-    radial-gradient(circle at 88% 76%, rgba(74, 222, 128, 0.13) 0 8px, transparent 9px),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 62%);
+    radial-gradient(circle at 10% 14%, rgba(255, 255, 255, 0.42) 0 14px, transparent 15px),
+    radial-gradient(circle at 88% 78%, rgba(255, 255, 255, 0.28) 0 11px, transparent 12px),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.08));
 }
 
 .auth-background-grid {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.24) 0 1px, transparent 2px);
-  background-size: 42px 42px, 42px 42px, 84px 84px;
-  mask-image: radial-gradient(circle at center, black 18%, transparent 84%);
+    linear-gradient(rgba(255, 255, 255, 0.45) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.45) 1px, transparent 1px);
+  background-size: 42px 42px;
+  opacity: 0.6;
+  mask-image: radial-gradient(circle at center, black 28%, transparent 86%);
 }
 
 .auth-constellation {
@@ -1172,13 +1173,13 @@ tbody tr:hover {
   width: 420px;
   height: 260px;
   pointer-events: none;
-  opacity: 0.34;
+  opacity: 0.44;
   background:
-    linear-gradient(35deg, transparent 49%, rgba(246, 195, 80, 0.58) 50%, transparent 51%),
-    linear-gradient(-28deg, transparent 49%, rgba(63, 214, 181, 0.48) 50%, transparent 51%),
-    radial-gradient(circle at 12% 70%, rgba(255, 255, 255, 0.9) 0 3px, transparent 4px),
-    radial-gradient(circle at 43% 30%, rgba(246, 195, 80, 0.9) 0 4px, transparent 5px),
-    radial-gradient(circle at 76% 58%, rgba(63, 214, 181, 0.88) 0 3px, transparent 4px);
+    linear-gradient(34deg, transparent 49%, rgba(59, 130, 246, 0.34) 50%, transparent 51%),
+    linear-gradient(-28deg, transparent 49%, rgba(16, 185, 129, 0.28) 50%, transparent 51%),
+    radial-gradient(circle at 12% 70%, rgba(255, 255, 255, 0.95) 0 3px, transparent 4px),
+    radial-gradient(circle at 43% 30%, rgba(250, 204, 21, 0.9) 0 4px, transparent 5px),
+    radial-gradient(circle at 76% 58%, rgba(45, 212, 191, 0.88) 0 3px, transparent 4px);
 }
 
 .auth-constellation-one {
@@ -1194,21 +1195,21 @@ tbody tr:hover {
 }
 
 .auth-glow {
-  border-radius: 36% 64% 42% 58%;
-  filter: blur(34px);
-  opacity: 0.44;
+  border-radius: 44% 56% 52% 48%;
+  filter: blur(44px);
+  opacity: 0.58;
 }
 
 .auth-glow-one {
-  background: rgba(61, 198, 168, 0.2);
+  background: rgba(56, 189, 248, 0.24);
 }
 
 .auth-glow-two {
-  background: rgba(37, 99, 235, 0.2);
+  background: rgba(99, 102, 241, 0.2);
 }
 
 .auth-glow-three {
-  background: rgba(245, 158, 11, 0.18);
+  background: rgba(250, 204, 21, 0.22);
 }
 
 .auth-shell {
@@ -1217,43 +1218,45 @@ tbody tr:hover {
 }
 
 .auth-topbar {
-  color: #f8fbff;
+  color: #152334;
 }
 
 .auth-topbar .eyebrow {
   margin: 0;
-  color: rgba(229, 239, 250, 0.72);
+  color: #62748b;
 }
 
 .auth-topbar h1 {
-  font-family: "Microsoft YaHei", "PingFang SC", "Fira Sans", sans-serif;
+  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
   font-size: clamp(34px, 5vw, 56px);
-  letter-spacing: 0;
-  text-shadow: 0 18px 38px rgba(0, 0, 0, 0.26);
+  letter-spacing: -0.03em;
+  text-shadow: 0 12px 28px rgba(255, 255, 255, 0.52);
 }
 
 .auth-brand {
-  background: linear-gradient(135deg, #f6c350 0%, #2dd4bf 52%, #2563eb 100%);
+  background: linear-gradient(135deg, #f6c350 0%, #39c4f0 55%, #2563eb 100%);
   color: #07111f;
-  box-shadow: 0 22px 58px rgba(37, 99, 235, 0.28);
+  box-shadow: 0 24px 58px rgba(37, 99, 235, 0.22);
 }
 
 .auth-main-layout {
   grid-template-columns: minmax(180px, 240px) minmax(430px, 500px) minmax(180px, 240px);
-  gap: clamp(16px, 3vw, 36px);
-  padding-top: 4px;
+  gap: clamp(18px, 3vw, 40px);
+  padding-top: 10px;
 }
 
 .auth-form-card {
   justify-self: center;
   width: min(500px, 100%);
-  padding: 30px;
-  border-radius: 26px;
+  padding: 32px;
+  border-radius: 30px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(241, 247, 252, 0.86)),
-    linear-gradient(135deg, rgba(45, 212, 191, 0.14), rgba(245, 158, 11, 0.1));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(243, 248, 255, 0.88)),
+    linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(45, 212, 191, 0.08));
   border: 1px solid rgba(255, 255, 255, 0.78);
-  box-shadow: 0 28px 90px rgba(4, 12, 24, 0.26);
+  box-shadow:
+    0 36px 100px rgba(37, 99, 235, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .compact-header {
@@ -1269,7 +1272,6 @@ tbody tr:hover {
   color: #57708d;
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0;
 }
 
 .compact-header h2 {
@@ -1279,10 +1281,10 @@ tbody tr:hover {
 
 .auth-mode-switch {
   justify-self: center;
-  min-width: 210px;
+  min-width: 214px;
   justify-content: center;
   border: 1px solid rgba(204, 217, 232, 0.86);
-  background: rgba(230, 238, 247, 0.82);
+  background: rgba(230, 238, 247, 0.9);
 }
 
 .auth-mode-switch button {
@@ -1327,32 +1329,33 @@ tbody tr:hover {
 }
 
 .eye-action:hover {
-  transform: translateY(-50%);
   background: #dbeafe;
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
 }
 
 .login-captcha-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 158px;
+  grid-template-columns: minmax(0, 1fr) 166px;
   gap: 12px;
   align-items: end;
 }
 
 .login-captcha-card {
-  min-height: 78px;
+  min-height: 96px;
   display: grid;
   align-content: center;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 18px;
   border: 1px solid rgba(135, 156, 184, 0.55);
   background:
     linear-gradient(20deg, transparent 42%, rgba(37, 99, 235, 0.16) 43%, transparent 46%),
     linear-gradient(-22deg, transparent 48%, rgba(15, 118, 110, 0.14) 49%, transparent 52%),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.58) 0 7px, rgba(226, 236, 246, 0.72) 7px 14px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.74) 0 8px, rgba(226, 236, 246, 0.84) 8px 16px),
     #f8fbff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.78),
+    0 12px 28px rgba(37, 99, 235, 0.08);
 }
 
 .login-captcha-card small {
@@ -1363,21 +1366,27 @@ tbody tr:hover {
 
 .captcha-code {
   width: 100%;
-  min-height: 36px;
+  min-height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   border: 0;
-  border-radius: 10px;
-  background: transparent;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.54);
   color: #12376d;
   cursor: pointer;
   font-family: "Fira Code", Consolas, "Courier New", monospace;
   font-size: 25px;
   font-weight: 800;
-  letter-spacing: 0;
+  letter-spacing: 0.02em;
   user-select: none;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.captcha-code:hover {
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
 }
 
 .captcha-code span {
@@ -1396,10 +1405,10 @@ tbody tr:hover {
 
 .captcha-refresh {
   justify-self: center;
-  min-height: 24px;
-  padding: 3px 10px;
+  min-height: 28px;
+  padding: 4px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.84);
   border: 1px solid rgba(186, 201, 221, 0.86);
   color: #35526f;
   font-size: 12px;
@@ -1410,22 +1419,28 @@ tbody tr:hover {
   min-height: 48px;
 }
 
+.auth-feedback {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(248, 251, 255, 0.82);
+  border: 1px solid rgba(212, 224, 240, 0.86);
+}
+
 .mascot-stage {
   position: relative;
   width: 100%;
-  min-height: 300px;
+  min-height: 316px;
   display: grid;
   place-items: center;
   align-content: center;
   gap: 10px;
-  order: initial;
   perspective: 900px;
 }
 
 .mascot-figure {
   position: relative;
-  width: 168px;
-  height: 232px;
+  width: 176px;
+  height: 244px;
   animation: mascotFloat 4.8s ease-in-out infinite;
   transform-origin: 50% 85%;
   transition: transform 0.38s ease;
@@ -1438,23 +1453,23 @@ tbody tr:hover {
 .mascot-neck {
   position: absolute;
   z-index: 1;
-  left: 68px;
-  top: 84px;
+  left: 71px;
+  top: 88px;
   width: 34px;
-  height: 60px;
+  height: 64px;
   border: 4px solid #263548;
   border-radius: 18px;
-  background: linear-gradient(180deg, #f7d9a8, #edbd78);
+  background: linear-gradient(180deg, #f9ddb0, #efc27f);
   transition: transform 0.35s ease, height 0.35s ease;
 }
 
 .mascot-head {
   position: absolute;
   z-index: 4;
-  left: 35px;
+  left: 38px;
   top: 12px;
-  width: 98px;
-  height: 98px;
+  width: 100px;
+  height: 100px;
   border: 4px solid #263548;
   border-radius: 42% 42% 48% 48%;
   background: linear-gradient(150deg, #ffe8b8 0%, #f4c37f 72%);
@@ -1463,7 +1478,7 @@ tbody tr:hover {
 }
 
 .mascot-right .mascot-head {
-  background: linear-gradient(150deg, #d7f8ef 0%, #8bd9cb 72%);
+  background: linear-gradient(150deg, #dbfaf1 0%, #91decd 72%);
 }
 
 .mascot-ear {
@@ -1548,12 +1563,12 @@ tbody tr:hover {
 .mascot-body {
   position: absolute;
   z-index: 3;
-  left: 21px;
-  top: 130px;
-  width: 126px;
-  height: 86px;
+  left: 24px;
+  top: 138px;
+  width: 128px;
+  height: 88px;
   border: 4px solid #263548;
-  border-radius: 38px 38px 28px 28px;
+  border-radius: 40px 40px 28px 28px;
   background: linear-gradient(150deg, #2c6be0 0%, #0f766e 100%);
   transition: transform 0.35s ease;
 }
@@ -1575,7 +1590,7 @@ tbody tr:hover {
   border: 4px solid #263548;
   border-top: 0;
   border-radius: 0 0 22px 22px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .mascot-core {
@@ -1594,7 +1609,7 @@ tbody tr:hover {
   z-index: 6;
   top: 12px;
   width: 22px;
-  height: 72px;
+  height: 78px;
   border: 4px solid #263548;
   border-radius: 999px;
   background: #f3c17f;
@@ -1632,17 +1647,17 @@ tbody tr:hover {
   height: 22px;
   margin-top: -10px;
   border-radius: 999px;
-  background: rgba(3, 10, 20, 0.22);
-  filter: blur(7px);
+  background: rgba(32, 64, 107, 0.14);
+  filter: blur(8px);
 }
 
 .mascot-label {
-  min-width: 104px;
+  min-width: 110px;
   padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.52);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  color: rgba(248, 251, 255, 0.86);
+  background: rgba(255, 255, 255, 0.46);
+  color: #34506f;
   font-size: 12px;
   font-weight: 800;
   text-align: center;
@@ -1651,7 +1666,7 @@ tbody tr:hover {
 
 .mascot-orbit {
   position: absolute;
-  inset: 16px 6px auto;
+  inset: 18px 8px auto;
   height: 168px;
   pointer-events: none;
 }
@@ -1693,24 +1708,24 @@ tbody tr:hover {
 }
 
 .mascot-peek .mascot-head {
-  transform: translateY(-7px) rotate(-10deg);
+  transform: translateY(-9px) rotate(-12deg);
 }
 
 .mascot-right.mascot-peek .mascot-head {
-  transform: translateY(-7px) rotate(10deg);
+  transform: translateY(-9px) rotate(12deg);
 }
 
 .mascot-peek .mascot-neck {
-  height: 74px;
-  transform: translateY(-8px);
+  height: 82px;
+  transform: translateY(-10px);
 }
 
 .mascot-peek .mascot-body {
-  transform: rotate(-5deg) translateX(5px);
+  transform: rotate(-8deg) translateX(10px);
 }
 
 .mascot-right.mascot-peek .mascot-body {
-  transform: rotate(5deg) translateX(-5px);
+  transform: rotate(8deg) translateX(-10px);
 }
 
 .mascot-peek .mascot-eye span {
@@ -1721,27 +1736,23 @@ tbody tr:hover {
   transform: translate(-5px, -1px);
 }
 
-.mascot-cover .mascot-head {
-  transform: translateY(0) rotate(0);
-}
-
 .mascot-cover .mascot-figure {
   animation: none;
 }
 
 .mascot-cover .mascot-eye span {
-  transform: scale(0.8);
+  transform: scale(0.82);
 }
 
 .mascot-cover .mascot-arm.left {
-  top: -112px;
-  left: 30px;
+  top: -114px;
+  left: 34px;
   transform: rotate(68deg);
 }
 
 .mascot-cover .mascot-arm.right {
-  top: -112px;
-  right: 30px;
+  top: -114px;
+  right: 34px;
   transform: rotate(-68deg);
 }
 
@@ -1842,6 +1853,19 @@ tbody tr:hover {
   .login-captcha-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.auth-noise {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.08;
+  background-image:
+    radial-gradient(circle at 20% 20%, #000 0 0.8px, transparent 0.9px),
+    radial-gradient(circle at 80% 30%, #000 0 0.7px, transparent 0.8px),
+    radial-gradient(circle at 35% 75%, #000 0 0.75px, transparent 0.85px);
+  background-size: 140px 140px, 170px 170px, 190px 190px;
+  mix-blend-mode: soft-light;
 }
 
 @media (prefers-reduced-motion: reduce) {

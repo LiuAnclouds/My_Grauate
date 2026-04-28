@@ -16,7 +16,7 @@ BACKEND_DIR = SYSTEM_ROOT / "backend"
 FRONTEND_DIR = SYSTEM_ROOT / "frontend"
 
 BACKEND_HOST = "127.0.0.1"
-BACKEND_PORT = 8000
+BACKEND_PORT = 8001
 FRONTEND_PORT = 5173
 
 
@@ -50,11 +50,8 @@ def main() -> None:
     # ---------- 前端 ----------
     npm = "npm.cmd" if sys.platform == "win32" else "npm"
     frontend_cmd = [npm, "run", "dev"]
-
-    # 如果后端不在默认 8000，临时设置 Vite 环境变量不方便，
-    # 这里直接提醒用户需要同步 vite.config.ts 里的 proxy 端口。
-    if backend_port != BACKEND_PORT:
-        print(f"[提醒] 后端实际端口为 {backend_port}，请确认 vite.config.ts 中 proxy 指向一致。")
+    frontend_env = os.environ.copy()
+    frontend_env["VITE_API_TARGET"] = f"http://{BACKEND_HOST}:{backend_port}"
 
     print("=" * 56)
     print("  星枢反欺诈平台 · 开发环境启动")
@@ -71,7 +68,7 @@ def main() -> None:
 
         time.sleep(1)
 
-        frontend_proc = subprocess.Popen(frontend_cmd, cwd=str(FRONTEND_DIR))
+        frontend_proc = subprocess.Popen(frontend_cmd, cwd=str(FRONTEND_DIR), env=frontend_env)
         procs.append(frontend_proc)
 
         for proc in procs:
