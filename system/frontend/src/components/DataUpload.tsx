@@ -125,14 +125,14 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
   }, []);
 
   return (
-    <section className="business-network-page">
+    <section className="business-network-page app-module-page">
       <div className="business-network-layout">
-        <div className="network-directory-panel">
-          <div className="business-module-heading">
+        <div className="network-directory-panel app-panel">
+          <div className="business-module-heading app-section-heading">
             <div>
               <p className="eyebrow">Business Networks</p>
-              <h2>业务网络</h2>
-              <p>选择需要分析的业务网络，或导入业务文件建立新的网络。</p>
+              <h2>业务网络目录</h2>
+              <p>统一管理演示网络、已接入数据集与导入入口，为关系建图和后续研判提供分析底座。</p>
             </div>
             <span className="directory-count">{datasets.length || defaultNetworks.length} 个网络</span>
           </div>
@@ -163,7 +163,7 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
             )}
           </div>
 
-          <div className="network-registry">
+          <div className="network-registry app-panel subtle-panel">
             <div className="registry-heading">
               <strong>可注册业务网络</strong>
               <span>测试阶段可直接接入系统内置网络</span>
@@ -186,8 +186,8 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
           </div>
         </div>
 
-        <aside className="network-side-stack">
-          <div className="selected-network-card">
+        <aside className="network-side-stack app-context-rail">
+          <div className="selected-network-card app-panel emphasis-panel">
             <div className="side-card-heading">
               <span>当前网络</span>
               {selectedDataset ? <em className={`status-badge status-${selectedDataset.status}`}>{formatStatus(selectedDataset.status)}</em> : null}
@@ -221,7 +221,7 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
             )}
           </div>
 
-          <div className="network-import-card">
+          <div className="network-import-card app-panel">
             <div className="side-card-heading">
               <span>导入业务文件</span>
               <em>CSV</em>
@@ -237,7 +237,7 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
           </div>
 
           {mapping ? (
-            <div className="network-import-result">
+            <div className="network-import-result app-panel success-panel">
               <div className="side-card-heading">
                 <span>文件已识别</span>
                 <em>{mapping.method}</em>

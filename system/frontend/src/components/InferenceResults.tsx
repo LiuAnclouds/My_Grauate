@@ -44,7 +44,7 @@ export function InferenceResults({ datasetId, refreshKey, onNodeFocus }: Props) 
   const normalCount = rows.length - abnormalCount;
 
   return (
-    <section className="panel panel-stack result-panel risk-ledger-panel">
+    <section className="panel panel-stack result-panel risk-ledger-panel app-panel">
       <div className="ledger-header">
         <div>
           <p className="eyebrow">Risk Ledger</p>

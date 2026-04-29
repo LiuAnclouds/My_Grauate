@@ -179,8 +179,8 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
   }, [graph, activeNodeId, nodeMap]);
 
   return (
-    <section className={compact ? "panel graph-panel workspace-panel graph-page-panel compact-graph-panel" : "panel graph-panel workspace-panel graph-page-panel"}>
-      <div className="graph-panel-top">
+    <section className={compact ? "panel graph-panel workspace-panel graph-page-panel compact-graph-panel app-panel" : "panel graph-panel workspace-panel graph-page-panel app-panel graph-investigation-panel"}>
+      <div className="graph-panel-top app-section-heading">
         <div>
           <p className="eyebrow">Relationship Network</p>
           <h2>关系网络图</h2>
@@ -202,7 +202,7 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
             </div>
           ) : null}
         </div>
-        <aside className="graph-sidecard insight-card">
+        <aside className="graph-sidecard insight-card app-secondary-rail-card">
           <h3>对象画像</h3>
           {selectedNode ? (
             <div className="detail-list">

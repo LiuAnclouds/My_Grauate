@@ -122,7 +122,7 @@ export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: P
   }
 
   return (
-    <section className="panel panel-stack analysis-process-panel">
+    <section className="panel panel-stack analysis-process-panel app-panel">
       <div className="panel-heading aligned-start split-heading">
         <div>
           <p className="eyebrow">Process Center</p>
