@@ -114,14 +114,46 @@ export type InferenceRunResponse = {
 
 const API_BASE = "/api";
 
+function normalizeApiError(message: string, status?: number) {
+  const text = message.trim();
+  if (!text || text === "Failed to fetch" || text === "NetworkError when attempting to fetch resource.") {
+    return "服务暂时无法连接，请确认后端已启动后重试。";
+  }
+  if (status === 404) {
+    return "服务接口暂时不可用，请刷新页面或重启后端后重试。";
+  }
+  if (text.includes("email already registered")) {
+    return "该邮箱已注册，请直接登录或更换邮箱。";
+  }
+  if (text.includes("invalid or expired verification code")) {
+    return "邮箱验证码错误或已过期，请重新获取。";
+  }
+  if (text.includes("invalid email or password")) {
+    return "邮箱账号或密码不正确，请重新输入。";
+  }
+  return text;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
-    ...init
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
+      ...init
+    });
+  } catch (error) {
+    throw new Error(normalizeApiError(error instanceof Error ? error.message : ""));
+  }
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Request failed: ${response.status}`);
+    let message = "";
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const payload = (await response.json().catch(() => null)) as { detail?: unknown; message?: unknown } | null;
+      message = String(payload?.detail ?? payload?.message ?? "");
+    } else {
+      message = await response.text();
+    }
+    throw new Error(normalizeApiError(message || `Request failed: ${response.status}`, response.status));
   }
   return response.json() as Promise<T>;
 }

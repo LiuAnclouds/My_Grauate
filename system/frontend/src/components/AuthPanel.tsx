@@ -8,6 +8,7 @@ type Props = {
 type FocusField = "account" | "password" | "register-code" | "login-captcha" | null;
 type MascotMode = "idle" | "peek" | "cover" | "error";
 type MascotTarget = "idle" | "account" | "password" | "captcha" | "error";
+type FeedbackType = "info" | "success" | "error";
 
 const footerFacts = ["面向交易关系的风险识别", "辅助定位异常用户", "支持数据接入与图谱分析"];
 
@@ -190,6 +191,7 @@ export function AuthPanel({ onAuthed }: Props) {
   const [loginCaptcha, setLoginCaptcha] = useState<LoginCaptchaResponse | null>(null);
   const [captchaRefreshing, setCaptchaRefreshing] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<FeedbackType>("info");
   const [busy, setBusy] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
@@ -251,10 +253,15 @@ export function AuthPanel({ onAuthed }: Props) {
     setPointerLook({ x, y });
   }
 
+  function showMessage(text: string, type: FeedbackType = "info") {
+    setMessage(text);
+    setMessageType(type);
+  }
+
   useEffect(() => {
     if (!isLogin) return;
     refreshLoginCaptcha().catch(() => {
-      setMessage("验证码加载失败，请稍后重试。");
+      showMessage("登录验证码加载失败，请稍后重试。", "error");
     });
   }, [isLogin]);
 
@@ -285,7 +292,7 @@ export function AuthPanel({ onAuthed }: Props) {
       setLoginCaptcha(result);
       setLoginCaptchaCode("");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "验证码加载失败，请稍后重试。");
+      showMessage(error instanceof Error ? error.message : "登录验证码加载失败，请稍后重试。", "error");
       triggerMascotError();
       throw error;
     } finally {
@@ -295,7 +302,7 @@ export function AuthPanel({ onAuthed }: Props) {
 
   async function handleRegisterCode() {
     if (!account.trim()) {
-      setMessage("请输入邮箱账号。");
+      showMessage("请先输入邮箱账号。", "error");
       triggerMascotError();
       return;
     }
@@ -303,10 +310,10 @@ export function AuthPanel({ onAuthed }: Props) {
     try {
       const result = await requestCode(account);
       setRegisterCode("");
-      setMessage(result.code ? "验证码已发送，请查看邮箱。" : result.message);
+      showMessage(result.code ? "邮箱验证码已发送，请查收邮件。" : result.message, "success");
       setCountdown(60);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "验证码发送失败，请稍后重试。");
+      showMessage(error instanceof Error ? error.message : "邮箱验证码发送失败，请稍后重试。", "error");
       triggerMascotError();
     } finally {
       setBusy(false);
@@ -320,10 +327,10 @@ export function AuthPanel({ onAuthed }: Props) {
       const result = isLogin
         ? await login(account, password, loginCaptcha?.captcha_id ?? "", loginCaptchaCode)
         : await register(account, password, registerCode);
-      setMessage(result.message);
+      showMessage(result.message, "success");
       onAuthed(result);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "认证失败。");
+      showMessage(error instanceof Error ? error.message : "认证失败，请检查输入后重试。", "error");
       triggerMascotError();
       if (isLogin) {
         refreshLoginCaptcha().catch(() => undefined);
@@ -344,7 +351,7 @@ export function AuthPanel({ onAuthed }: Props) {
     setCountdown(0);
     setFocusField(null);
     setShowPassword(false);
-    setMessage("");
+    showMessage("", "info");
   }
 
   return (
@@ -484,7 +491,7 @@ export function AuthPanel({ onAuthed }: Props) {
               </button>
             </form>
 
-            {message ? <p className="hint auth-feedback minimal-feedback">{message}</p> : null}
+            {message ? <p className={`hint auth-feedback minimal-feedback ${messageType}`}>{message}</p> : null}
           </section>
 
           <AuthMascot side="right" mode={mascotMode} target={mascotTarget} style={getMascotStyle("right")} />
