@@ -5942,3 +5942,139 @@ tbody tr:hover {
     transition: none;
   }
 }
+
+/* Sidebar fill and typography refinement. */
+.app-sidebar__rail {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-sidebar__brand {
+  flex: 0 0 auto;
+}
+
+.app-sidebar__nav-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 2px;
+}
+
+.app-nav-group {
+  min-height: 0;
+}
+
+.app-nav-group--analysis {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-nav-group--analysis .app-nav-group__items {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-nav-group--analysis .app-nav-item {
+  flex: 1 1 0;
+  min-height: 74px;
+  max-height: 92px;
+}
+
+.app-nav-group--system {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+
+.app-nav-group--system .app-nav-item {
+  min-height: 78px;
+}
+
+.app-nav-item {
+  align-items: center;
+  padding: 12px 12px;
+}
+
+.app-nav-item__copy {
+  gap: 3px;
+  align-content: center;
+}
+
+.app-nav-item__copy small {
+  color: #7c8fa8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.app-nav-item__copy strong {
+  color: #102235;
+  font-size: 16px;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.app-nav-item__copy em {
+  color: #5f7288;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.app-nav-item.active .app-nav-item__copy small {
+  color: #6685a9;
+}
+
+.app-nav-item.active .app-nav-item__copy em {
+  color: #496178;
+}
+
+.is-collapsed .app-sidebar__nav-list {
+  gap: 10px;
+}
+
+.is-collapsed .app-nav-group--analysis .app-nav-group__items {
+  gap: 7px;
+}
+
+.is-collapsed .app-nav-group--analysis .app-nav-item {
+  min-height: 70px;
+  max-height: 82px;
+}
+
+.is-collapsed .app-nav-group--system .app-nav-item {
+  min-height: 70px;
+}
+
+.is-collapsed .app-nav-item__copy strong {
+  max-width: 72px;
+  color: #33475f;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+@media (max-height: 760px) and (min-width: 981px) {
+  .app-sidebar__rail {
+    overflow: auto;
+  }
+
+  .app-nav-group--analysis .app-nav-item {
+    flex: 0 0 auto;
+    min-height: 66px;
+  }
+
+  .app-nav-group--system .app-nav-item {
+    min-height: 66px;
+  }
+}

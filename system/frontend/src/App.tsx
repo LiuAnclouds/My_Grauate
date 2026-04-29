@@ -6,12 +6,12 @@ import { AuthenticatedAppShell, NavItem } from "./components/layout/Authenticate
 export type AppPage = "monitor" | "access" | "network" | "analysis" | "cases" | "admin";
 
 const navItems: NavItem[] = [
-  { key: "monitor", label: "风险工作台", eyebrow: "Overview", description: "查看当前态势、待处理风险与下一步动作", shortLabel: "工作台" },
-  { key: "access", label: "业务网络", eyebrow: "Network", description: "接入、注册或切换待分析业务网络", shortLabel: "网络" },
-  { key: "network", label: "关系图谱", eyebrow: "Graph", description: "查看对象关系、交易链路与关联结构", shortLabel: "图谱" },
-  { key: "analysis", label: "智能研判", eyebrow: "Analysis", description: "执行风险识别并跟踪研判过程", shortLabel: "研判" },
-  { key: "cases", label: "风险对象", eyebrow: "Risk", description: "复核异常对象、风险分数与关联线索", shortLabel: "对象" },
-  { key: "admin", label: "系统设置", eyebrow: "System", description: "管理账号、运行状态与系统配置", shortLabel: "设置" }
+  { key: "monitor", label: "风险工作台", eyebrow: "Overview", description: "查看风险态势与待处理事项", shortLabel: "工作台" },
+  { key: "access", label: "业务网络", eyebrow: "Network", description: "接入或切换待分析业务网络", shortLabel: "网络" },
+  { key: "network", label: "关系图谱", eyebrow: "Graph", description: "浏览对象关系与交易链路", shortLabel: "图谱" },
+  { key: "analysis", label: "智能研判", eyebrow: "Analysis", description: "启动识别任务并跟踪过程", shortLabel: "研判" },
+  { key: "cases", label: "风险对象", eyebrow: "Risk", description: "复核异常对象与关联线索", shortLabel: "对象" },
+  { key: "admin", label: "系统设置", eyebrow: "System", description: "管理账号、状态与系统配置", shortLabel: "设置" }
 ];
 
 const monitorCards = [
