@@ -1318,6 +1318,17 @@ tbody tr:hover {
   padding-right: 58px;
 }
 
+.with-action input[type="password"]::-ms-reveal,
+.with-action input[type="password"]::-ms-clear {
+  display: none;
+}
+
+.with-action input[type="password"]::-webkit-credentials-auto-fill-button,
+.with-action input[type="password"]::-webkit-textfield-decoration-container {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .eye-action {
   width: 40px;
   height: 40px;
@@ -2174,22 +2185,108 @@ tbody tr:hover {
 
 .mascot-arm-svg {
   transform-origin: 110px 151px;
+  transform-box: fill-box;
 }
 
 .mascot-arm-svg path {
   fill: none;
 }
 
-.mascot-cover .mascot-arm-svg.left {
-  transform: translate(52px, -112px) rotate(-18deg);
+.mascot-cover .mascot-arm-svg {
+  opacity: 0;
 }
 
-.mascot-cover .mascot-arm-svg.right {
-  transform: translate(-52px, -112px) rotate(18deg);
+.mascot-left.mascot-cover .mascot-arm-svg.left {
+  transform: translate(52px, -118px) rotate(-30deg);
+}
+
+.mascot-left.mascot-cover .mascot-arm-svg.right {
+  transform: translate(-52px, -118px) rotate(30deg);
+}
+
+.mascot-right.mascot-cover .mascot-arm-svg.left {
+  transform: translate(55px, -116px) rotate(-26deg);
+}
+
+.mascot-right.mascot-cover .mascot-arm-svg.right {
+  transform: translate(-55px, -116px) rotate(26deg);
+}
+
+.mascot-cover .panda-hand,
+.mascot-cover .buddy-hand {
+  filter: drop-shadow(0 5px 4px rgba(35, 55, 84, 0.18));
+}
+
+.mascot-left.mascot-cover .panda-hand,
+.mascot-right.mascot-cover .buddy-hand {
+  transform: scale(1.18);
+  transform-origin: center;
+  transform-box: fill-box;
 }
 
 .mascot-cover .mascot-eye-svg {
-  opacity: 0.28;
+  opacity: 0.16;
+}
+
+.mascot-cover .mascot-pupil {
+  transform: translate(0, 2px) scale(0.72);
+}
+
+.mascot-cover .mascot-head-svg {
+  transform: translate(0, 1px) rotate(0deg);
+}
+
+.mascot-eye-cover {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: translateY(14px) scale(0.82);
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.mascot-eye-cover .cover-arm {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 16;
+}
+
+.panda-cover-paws .cover-arm,
+.panda-cover-paws ellipse {
+  fill: #2c4777;
+  stroke: #213552;
+  filter: drop-shadow(0 5px 4px rgba(35, 55, 84, 0.2));
+}
+
+.panda-cover-paws .cover-arm {
+  fill: none;
+  stroke-width: 15;
+}
+
+.panda-cover-paws ellipse {
+  stroke-width: 3.4;
+}
+
+.buddy-cover-paws .cover-arm,
+.buddy-cover-paws ellipse {
+  fill: #ffd35d;
+  stroke: #284260;
+  filter: drop-shadow(0 5px 4px rgba(35, 55, 84, 0.18));
+}
+
+.buddy-cover-paws .cover-arm {
+  fill: none;
+  stroke-width: 15;
+}
+
+.buddy-cover-paws ellipse {
+  stroke-width: 3.4;
+}
+
+.mascot-cover .mascot-eye-cover {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .mascot-error .mascot-character {

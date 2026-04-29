@@ -108,6 +108,16 @@ function AuthMascot({
               <path className="face-blush left" d="M66 111c10-6 20-4 26 4" />
               <path className="face-blush right" d="M154 111c-10-6-20-4-26 4" />
             </g>
+            <g className="mascot-eye-cover panda-cover-paws">
+              <path className="cover-arm left" d="M61 158C49 133 58 106 78 91" />
+              <path className="cover-arm right" d="M159 158C171 133 162 106 142 91" />
+              <path className="cover-palm left" d="M64 91c0-14 10-24 25-25 15-1 27 8 29 21 2 14-9 23-26 25-17 1-28-7-28-21z" />
+              <path className="cover-palm right" d="M156 91c0-14-10-24-25-25-15-1-27 8-29 21-2 14 9 23 26 25 17 1 28-7 28-21z" />
+              <path className="cover-finger left" d="M75 78c7 4 17 4 25 0M72 89c9 5 24 5 35 0M77 101c8 3 17 3 25-1" />
+              <path className="cover-finger right" d="M145 78c-7 4-17 4-25 0M148 89c-9 5-24 5-35 0M143 101c-8 3-17 3-25-1" />
+              <path className="palm-highlight left" d="M80 71c8-3 19-1 26 7" />
+              <path className="palm-highlight right" d="M140 71c-8-3-19-1-26 7" />
+            </g>
             <g className="mascot-arm-svg left">
               <path className="panda-arm" d="M62 153c-26 15-38 39-29 51 10 13 34-2 46-27" />
               <circle className="panda-hand" cx="32" cy="204" r="18" />
@@ -145,6 +155,16 @@ function AuthMascot({
               <path className="buddy-mouth" d="M91 120c10 12 28 12 38 0" />
               <path className="face-blush left" d="M65 111c10-5 19-3 25 3" />
               <path className="face-blush right" d="M155 111c-10-5-19-3-25 3" />
+            </g>
+            <g className="mascot-eye-cover buddy-cover-paws">
+              <path className="cover-arm left" d="M61 158C50 131 65 101 86 86" />
+              <path className="cover-arm right" d="M159 158C170 131 155 101 134 86" />
+              <path className="cover-palm left" d="M68 83c0-15 12-26 28-26 17 0 29 10 29 24 0 14-12 23-30 24-17 1-27-8-27-22z" />
+              <path className="cover-palm right" d="M152 83c0-15-12-26-28-26-17 0-29 10-29 24 0 14 12 23 30 24 17 1 27-8 27-22z" />
+              <path className="cover-finger left" d="M80 70c8 4 19 4 29 0M76 82c11 5 26 5 38 0M81 95c9 3 19 3 28-1" />
+              <path className="cover-finger right" d="M140 70c-8 4-19 4-29 0M144 82c-11 5-26 5-38 0M139 95c-9 3-19 3-28-1" />
+              <path className="palm-highlight left" d="M84 62c10-3 22 0 29 9" />
+              <path className="palm-highlight right" d="M136 62c-10-3-22 0-29 9" />
             </g>
             <g className="mascot-arm-svg left">
               <path className="buddy-arm" d="M62 153c-27 15-38 39-29 51 10 13 34-2 46-27" />
