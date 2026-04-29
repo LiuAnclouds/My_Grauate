@@ -66,21 +66,6 @@ export default function App() {
 
   return (
     <main className="app-shell enterprise-app-shell">
-      <header className="topbar app-topbar">
-        <div className="brand-block">
-          <p className="eyebrow">StarHubGraph RiskOps</p>
-          <h1 className="brand-title">星枢反欺诈分析平台</h1>
-          <p className="topbar-subtitle">关系网络风控系统</p>
-        </div>
-        <div className="topbar-actions">
-          <span className="account-pill">{session.email}</span>
-          {session.is_admin ? <span className="role-pill">管理员</span> : <span className="role-pill muted">分析员</span>}
-          <button className="ghost-button" onClick={() => setSession(null)}>
-            退出
-          </button>
-        </div>
-      </header>
-
       <div className="system-frame riskops-frame">
         <aside className="system-nav riskops-nav" aria-label="系统功能导航">
           <div className="nav-card compact-nav-card">
@@ -109,6 +94,21 @@ export default function App() {
         </aside>
 
         <section className="system-main riskops-main">
+          <header className="topbar app-topbar">
+            <div className="brand-block">
+              <p className="eyebrow">StarHubGraph RiskOps</p>
+              <h1 className="brand-title">星枢反欺诈分析平台</h1>
+              <p className="topbar-subtitle">业务网络风险识别、关系研判与异常对象复核系统</p>
+            </div>
+            <div className="topbar-actions">
+              <span className="account-pill">{session.email}</span>
+              {session.is_admin ? <span className="role-pill">管理员</span> : <span className="role-pill muted">分析员</span>}
+              <button className="ghost-button" onClick={() => setSession(null)}>
+                退出
+              </button>
+            </div>
+          </header>
+
           <div className="page-toolbar riskops-toolbar">
             <div>
               <p className="eyebrow">{activeNav.eyebrow}</p>
