@@ -11,6 +11,7 @@ import {
 type Props = {
   selectedDatasetId: number | null;
   onSelect: (datasetId: number, networkName?: string) => void;
+  onOpenPage?: (page: "network" | "analysis") => void;
 };
 
 const networkProfiles: Record<string, { label: string; description: string; scene: string }> = {
@@ -62,7 +63,15 @@ function descriptionFor(item: DatasetSummary) {
   return key ? networkProfiles[key].description : String(item.summary?.source_description ?? item.original_filename);
 }
 
-export function DataUpload({ selectedDatasetId, onSelect }: Props) {
+function networkIdFor(item: DatasetSummary) {
+  return `BN-${String(item.id).padStart(4, "0")}`;
+}
+
+function countText(value: unknown, fallback = "-") {
+  return value === null || value === undefined ? fallback : String(value);
+}
+
+export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [useLlm, setUseLlm] = useState(false);
   const [mapping, setMapping] = useState<MappingResponse | null>(null);
@@ -116,106 +125,130 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
   }, []);
 
   return (
-    <section className="panel panel-stack business-access-panel">
-      <div className="panel-heading aligned-start">
-        <div>
-          <p className="eyebrow">Business Access</p>
-          <h2>业务接入中心</h2>
-          <p className="section-copy">选择默认业务网络快速进入风控流程，也可以导入新的业务文件进行关系分析。</p>
-        </div>
-      </div>
-
-      <div className="default-network-grid">
-        {defaultNetworks.map((option) => (
-          <button
-            key={option.key}
-            className="resource-card default-network-card"
-            onClick={() => handleDefaultNetwork(option.key, option.label)}
-            disabled={busy}
-            type="button"
-          >
-            <small>{option.scene}</small>
-            <strong>{option.label}</strong>
-            <span>{option.description}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="upload-card emphasis-card">
-        <div className="panel-subheading compact-heading">
-          <h3>导入业务文件</h3>
-          <span className="subtle-tag">CSV</span>
-        </div>
-        <label className="upload-label">
-          <span>上传待分析的业务结构化文件</span>
-          <input type="file" accept=".csv" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} disabled={busy} />
-        </label>
-        <label className="inline-check">
-          <input type="checkbox" checked={useLlm} onChange={(event) => setUseLlm(event.target.checked)} />
-          启用智能字段识别，自动匹配对象、关系与特征字段
-        </label>
-      </div>
-
-      {selectedDataset ? (
-        <div className="dataset-summary-card emphasis-card selected-network-card">
-          <div className="panel-subheading compact-heading">
-            <h3>当前业务网络</h3>
-            <span className={`status-badge status-${selectedDataset.status}`}>{formatStatus(selectedDataset.status)}</span>
+    <section className="business-network-page">
+      <div className="business-network-layout">
+        <div className="network-directory-panel">
+          <div className="business-module-heading">
+            <div>
+              <p className="eyebrow">Business Networks</p>
+              <h2>业务网络</h2>
+              <p>选择需要分析的业务网络，或导入业务文件建立新的网络。</p>
+            </div>
+            <span className="directory-count">{datasets.length || defaultNetworks.length} 个网络</span>
           </div>
-          <strong>{displayNameFor(selectedDataset)}</strong>
-          <small>{descriptionFor(selectedDataset)}</small>
-          <div className="stat-grid compact">
-            <div>
-              <span>对象规模</span>
-              <strong>{String(selectedDataset.summary?.node_count ?? selectedDataset.row_count)}</strong>
+
+          <div className="network-directory-list" aria-label="业务网络列表">
+            {datasets.length ? (
+              datasets.map((dataset) => (
+                <article key={dataset.id} className={dataset.id === selectedDatasetId ? "network-row active" : "network-row"}>
+                  <button className="network-row-main" onClick={() => onSelect(dataset.id, displayNameFor(dataset))} type="button">
+                    <span className="network-id">{networkIdFor(dataset)}</span>
+                    <strong>{displayNameFor(dataset)}</strong>
+                    <small>{descriptionFor(dataset)}</small>
+                  </button>
+                  <div className="network-row-stats">
+                    <span>{formatStatus(dataset.status)}</span>
+                    <strong>{countText(dataset.summary?.edge_count)} 条关系</strong>
+                  </div>
+                  <button className="network-row-action" onClick={() => onSelect(dataset.id, displayNameFor(dataset))} type="button">
+                    选择
+                  </button>
+                </article>
+              ))
+            ) : (
+              <div className="empty-network-state">
+                <strong>暂无已接入的业务网络</strong>
+                <span>可以先注册一个默认网络，或从右侧导入业务文件。</span>
+              </div>
+            )}
+          </div>
+
+          <div className="network-registry">
+            <div className="registry-heading">
+              <strong>可注册业务网络</strong>
+              <span>测试阶段可直接接入系统内置网络</span>
             </div>
-            <div>
-              <span>关系规模</span>
-              <strong>{String(selectedDataset.summary?.edge_count ?? "-")}</strong>
-            </div>
-            <div>
-              <span>特征维度</span>
-              <strong>{String(selectedDataset.summary?.feature_count ?? "-")}</strong>
+            <div className="registry-list">
+              {defaultNetworks.map((option) => (
+                <button
+                  key={option.key}
+                  className="registry-item"
+                  onClick={() => handleDefaultNetwork(option.key, option.label)}
+                  disabled={busy}
+                  type="button"
+                >
+                  <span>{option.scene}</span>
+                  <strong>{option.label}</strong>
+                  <small>{option.description}</small>
+                </button>
+              ))}
             </div>
           </div>
         </div>
-      ) : null}
 
-      {mapping ? (
-        <div className="mapping-preview product-preview">
-          <div className="panel-subheading compact-heading">
-            <h3>接入解析结果</h3>
-            <span className="subtle-tag">{mapping.method}</span>
+        <aside className="network-side-stack">
+          <div className="selected-network-card">
+            <div className="side-card-heading">
+              <span>当前网络</span>
+              {selectedDataset ? <em className={`status-badge status-${selectedDataset.status}`}>{formatStatus(selectedDataset.status)}</em> : null}
+            </div>
+            {selectedDataset ? (
+              <>
+                <strong>{displayNameFor(selectedDataset)}</strong>
+                <small>{networkIdFor(selectedDataset)}</small>
+                <p>{descriptionFor(selectedDataset)}</p>
+                <div className="selected-network-stats">
+                  <div>
+                    <span>对象</span>
+                    <strong>{countText(selectedDataset.summary?.node_count ?? selectedDataset.row_count)}</strong>
+                  </div>
+                  <div>
+                    <span>关系</span>
+                    <strong>{countText(selectedDataset.summary?.edge_count)}</strong>
+                  </div>
+                </div>
+                <div className="selected-network-actions">
+                  <button className="secondary" onClick={() => onOpenPage?.("network")} type="button">
+                    查看关系
+                  </button>
+                  <button className="primary" onClick={() => onOpenPage?.("analysis")} type="button">
+                    开始研判
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p>请先从左侧选择或注册业务网络。</p>
+            )}
           </div>
-          <span>{mapping.message}</span>
-          <small>对象主键字段：{String(mapping.mapping.node_id ?? "-")}</small>
-          <small>
-            关系字段：{String(mapping.mapping.source_id ?? "-")} {"->"} {String(mapping.mapping.target_id ?? "-")}
-          </small>
-          <small>模型输入字段数：{Array.isArray(mapping.mapping.feature_columns) ? mapping.mapping.feature_columns.length : 0}</small>
-        </div>
-      ) : null}
 
-      <p className="hint">{message}</p>
+          <div className="network-import-card">
+            <div className="side-card-heading">
+              <span>导入业务文件</span>
+              <em>CSV</em>
+            </div>
+            <label className="upload-label compact-upload">
+              <span>选择待分析文件</span>
+              <input type="file" accept=".csv" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} disabled={busy} />
+            </label>
+            <label className="inline-check compact-check">
+              <input type="checkbox" checked={useLlm} onChange={(event) => setUseLlm(event.target.checked)} />
+              自动识别文件结构
+            </label>
+          </div>
 
-      <div className="network-list">
-        {datasets.map((dataset) => (
-          <button
-            key={dataset.id}
-            className={dataset.id === selectedDatasetId ? "dataset-item active" : "dataset-item"}
-            onClick={() => onSelect(dataset.id, displayNameFor(dataset))}
-            type="button"
-          >
-            <div>
-              <span>{displayNameFor(dataset)}</span>
-              <small>{descriptionFor(dataset)}</small>
+          {mapping ? (
+            <div className="network-import-result">
+              <div className="side-card-heading">
+                <span>文件已识别</span>
+                <em>{mapping.method}</em>
+              </div>
+              <p>{mapping.message}</p>
+              <small>已完成对象、关系和分析字段匹配。</small>
             </div>
-            <div className="dataset-meta">
-              <small>{formatStatus(dataset.status)}</small>
-              <small>{String(dataset.summary?.edge_count ?? "-")} 条关系</small>
-            </div>
-          </button>
-        ))}
+          ) : null}
+
+          <p className="network-feedback">{message}</p>
+        </aside>
       </div>
     </section>
   );

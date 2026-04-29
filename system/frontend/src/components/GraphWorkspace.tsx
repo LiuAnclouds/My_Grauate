@@ -7,6 +7,7 @@ type Props = {
   refreshKey: number;
   highlightedNodeId: string | null;
   timelineNodeId: string | null;
+  compact?: boolean;
 };
 
 const networkNames: Record<string, string> = {
@@ -23,7 +24,7 @@ function displayNetworkName(summary: Record<string, unknown> | undefined) {
   return String(summary?.business_name ?? "-");
 }
 
-export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timelineNodeId }: Props) {
+export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timelineNodeId, compact = false }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const [graph, setGraph] = useState<GraphResponse | null>(null);
@@ -178,12 +179,12 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
   }, [graph, activeNodeId, nodeMap]);
 
   return (
-    <section className="panel graph-panel workspace-panel">
-      <div className="panel-heading aligned-start">
+    <section className={compact ? "panel graph-panel workspace-panel graph-page-panel compact-graph-panel" : "panel graph-panel workspace-panel graph-page-panel"}>
+      <div className="graph-panel-top">
         <div>
           <p className="eyebrow">Relationship Network</p>
-          <h2>关系网络</h2>
-          <p className="section-copy">集中查看对象关联结构、风险着色结果与研判过程中的节点联动。</p>
+          <h2>关系网络图</h2>
+          <p>选择节点查看对象画像，研判结果会同步标记到图中。</p>
         </div>
         <div className="legend-row enterprise-legend">
           <span><i className="legend-dot blue" /> 当前定位对象</span>
@@ -193,7 +194,14 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
       </div>
 
       <div className="graph-layout enterprise-graph-layout">
-        <div ref={containerRef} className="graph-canvas enterprise-canvas" />
+        <div ref={containerRef} className="graph-canvas enterprise-canvas">
+          {!graph ? (
+            <div className="empty-graph-state">
+              <strong>尚未选择业务网络</strong>
+              <span>请先进入“业务网络”栏目选择或导入一个网络。</span>
+            </div>
+          ) : null}
+        </div>
         <aside className="graph-sidecard insight-card">
           <h3>对象画像</h3>
           {selectedNode ? (
@@ -202,8 +210,6 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
               <div><span>姓名</span><strong>{selectedNode.label}</strong></div>
               <div><span>区域</span><strong>{selectedNode.region}</strong></div>
               <div><span>职业</span><strong>{selectedNode.occupation}</strong></div>
-              <div><span>来源类型</span><strong>{selectedNode.source_type ?? "业务网络"}</strong></div>
-              <div><span>特征维度</span><strong>{selectedNode.feature_count}</strong></div>
               <div><span>风险标签</span><strong>{selectedNode.risk_label === "suspicious" ? "高风险" : selectedNode.risk_label === "normal" ? "低风险" : "待分析"}</strong></div>
               <div><span>风险分数</span><strong>{selectedNode.risk_score?.toFixed(4) ?? "-"}</strong></div>
             </div>
@@ -216,7 +222,6 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
               <small>业务网络：{displayNetworkName(graph.summary)}</small>
               <small>对象规模：{String(graph.summary.node_count ?? "-")}</small>
               <small>关系规模：{String(graph.summary.edge_count ?? "-")}</small>
-              <small>特征维度：{String(graph.summary.feature_count ?? "-")}</small>
             </div>
           ) : null}
         </aside>

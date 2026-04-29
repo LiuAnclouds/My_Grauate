@@ -40,7 +40,7 @@ export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: P
   const [inference, setInference] = useState<InferenceRunResponse | null>(null);
   const [currentEventIndex, setCurrentEventIndex] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("等待选择分析资产并启动风险任务流程。");
+  const [message, setMessage] = useState("等待选择业务网络并启动风险任务。");
 
   const currentEvent = timeline?.events?.[currentEventIndex] ?? null;
   const progress = Math.round((currentEvent?.progress ?? task?.progress ?? 0) * 100);
@@ -122,12 +122,12 @@ export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: P
   }
 
   return (
-    <section className="panel panel-stack">
+    <section className="panel panel-stack analysis-process-panel">
       <div className="panel-heading aligned-start split-heading">
         <div>
           <p className="eyebrow">Process Center</p>
-          <h2>任务流程中心</h2>
-          <p className="section-copy">查看接入后的处理阶段、关键节点聚合轨迹与推理任务进展。</p>
+          <h2>智能研判流程</h2>
+          <p className="section-copy">启动任务后，系统会按阶段展示处理进度和当前定位对象。</p>
         </div>
         <button className="primary" disabled={!datasetId || busy} onClick={startPipeline}>
           {busy ? "任务执行中" : "启动分析任务"}

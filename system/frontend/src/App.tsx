@@ -10,7 +10,7 @@ type AppPage = "monitor" | "access" | "network" | "analysis" | "cases" | "admin"
 
 const navItems: Array<{ key: AppPage; label: string; eyebrow: string; description: string }> = [
   { key: "monitor", label: "风险总览", eyebrow: "Monitor", description: "查看业务网络状态与待处理风险" },
-  { key: "access", label: "业务接入", eyebrow: "Access", description: "接入默认网络或上传业务文件" },
+  { key: "access", label: "业务网络", eyebrow: "Network", description: "选择默认网络或导入业务文件" },
   { key: "network", label: "关系网络", eyebrow: "Network", description: "查看对象与交易关系结构" },
   { key: "analysis", label: "智能研判", eyebrow: "Analysis", description: "执行特征处理与风险推理" },
   { key: "cases", label: "风险名单", eyebrow: "Cases", description: "复核高风险对象与解释线索" },
@@ -70,10 +70,9 @@ export default function App() {
         <div className="brand-block">
           <p className="eyebrow">StarHubGraph RiskOps</p>
           <h1 className="brand-title">星枢反欺诈分析平台</h1>
-          <p className="topbar-subtitle">面向业务人员的关系网络风控系统，聚合业务接入、关系分析、智能研判和风险名单复核。</p>
+          <p className="topbar-subtitle">关系网络风控系统</p>
         </div>
         <div className="topbar-actions">
-          <span className="dataset-pill">{currentNetwork}</span>
           <span className="account-pill">{session.email}</span>
           {session.is_admin ? <span className="role-pill">管理员</span> : <span className="role-pill muted">分析员</span>}
           <button className="ghost-button" onClick={() => setSession(null)}>
@@ -107,11 +106,6 @@ export default function App() {
               </button>
             ))}
           </nav>
-
-          <div className="nav-hint">
-            <strong>当前业务网络</strong>
-            <span>{currentNetwork}</span>
-          </div>
         </aside>
 
         <section className="system-main riskops-main">
@@ -121,26 +115,18 @@ export default function App() {
               <h2>{activeNav.label}</h2>
               <span>{activeNav.description}</span>
             </div>
-            <div className="page-actions">
-              <button className="ghost-inline" onClick={() => openPage("access")} type="button">
-                选择网络
-              </button>
-              <button className="secondary" onClick={() => openPage("analysis")} type="button">
-                开始研判
-              </button>
-            </div>
           </div>
 
           {activePage === "monitor" ? <MonitorPage onOpenPage={openPage} currentNetwork={currentNetwork} hasNetwork={Boolean(selectedDatasetId)} /> : null}
 
           {activePage === "access" ? (
-            <PageSurface title="业务接入" description="选择系统内置业务网络，或导入新的业务文件进入风控分析流程。">
-              <DataUpload selectedDatasetId={selectedDatasetId} onSelect={handleBusinessSelect} />
+            <PageSurface>
+              <DataUpload selectedDatasetId={selectedDatasetId} onSelect={handleBusinessSelect} onOpenPage={openPage} />
             </PageSurface>
           ) : null}
 
           {activePage === "network" ? (
-            <PageSurface title="关系网络" description="查看对象、交易方向、关联强度和风险着色，定位关键关系链路。">
+            <PageSurface>
               <GraphWorkspace
                 datasetId={selectedDatasetId}
                 refreshKey={graphRefreshKey}
@@ -151,7 +137,7 @@ export default function App() {
           ) : null}
 
           {activePage === "analysis" ? (
-            <PageSurface title="智能研判" description="执行特征整理、邻域聚合和模型推理，并与关系网络中的当前对象联动。">
+            <PageSurface>
               <div className="split-page riskops-split">
                 <PipelinePanel
                   datasetId={selectedDatasetId}
@@ -163,13 +149,14 @@ export default function App() {
                   refreshKey={graphRefreshKey}
                   highlightedNodeId={highlightedNodeId}
                   timelineNodeId={activeTimelineNodeId}
+                  compact
                 />
               </div>
             </PageSurface>
           ) : null}
 
           {activePage === "cases" ? (
-            <PageSurface title="风险名单" description="面向业务复核输出异常对象、风险分数、画像信息和研判依据。">
+            <PageSurface>
               <InferenceResults datasetId={selectedDatasetId} refreshKey={graphRefreshKey} onNodeFocus={setHighlightedNodeId} />
             </PageSurface>
           ) : null}
@@ -181,16 +168,9 @@ export default function App() {
   );
 }
 
-function PageSurface({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+function PageSurface({ children }: { children: ReactNode }) {
   return (
     <section className="page-surface riskops-surface">
-      <div className="page-hero riskops-page-hero">
-        <div>
-          <p className="eyebrow">业务模块</p>
-          <h2>{title}</h2>
-          <p>{description}</p>
-        </div>
-      </div>
       <div className="page-content riskops-page-content">{children}</div>
     </section>
   );
@@ -202,8 +182,8 @@ function MonitorPage({ onOpenPage, currentNetwork, hasNetwork }: { onOpenPage: (
       <div className="monitor-hero">
         <div className="monitor-copy">
           <p className="eyebrow">Risk Operations</p>
-          <h2>面向业务风险处置的关系网络分析系统。</h2>
-          <p>系统默认提供三套业务网络用于演示和验证，也支持后续扩展新的业务文件接入。业务用户只需要选择网络、启动研判、查看风险名单。</p>
+          <h2>业务风险总览</h2>
+          <p>选择业务网络后，可进入关系网络、智能研判和风险名单复核。</p>
           <div className="monitor-actions">
             <button className="primary" onClick={() => onOpenPage("access")} type="button">
               选择业务网络

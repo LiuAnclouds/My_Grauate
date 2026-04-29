@@ -20,7 +20,7 @@ export function InferenceResults({ datasetId, refreshKey, onNodeFocus }: Props) 
     listInferenceResults(datasetId)
       .then((items) => {
         setRows(items);
-        setMessage(items.length ? `已生成 ${items.length} 条风险记录。` : "当前分析资产尚未生成风险记录。");
+        setMessage(items.length ? `已生成 ${items.length} 条风险记录。` : "当前业务网络尚未生成风险记录。");
       })
       .catch((error) => setMessage(error.message));
   }, [datasetId, refreshKey]);
@@ -44,12 +44,12 @@ export function InferenceResults({ datasetId, refreshKey, onNodeFocus }: Props) 
   const normalCount = rows.length - abnormalCount;
 
   return (
-    <section className="panel panel-stack result-panel">
-      <div className="panel-heading aligned-start split-heading">
+    <section className="panel panel-stack result-panel risk-ledger-panel">
+      <div className="ledger-header">
         <div>
           <p className="eyebrow">Risk Ledger</p>
-          <h2>风险结果台账</h2>
-          <p className="section-copy">沉淀对象级风险评分、画像信息与模型解释线索，支持快速定位与复核。</p>
+          <h2>风险名单</h2>
+          <p>查看待复核对象、风险等级和关联线索。</p>
         </div>
         <div className="result-summary enterprise-summary">
           <span>总记录 {rows.length}</span>
@@ -58,12 +58,14 @@ export function InferenceResults({ datasetId, refreshKey, onNodeFocus }: Props) 
         </div>
       </div>
 
-      <input
-        className="search-input"
-        value={keyword}
-        onChange={(event) => setKeyword(event.target.value)}
-        placeholder="按对象编号、姓名、区域、职业或风险标签筛选"
-      />
+      <div className="ledger-tools">
+        <input
+          className="search-input"
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+          placeholder="按对象编号、姓名、区域、职业或风险标签筛选"
+        />
+      </div>
 
       <div className="table-wrap enterprise-table-wrap">
         <table>
@@ -110,6 +112,16 @@ export function InferenceResults({ datasetId, refreshKey, onNodeFocus }: Props) 
                 </td>
               </tr>
             ))}
+            {!filteredRows.length ? (
+              <tr>
+                <td colSpan={6}>
+                  <div className="empty-ledger-state">
+                    <strong>暂无可展示的风险记录</strong>
+                    <span>{rows.length ? "没有匹配当前筛选条件的记录。" : "请先完成智能研判任务。"}</span>
+                  </div>
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
