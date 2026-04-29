@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = ""
     smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
 
     verification_code_ttl_minutes: int = 10
     demo_mode: bool = True
