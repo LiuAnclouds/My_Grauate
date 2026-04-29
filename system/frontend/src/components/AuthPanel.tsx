@@ -216,7 +216,7 @@ export function AuthPanel({ onAuthed }: Props) {
   const captchaChars = useMemo(() => (loginCaptcha?.captcha_text ?? "-----").split(""), [loginCaptcha]);
   const heading = isLogin ? "登录分析平台" : "注册分析账号";
   const passwordLabel = isLogin ? "登录密码" : "设置密码";
-  const submitLabel = busy ? "正在验证" : isLogin ? "进入工作台" : "创建账号并进入";
+  const submitLabel = busy ? "正在验证" : isLogin ? "进入系统" : "创建账号并进入";
 
   function getMascotStyle(side: "left" | "right"): CSSProperties {
     const targetLook: Record<MascotTarget, { x: number; y: number }> = {

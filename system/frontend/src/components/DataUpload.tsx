@@ -10,30 +10,63 @@ import {
 
 type Props = {
   selectedDatasetId: number | null;
-  onSelect: (datasetId: number) => void;
+  onSelect: (datasetId: number, networkName?: string) => void;
 };
 
-const demoOptions = [
-  { key: "xinye_dgraph", label: "零售交易网络 A", description: "高频账户往来样本，用于关联聚合与异常识别分析。" },
-  { key: "elliptic_transactions", label: "链路交易网络 B", description: "跨主体资金转移样本，适合观察时序关系与链路扩散。" },
-  { key: "ellipticpp_transactions", label: "综合关系网络 C", description: "增强多维关系样本，适合展示多特征风控分析过程。" }
+const networkProfiles: Record<string, { label: string; description: string; scene: string }> = {
+  xinye_dgraph: {
+    label: "星链零售网络",
+    description: "面向零售交易场景的账户关联网络，适合观察高频往来与异常聚集。",
+    scene: "零售交易风控"
+  },
+  elliptic_transactions: {
+    label: "清算支付网络",
+    description: "面向跨主体支付链路的业务网络，适合观察资金路径和链路扩散。",
+    scene: "支付链路监测"
+  },
+  ellipticpp_transactions: {
+    label: "枢纽综合网络",
+    description: "面向多关系混合场景的综合业务网络，适合展示多维风险分析过程。",
+    scene: "综合关系研判"
+  }
+};
+
+const defaultNetworks = [
+  { key: "xinye_dgraph", ...networkProfiles.xinye_dgraph },
+  { key: "elliptic_transactions", ...networkProfiles.elliptic_transactions },
+  { key: "ellipticpp_transactions", ...networkProfiles.ellipticpp_transactions }
 ];
 
 function formatStatus(status: string) {
   const map: Record<string, string> = {
-    normalized: "已完成入库",
-    official_validation: "已接入样本",
-    feature_ready: "已完成特征准备",
-    inference_completed: "已生成风险结果"
+    normalized: "已入库",
+    official_validation: "可分析",
+    feature_ready: "已完成处理",
+    inference_completed: "已生成风险名单"
   };
-  return map[status] ?? status;
+  return map[status] ?? "处理中";
+}
+
+function resolveNetworkKey(item: DatasetSummary) {
+  const text = [item.name, item.original_filename, String(item.summary?.technical_name ?? "")].join(" ");
+  return Object.keys(networkProfiles).find((key) => text.includes(key)) ?? "";
+}
+
+function displayNameFor(item: DatasetSummary) {
+  const key = resolveNetworkKey(item);
+  return key ? networkProfiles[key].label : String(item.summary?.business_name ?? item.name);
+}
+
+function descriptionFor(item: DatasetSummary) {
+  const key = resolveNetworkKey(item);
+  return key ? networkProfiles[key].description : String(item.summary?.source_description ?? item.original_filename);
 }
 
 export function DataUpload({ selectedDatasetId, onSelect }: Props) {
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [useLlm, setUseLlm] = useState(false);
   const [mapping, setMapping] = useState<MappingResponse | null>(null);
-  const [message, setMessage] = useState("可直接接入业务 CSV，也可一键加载平台内置样本以快速进入关系分析流程。");
+  const [message, setMessage] = useState("请选择默认业务网络，或导入新的业务文件进入关系分析流程。");
   const [busy, setBusy] = useState(false);
 
   const selectedDataset = useMemo(
@@ -52,27 +85,27 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
       const dataset = await uploadDataset(file, useLlm);
       const mappingResult = await fetchMapping(dataset.id);
       setMapping(mappingResult);
-      setMessage(`数据资产已接入：${dataset.original_filename}，共 ${dataset.row_count} 条记录。`);
+      setMessage(`业务文件已接入：${dataset.original_filename}，共 ${dataset.row_count} 条记录。`);
       await refresh();
-      onSelect(dataset.id);
+      onSelect(dataset.id, displayNameFor(dataset));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "CSV 上传失败。");
+      setMessage(error instanceof Error ? error.message : "业务文件导入失败。");
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleDemo(datasetName: string) {
+  async function handleDefaultNetwork(networkKey: string, label: string) {
     setBusy(true);
     try {
-      const dataset = await createDemoDataset(datasetName);
+      const dataset = await createDemoDataset(networkKey);
       const mappingResult = await fetchMapping(dataset.id);
       setMapping(mappingResult);
-      setMessage(`内置样本已接入：${dataset.name}，共 ${dataset.row_count} 个对象。`);
+      setMessage(`${label} 已接入，可以进入关系网络或智能研判。`);
       await refresh();
-      onSelect(dataset.id);
+      onSelect(dataset.id, displayNameFor(dataset));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "内置样本加载失败。");
+      setMessage(error instanceof Error ? error.message : "默认业务网络加载失败。");
     } finally {
       setBusy(false);
     }
@@ -83,63 +116,54 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
   }, []);
 
   return (
-    <section className="panel panel-stack">
+    <section className="panel panel-stack business-access-panel">
       <div className="panel-heading aligned-start">
         <div>
-          <p className="eyebrow">Data Access</p>
-          <h2>数据资产中心</h2>
-          <p className="section-copy">统一管理接入样本、内置关系网络与当前分析对象。</p>
+          <p className="eyebrow">Business Access</p>
+          <h2>业务接入中心</h2>
+          <p className="section-copy">选择默认业务网络快速进入风控流程，也可以导入新的业务文件进行关系分析。</p>
         </div>
       </div>
 
-      <div className="upload-card emphasis-card">
-        <div className="panel-subheading compact-heading">
-          <h3>接入业务数据</h3>
-          <span className="subtle-tag">CSV</span>
-        </div>
-        <label className="upload-label">
-          <span>上传待分析的结构化数据文件</span>
-          <input type="file" accept=".csv" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} disabled={busy} />
-        </label>
-        <label className="inline-check">
-          <input type="checkbox" checked={useLlm} onChange={(event) => setUseLlm(event.target.checked)} />
-          启用智能字段识别，自动匹配节点、关系与特征字段
-        </label>
-      </div>
-
-      <div className="resource-grid">
-        {demoOptions.map((option) => (
-          <button key={option.key} className="resource-card" onClick={() => handleDemo(option.key)} disabled={busy}>
-            <small>平台样本</small>
+      <div className="default-network-grid">
+        {defaultNetworks.map((option) => (
+          <button
+            key={option.key}
+            className="resource-card default-network-card"
+            onClick={() => handleDefaultNetwork(option.key, option.label)}
+            disabled={busy}
+            type="button"
+          >
+            <small>{option.scene}</small>
             <strong>{option.label}</strong>
             <span>{option.description}</span>
           </button>
         ))}
       </div>
 
-      {mapping ? (
-        <div className="mapping-preview product-preview">
-          <div className="panel-subheading compact-heading">
-            <h3>接入解析结果</h3>
-            <span className="subtle-tag">{mapping.method}</span>
-          </div>
-          <span>{mapping.message}</span>
-          <small>对象主键字段：{String(mapping.mapping.node_id ?? "-")}</small>
-          <small>
-            关系字段：{String(mapping.mapping.source_id ?? "-")} → {String(mapping.mapping.target_id ?? "-")}
-          </small>
-          <small>识别特征字段数：{Array.isArray(mapping.mapping.feature_columns) ? mapping.mapping.feature_columns.length : 0}</small>
+      <div className="upload-card emphasis-card">
+        <div className="panel-subheading compact-heading">
+          <h3>导入业务文件</h3>
+          <span className="subtle-tag">CSV</span>
         </div>
-      ) : null}
+        <label className="upload-label">
+          <span>上传待分析的业务结构化文件</span>
+          <input type="file" accept=".csv" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} disabled={busy} />
+        </label>
+        <label className="inline-check">
+          <input type="checkbox" checked={useLlm} onChange={(event) => setUseLlm(event.target.checked)} />
+          启用智能字段识别，自动匹配对象、关系与特征字段
+        </label>
+      </div>
 
       {selectedDataset ? (
-        <div className="dataset-summary-card emphasis-card">
+        <div className="dataset-summary-card emphasis-card selected-network-card">
           <div className="panel-subheading compact-heading">
-            <h3>当前分析资产</h3>
+            <h3>当前业务网络</h3>
             <span className={`status-badge status-${selectedDataset.status}`}>{formatStatus(selectedDataset.status)}</span>
           </div>
-          <strong>{String(selectedDataset.summary?.business_name ?? selectedDataset.name)}</strong>
-          <small>{String(selectedDataset.summary?.source_description ?? selectedDataset.original_filename)}</small>
+          <strong>{displayNameFor(selectedDataset)}</strong>
+          <small>{descriptionFor(selectedDataset)}</small>
           <div className="stat-grid compact">
             <div>
               <span>对象规模</span>
@@ -157,22 +181,38 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
         </div>
       ) : null}
 
+      {mapping ? (
+        <div className="mapping-preview product-preview">
+          <div className="panel-subheading compact-heading">
+            <h3>接入解析结果</h3>
+            <span className="subtle-tag">{mapping.method}</span>
+          </div>
+          <span>{mapping.message}</span>
+          <small>对象主键字段：{String(mapping.mapping.node_id ?? "-")}</small>
+          <small>
+            关系字段：{String(mapping.mapping.source_id ?? "-")} {"->"} {String(mapping.mapping.target_id ?? "-")}
+          </small>
+          <small>模型输入字段数：{Array.isArray(mapping.mapping.feature_columns) ? mapping.mapping.feature_columns.length : 0}</small>
+        </div>
+      ) : null}
+
       <p className="hint">{message}</p>
 
-      <div className="dataset-list">
+      <div className="network-list">
         {datasets.map((dataset) => (
           <button
             key={dataset.id}
             className={dataset.id === selectedDatasetId ? "dataset-item active" : "dataset-item"}
-            onClick={() => onSelect(dataset.id)}
+            onClick={() => onSelect(dataset.id, displayNameFor(dataset))}
+            type="button"
           >
             <div>
-              <span>{String(dataset.summary?.business_name ?? dataset.name)}</span>
-              <small>{String(dataset.summary?.source_description ?? dataset.original_filename)}</small>
+              <span>{displayNameFor(dataset)}</span>
+              <small>{descriptionFor(dataset)}</small>
             </div>
             <div className="dataset-meta">
               <small>{formatStatus(dataset.status)}</small>
-              <small>{String(dataset.summary?.edge_count ?? "-")} relations</small>
+              <small>{String(dataset.summary?.edge_count ?? "-")} 条关系</small>
             </div>
           </button>
         ))}

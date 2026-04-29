@@ -16,18 +16,18 @@ from app.services.synthetic_identity import synthetic_person_for_node
 
 OFFICIAL_DATASET_PROFILES = {
     "xinye_dgraph": {
-        "business_name": "零售交易网络 A",
-        "source_description": "平台内置高频账户往来样本",
+        "business_name": "星链零售网络",
+        "source_description": "默认零售交易业务网络",
         "technical_label": "XinYe validation nodes",
     },
     "elliptic_transactions": {
-        "business_name": "链路交易网络 B",
-        "source_description": "平台内置跨主体资金转移样本",
+        "business_name": "清算支付网络",
+        "source_description": "默认跨主体支付链路网络",
         "technical_label": "Elliptic validation nodes",
     },
     "ellipticpp_transactions": {
-        "business_name": "综合关系网络 C",
-        "source_description": "平台内置增强多维关系样本",
+        "business_name": "枢纽综合网络",
+        "source_description": "默认多关系综合研判网络",
         "technical_label": "Elliptic++ validation nodes",
     },
 }
@@ -79,7 +79,7 @@ def seed_official_validation_dataset(
             "feature_dir": str(feature_dir),
             "model": "full_dyrift_gnn/dyrift_gnn",
             "mapping_method": "official_validation",
-            "mapping_message": "平台已从内置样本中装载对象关系与分析特征。",
+            "mapping_message": "系统已完成业务网络装载，并准备好对象关系与分析特征。",
         },
         summary_json={},
     )
@@ -118,7 +118,7 @@ def seed_official_validation_dataset(
         status="completed",
         progress=1.0,
         current_step="official_feature_cache",
-        message="平台样本已完成装载，可直接进入风险识别流程。",
+        message="业务网络已完成装载，可直接进入风险识别流程。",
         summary=dataset.summary_json,
     )
     db.commit()

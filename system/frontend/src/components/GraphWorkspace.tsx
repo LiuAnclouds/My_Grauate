@@ -9,11 +9,25 @@ type Props = {
   timelineNodeId: string | null;
 };
 
+const networkNames: Record<string, string> = {
+  xinye_dgraph: "星链零售网络",
+  elliptic_transactions: "清算支付网络",
+  ellipticpp_transactions: "枢纽综合网络"
+};
+
+function displayNetworkName(summary: Record<string, unknown> | undefined) {
+  const technicalName = String(summary?.technical_name ?? "");
+  if (technicalName && networkNames[technicalName]) {
+    return networkNames[technicalName];
+  }
+  return String(summary?.business_name ?? "-");
+}
+
 export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timelineNodeId }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const [graph, setGraph] = useState<GraphResponse | null>(null);
-  const [message, setMessage] = useState("选择分析资产后，这里将展示关系网络主舞台。");
+  const [message, setMessage] = useState("选择业务网络后，这里将展示对象关系结构。");
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 
   const activeNodeId = timelineNodeId ?? highlightedNodeId;
@@ -168,8 +182,8 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
       <div className="panel-heading aligned-start">
         <div>
           <p className="eyebrow">Relationship Network</p>
-          <h2>关系网络主舞台</h2>
-          <p className="section-copy">集中查看对象关联结构、风险着色结果与任务过程中的节点联动。</p>
+          <h2>关系网络</h2>
+          <p className="section-copy">集中查看对象关联结构、风险着色结果与研判过程中的节点联动。</p>
         </div>
         <div className="legend-row enterprise-legend">
           <span><i className="legend-dot blue" /> 当前定位对象</span>
@@ -188,7 +202,7 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
               <div><span>姓名</span><strong>{selectedNode.label}</strong></div>
               <div><span>区域</span><strong>{selectedNode.region}</strong></div>
               <div><span>职业</span><strong>{selectedNode.occupation}</strong></div>
-              <div><span>来源类型</span><strong>{selectedNode.source_type ?? "dataset"}</strong></div>
+              <div><span>来源类型</span><strong>{selectedNode.source_type ?? "业务网络"}</strong></div>
               <div><span>特征维度</span><strong>{selectedNode.feature_count}</strong></div>
               <div><span>风险标签</span><strong>{selectedNode.risk_label === "suspicious" ? "高风险" : selectedNode.risk_label === "normal" ? "低风险" : "待分析"}</strong></div>
               <div><span>风险分数</span><strong>{selectedNode.risk_score?.toFixed(4) ?? "-"}</strong></div>
@@ -199,7 +213,7 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
           {graph?.summary ? (
             <div className="graph-summary">
               <h4>网络概览</h4>
-              <small>数据资产：{String(graph.summary.business_name ?? "-")}</small>
+              <small>业务网络：{displayNetworkName(graph.summary)}</small>
               <small>对象规模：{String(graph.summary.node_count ?? "-")}</small>
               <small>关系规模：{String(graph.summary.edge_count ?? "-")}</small>
               <small>特征维度：{String(graph.summary.feature_count ?? "-")}</small>

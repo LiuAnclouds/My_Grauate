@@ -6,90 +6,52 @@ import { GraphWorkspace } from "./components/GraphWorkspace";
 import { InferenceResults } from "./components/InferenceResults";
 import { PipelinePanel } from "./components/PipelinePanel";
 
-type AppPage = "overview" | "data" | "graph" | "pipeline" | "ledger" | "settings";
+type AppPage = "monitor" | "access" | "network" | "analysis" | "cases" | "admin";
 
-const navItems: Array<{ key: AppPage; label: string; eyebrow: string }> = [
-  { key: "overview", label: "工作台", eyebrow: "Overview" },
-  { key: "data", label: "数据资产", eyebrow: "Data" },
-  { key: "graph", label: "关系图谱", eyebrow: "Graph" },
-  { key: "pipeline", label: "分析流程", eyebrow: "Pipeline" },
-  { key: "ledger", label: "风险台账", eyebrow: "Ledger" },
-  { key: "settings", label: "系统设置", eyebrow: "Settings" }
+const navItems: Array<{ key: AppPage; label: string; eyebrow: string; description: string }> = [
+  { key: "monitor", label: "风险总览", eyebrow: "Monitor", description: "查看业务网络状态与待处理风险" },
+  { key: "access", label: "业务接入", eyebrow: "Access", description: "接入默认网络或上传业务文件" },
+  { key: "network", label: "关系网络", eyebrow: "Network", description: "查看对象与交易关系结构" },
+  { key: "analysis", label: "智能研判", eyebrow: "Analysis", description: "执行特征处理与风险推理" },
+  { key: "cases", label: "风险名单", eyebrow: "Cases", description: "复核高风险对象与解释线索" },
+  { key: "admin", label: "系统管理", eyebrow: "Admin", description: "查看运行状态与配置边界" }
 ];
 
-const workflowSteps = [
-  {
-    title: "数据接入",
-    detail: "上传 CSV 或加载平台样本，完成字段识别、人物信息生成与数据入库。"
-  },
-  {
-    title: "关系建模",
-    detail: "将 source、target、金额、时间等字段组织为可交互的关系网络。"
-  },
-  {
-    title: "特征处理",
-    detail: "将身份展示字段与模型特征字段分离，生成推理所需的节点输入。"
-  },
-  {
-    title: "模型推理",
-    detail: "复用 Full GNN 权重，对节点及邻域上下文进行风险识别。"
-  },
-  {
-    title: "结果台账",
-    detail: "沉淀高风险对象、画像信息、风险分数与解释线索。"
-  }
+const monitorCards = [
+  { label: "风险识别模式", value: "纯 GNN", detail: "推理阶段不使用标签，只复用训练完成的模型权重。" },
+  { label: "默认业务网络", value: "3 套", detail: "覆盖零售交易、支付链路与综合关系三类演示场景。" },
+  { label: "处置闭环", value: "5 步", detail: "接入、建图、处理、研判、名单复核形成业务闭环。" },
+  { label: "当前状态", value: "可运行", detail: "后端服务、邮件验证和前端系统均已接入。" }
 ];
 
-const dashboardCards = [
-  {
-    label: "当前数据集",
-    value: "按需选择",
-    detail: "从数据资产页接入或切换分析对象。"
-  },
-  {
-    label: "分析链路",
-    value: "5 步闭环",
-    detail: "接入、建图、特征、推理、台账分页面承载。"
-  },
-  {
-    label: "模型模式",
-    value: "纯 GNN 推理",
-    detail: "系统阶段不使用标签，只复用训练好的权重。"
-  },
-  {
-    label: "展示目标",
-    value: "异常对象定位",
-    detail: "面向关系网络中的高风险节点发现。"
-  }
+const operationFlow = [
+  { title: "选择业务网络", detail: "从默认网络进入，也可以导入业务 CSV 文件。" },
+  { title: "查看关系结构", detail: "在关系网络中定位对象、交易方向和异常关联。" },
+  { title: "启动智能研判", detail: "执行特征整理、邻域聚合和模型风险识别。" },
+  { title: "复核风险名单", detail: "查看高风险对象画像、分数、原因和关联对象。" }
 ];
 
-const settingsCards = [
-  {
-    title: "用户与认证库",
-    detail: "保存系统账号、管理员身份、邮箱验证码和登录相关状态。"
-  },
-  {
-    title: "业务分析库",
-    detail: "保存数据资产、人物画像、节点特征、关系边、任务事件和推理结果。"
-  },
-  {
-    title: "本地运行配置",
-    detail: "邮箱授权码、模型路径等敏感配置仅保存在本地环境文件，不提交到 GitHub。"
-  }
+const adminCards = [
+  { title: "账号认证", detail: "用户账号、密码哈希和邮箱验证码独立保存，不和业务网络内容混用。" },
+  { title: "业务网络", detail: "对象画像、关系边、模型输入和推理结果按业务分析流程组织。" },
+  { title: "敏感配置", detail: "邮箱授权码、模型路径等运行配置只保存在本地环境文件。" }
 ];
 
 export default function App() {
   const [session, setSession] = useState<AuthResponse | null>(null);
   const [selectedDatasetId, setSelectedDatasetId] = useState<number | null>(null);
+  const [selectedNetworkName, setSelectedNetworkName] = useState("");
   const [graphRefreshKey, setGraphRefreshKey] = useState(0);
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
   const [activeTimelineNodeId, setActiveTimelineNodeId] = useState<string | null>(null);
-  const [activePage, setActivePage] = useState<AppPage>("overview");
+  const [activePage, setActivePage] = useState<AppPage>("monitor");
 
   const activeNav = useMemo(() => navItems.find((item) => item.key === activePage) ?? navItems[0], [activePage]);
+  const currentNetwork = selectedNetworkName || (selectedDatasetId ? "已接入业务网络" : "尚未接入业务网络");
 
-  function handleDatasetSelect(datasetId: number) {
+  function handleBusinessSelect(datasetId: number, networkName?: string) {
     setSelectedDatasetId(datasetId);
+    setSelectedNetworkName(networkName ?? "已接入业务网络");
     setHighlightedNodeId(null);
     setActiveTimelineNodeId(null);
   }
@@ -106,32 +68,32 @@ export default function App() {
     <main className="app-shell enterprise-app-shell">
       <header className="topbar app-topbar">
         <div className="brand-block">
-          <p className="eyebrow">StarHubGraph Workspace</p>
+          <p className="eyebrow">StarHubGraph RiskOps</p>
           <h1 className="brand-title">星枢反欺诈分析平台</h1>
-          <p className="topbar-subtitle">面向数据接入、关系图谱、特征处理、风险推理与结果复核的一体化工作台。</p>
+          <p className="topbar-subtitle">面向业务人员的关系网络风控系统，聚合业务接入、关系分析、智能研判和风险名单复核。</p>
         </div>
         <div className="topbar-actions">
-          <span className="dataset-pill">{selectedDatasetId ? `数据集 #${selectedDatasetId}` : "未选择数据集"}</span>
+          <span className="dataset-pill">{currentNetwork}</span>
           <span className="account-pill">{session.email}</span>
-          {session.is_admin ? <span className="role-pill">管理员</span> : <span className="role-pill muted">分析账号</span>}
+          {session.is_admin ? <span className="role-pill">管理员</span> : <span className="role-pill muted">分析员</span>}
           <button className="ghost-button" onClick={() => setSession(null)}>
-            退出登录
+            退出
           </button>
         </div>
       </header>
 
-      <div className="system-frame">
-        <aside className="system-nav" aria-label="系统功能导航">
-          <div className="nav-card">
-            <span className="nav-mark">SG</span>
+      <div className="system-frame riskops-frame">
+        <aside className="system-nav riskops-nav" aria-label="系统功能导航">
+          <div className="nav-card compact-nav-card">
+            <span className="nav-mark">星</span>
             <div>
-              <strong>功能导航</strong>
-              <small>按分析流程组织页面</small>
+              <strong>风险运营台</strong>
+              <small>按业务处置流程组织</small>
             </div>
           </div>
 
           <nav className="nav-list">
-            {navItems.map((item, index) => (
+            {navItems.map((item) => (
               <button
                 key={item.key}
                 className={item.key === activePage ? "nav-button active" : "nav-button"}
@@ -139,53 +101,46 @@ export default function App() {
                 aria-current={item.key === activePage ? "page" : undefined}
                 type="button"
               >
-                <span>{String(index + 1).padStart(2, "0")}</span>
+                <span>{item.eyebrow}</span>
                 <strong>{item.label}</strong>
-                <small>{item.eyebrow}</small>
+                <small>{item.description}</small>
               </button>
             ))}
           </nav>
 
           <div className="nav-hint">
-            <strong>推荐流程</strong>
-            <span>先接入数据，再进入图谱和分析流程，最后查看风险台账。</span>
+            <strong>当前业务网络</strong>
+            <span>{currentNetwork}</span>
           </div>
         </aside>
 
-        <section className="system-main">
-          <div className="page-toolbar">
+        <section className="system-main riskops-main">
+          <div className="page-toolbar riskops-toolbar">
             <div>
               <p className="eyebrow">{activeNav.eyebrow}</p>
               <h2>{activeNav.label}</h2>
+              <span>{activeNav.description}</span>
             </div>
             <div className="page-actions">
-              <button className="ghost-inline" onClick={() => openPage("data")} type="button">
-                接入数据
+              <button className="ghost-inline" onClick={() => openPage("access")} type="button">
+                选择网络
               </button>
-              <button className="secondary" onClick={() => openPage("pipeline")} type="button">
-                启动分析
+              <button className="secondary" onClick={() => openPage("analysis")} type="button">
+                开始研判
               </button>
             </div>
           </div>
 
-          {activePage === "overview" ? (
-            <OverviewPage onOpenPage={openPage} selectedDatasetId={selectedDatasetId} />
-          ) : null}
+          {activePage === "monitor" ? <MonitorPage onOpenPage={openPage} currentNetwork={currentNetwork} hasNetwork={Boolean(selectedDatasetId)} /> : null}
 
-          {activePage === "data" ? (
-            <PageSurface
-              title="数据资产中心"
-              description="负责 CSV 上传、内置样本接入、字段解析和当前分析资产选择。人物信息、关系字段和模型特征会在这里形成清晰边界。"
-            >
-              <DataUpload selectedDatasetId={selectedDatasetId} onSelect={handleDatasetSelect} />
+          {activePage === "access" ? (
+            <PageSurface title="业务接入" description="选择系统内置业务网络，或导入新的业务文件进入风控分析流程。">
+              <DataUpload selectedDatasetId={selectedDatasetId} onSelect={handleBusinessSelect} />
             </PageSurface>
           ) : null}
 
-          {activePage === "graph" ? (
-            <PageSurface
-              title="关系图谱主舞台"
-              description="集中展示对象关联结构、边方向、风险着色和任务过程中的节点联动。"
-            >
+          {activePage === "network" ? (
+            <PageSurface title="关系网络" description="查看对象、交易方向、关联强度和风险着色，定位关键关系链路。">
               <GraphWorkspace
                 datasetId={selectedDatasetId}
                 refreshKey={graphRefreshKey}
@@ -195,12 +150,9 @@ export default function App() {
             </PageSurface>
           ) : null}
 
-          {activePage === "pipeline" ? (
-            <PageSurface
-              title="特征处理与风险推理"
-              description="展示从数据装载、关系组织、特征准备到模型推理的全过程，并联动图谱中的当前节点。"
-            >
-              <div className="split-page">
+          {activePage === "analysis" ? (
+            <PageSurface title="智能研判" description="执行特征整理、邻域聚合和模型推理，并与关系网络中的当前对象联动。">
+              <div className="split-page riskops-split">
                 <PipelinePanel
                   datasetId={selectedDatasetId}
                   onFocusNode={setActiveTimelineNodeId}
@@ -216,16 +168,13 @@ export default function App() {
             </PageSurface>
           ) : null}
 
-          {activePage === "ledger" ? (
-            <PageSurface
-              title="风险结果台账"
-              description="面向最终复核输出，展示异常对象、身份画像、风险分数、解释线索和关联对象。"
-            >
+          {activePage === "cases" ? (
+            <PageSurface title="风险名单" description="面向业务复核输出异常对象、风险分数、画像信息和研判依据。">
               <InferenceResults datasetId={selectedDatasetId} refreshKey={graphRefreshKey} onNodeFocus={setHighlightedNodeId} />
             </PageSurface>
           ) : null}
 
-          {activePage === "settings" ? <SettingsPage /> : null}
+          {activePage === "admin" ? <AdminPage /> : null}
         </section>
       </div>
     </main>
@@ -234,38 +183,46 @@ export default function App() {
 
 function PageSurface({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
-    <section className="page-surface">
-      <div className="page-hero">
+    <section className="page-surface riskops-surface">
+      <div className="page-hero riskops-page-hero">
         <div>
-          <p className="eyebrow">Workspace Module</p>
+          <p className="eyebrow">业务模块</p>
           <h2>{title}</h2>
           <p>{description}</p>
         </div>
       </div>
-      <div className="page-content">{children}</div>
+      <div className="page-content riskops-page-content">{children}</div>
     </section>
   );
 }
 
-function OverviewPage({ onOpenPage, selectedDatasetId }: { onOpenPage: (page: AppPage) => void; selectedDatasetId: number | null }) {
+function MonitorPage({ onOpenPage, currentNetwork, hasNetwork }: { onOpenPage: (page: AppPage) => void; currentNetwork: string; hasNetwork: boolean }) {
   return (
-    <section className="overview-page">
-      <div className="overview-hero">
-        <div>
-          <p className="eyebrow">Analysis Command Center</p>
-          <h2>把接入、建图、特征处理、推理和结果复核拆成清晰工作区。</h2>
-          <p>系统面向演示和落地使用，首页只保留状态总览和快捷入口，具体操作放到对应页面中。</p>
+    <section className="monitor-page">
+      <div className="monitor-hero">
+        <div className="monitor-copy">
+          <p className="eyebrow">Risk Operations</p>
+          <h2>面向业务风险处置的关系网络分析系统。</h2>
+          <p>系统默认提供三套业务网络用于演示和验证，也支持后续扩展新的业务文件接入。业务用户只需要选择网络、启动研判、查看风险名单。</p>
+          <div className="monitor-actions">
+            <button className="primary" onClick={() => onOpenPage("access")} type="button">
+              选择业务网络
+            </button>
+            <button className="secondary" onClick={() => onOpenPage(hasNetwork ? "analysis" : "access")} type="button">
+              {hasNetwork ? "进入智能研判" : "先接入网络"}
+            </button>
+          </div>
         </div>
-        <div className="overview-current">
-          <span>当前分析资产</span>
-          <strong>{selectedDatasetId ? `数据集 #${selectedDatasetId}` : "尚未选择"}</strong>
-          <small>{selectedDatasetId ? "可以进入图谱、分析流程或风险台账继续操作。" : "请先在数据资产页上传 CSV 或加载平台样本。"}</small>
+        <div className="network-status-card">
+          <span>当前业务网络</span>
+          <strong>{currentNetwork}</strong>
+          <small>{hasNetwork ? "已准备进入关系分析与风险研判。" : "请选择默认业务网络或导入业务文件。"}</small>
         </div>
       </div>
 
-      <div className="dashboard-card-grid">
-        {dashboardCards.map((card) => (
-          <article key={card.label} className="dashboard-card">
+      <div className="dashboard-card-grid riskops-metrics">
+        {monitorCards.map((card) => (
+          <article key={card.label} className="dashboard-card riskops-metric-card">
             <span>{card.label}</span>
             <strong>{card.value}</strong>
             <p>{card.detail}</p>
@@ -273,22 +230,19 @@ function OverviewPage({ onOpenPage, selectedDatasetId }: { onOpenPage: (page: Ap
         ))}
       </div>
 
-      <div className="workflow-board">
+      <div className="workflow-board riskops-flow-board">
         <div className="board-heading">
           <div>
-            <p className="eyebrow">Process Map</p>
-            <h3>系统主流程</h3>
+            <p className="eyebrow">Operational Flow</p>
+            <h3>业务使用流程</h3>
           </div>
-          <button className="primary" onClick={() => onOpenPage("data")} type="button">
-            开始接入数据
-          </button>
         </div>
-        <div className="workflow-steps">
-          {workflowSteps.map((step, index) => (
+        <div className="workflow-steps riskops-flow">
+          {operationFlow.map((step, index) => (
             <button
               key={step.title}
-              className="workflow-step"
-              onClick={() => onOpenPage(index === 0 ? "data" : index === 1 ? "graph" : index <= 3 ? "pipeline" : "ledger")}
+              className="workflow-step riskops-flow-step"
+              onClick={() => onOpenPage(index === 0 ? "access" : index === 1 ? "network" : index === 2 ? "analysis" : "cases")}
               type="button"
             >
               <span>{String(index + 1).padStart(2, "0")}</span>
@@ -302,19 +256,19 @@ function OverviewPage({ onOpenPage, selectedDatasetId }: { onOpenPage: (page: Ap
   );
 }
 
-function SettingsPage() {
+function AdminPage() {
   return (
     <section className="settings-page">
-      <div className="page-hero">
+      <div className="page-hero riskops-page-hero">
         <div>
-          <p className="eyebrow">Runtime & Storage</p>
-          <h2>系统设置</h2>
-          <p>这里先展示运行配置和数据库分层规划，后续可以继续接入管理员配置表单。</p>
+          <p className="eyebrow">System Control</p>
+          <h2>系统管理</h2>
+          <p>这里保留系统运行状态、数据库边界和本地配置说明，后续可以继续扩展管理员控制项。</p>
         </div>
       </div>
       <div className="settings-grid">
-        {settingsCards.map((card) => (
-          <article key={card.title} className="settings-card">
+        {adminCards.map((card) => (
+          <article key={card.title} className="settings-card riskops-admin-card">
             <span className="status-light" />
             <strong>{card.title}</strong>
             <p>{card.detail}</p>
