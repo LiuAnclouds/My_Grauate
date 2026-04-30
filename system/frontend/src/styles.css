@@ -5205,6 +5205,10 @@ tbody tr:hover {
   color: var(--app-amber) !important;
 }
 
+.risk-context-status--health {
+  color: var(--app-success) !important;
+}
+
 .workbench-icon {
   width: 46px;
   height: 46px;
@@ -5504,6 +5508,65 @@ tbody tr:hover {
   font-style: normal;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.compact-empty-state {
+  min-height: 116px;
+}
+
+.network-search-box,
+.network-edit-field {
+  display: grid;
+  gap: 7px;
+}
+
+.network-search-box span,
+.network-edit-field span {
+  color: var(--app-text-faint);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.network-search-box input,
+.network-edit-field input,
+.network-edit-field select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--app-text);
+  font: inherit;
+  outline: none;
+  padding: 0 13px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.network-search-box input:focus,
+.network-edit-field input:focus,
+.network-edit-field select:focus {
+  border-color: rgba(59, 130, 246, 0.42);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.18);
+}
+
+.network-directory-list--scroll {
+  max-height: min(58vh, 620px);
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.network-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.network-row-action.danger {
+  color: var(--app-danger);
+  background: rgba(255, 247, 237, 0.86);
+  border-color: rgba(251, 146, 60, 0.2);
 }
 
 @media (max-width: 1180px) {

@@ -1,37 +1,23 @@
+import { useEffect, useMemo, useState } from "react";
 import { AppPage } from "../../App";
+import {
+  fetchTimeline,
+  InferenceResultItem,
+  listDatasets,
+  listInferenceResults,
+  ProcessingEventItem,
+  TaskTimelineResponse
+} from "../../services/api";
 
-type MonitorCard = { label: string; value: string; detail: string };
 type OperationStep = { title: string; detail: string };
 
 type Props = {
   currentNetwork: string;
+  selectedDatasetId: number | null;
   hasNetwork: boolean;
-  monitorCards: MonitorCard[];
   operationFlow: OperationStep[];
   onOpenPage: (page: AppPage) => void;
 };
-
-const riskObjects = [
-  { name: "星枢零售科技有限公司", type: "企业", level: "高风险", count: "128", status: "待复核", tone: "danger" },
-  { name: "李某某", type: "自然人", level: "高风险", count: "86", status: "待复核", tone: "danger" },
-  { name: "尾号 8888 的银行卡", type: "银行卡", level: "中风险", count: "54", status: "处理中", tone: "warning" },
-  { name: "139****5678", type: "手机号", level: "中风险", count: "42", status: "待复核", tone: "warning" },
-  { name: "上海荣景贸易公司", type: "企业", level: "低风险", count: "18", status: "待复核", tone: "success" }
-];
-
-const operationRecords = [
-  { time: "2025-05-20 10:15:32", operator: "张伟", action: "启动智能研判", result: "成功" },
-  { time: "2025-05-20 09:42:18", operator: "王敏", action: "标记风险对象", result: "成功" },
-  { time: "2025-05-20 09:21:07", operator: "李强", action: "调整风险等级", result: "成功" },
-  { time: "2025-05-20 08:55:14", operator: "张伟", action: "查看关系图谱", result: "成功" }
-];
-
-const analysisRecords = [
-  { time: "2025-05-20 10:30:45", scope: "星枢金融业务网络", high: "36", medium: "89", analyst: "张伟" },
-  { time: "2025-05-19 22:10:11", scope: "星枢金融业务网络", high: "28", medium: "76", analyst: "张伟" },
-  { time: "2025-05-19 16:05:33", scope: "星枢企业业务网络", high: "31", medium: "92", analyst: "王敏" },
-  { time: "2025-05-19 10:20:54", scope: "星枢金融业务网络", high: "25", medium: "68", analyst: "系统" }
-];
 
 function WorkbenchIcon({ tone }: { tone: string }) {
   return (
@@ -67,14 +53,91 @@ function WorkbenchIcon({ tone }: { tone: string }) {
   );
 }
 
-export function MonitorView({ currentNetwork, hasNetwork, monitorCards, operationFlow, onOpenPage }: Props) {
+function statusLabel(status?: string) {
+  const map: Record<string, string> = {
+    pending: "待处理",
+    running: "进行中",
+    completed: "已完成",
+    failed: "失败"
+  };
+  return map[status ?? ""] ?? "未开始";
+}
+
+function riskTone(score: number) {
+  if (score >= 0.75) return "danger";
+  if (score >= 0.55) return "warning";
+  return "success";
+}
+
+function riskLabel(score: number, label: string) {
+  if (label === "suspicious" || score >= 0.75) return "高风险";
+  if (score >= 0.55) return "中风险";
+  return "低风险";
+}
+
+function formatTime(value?: string) {
+  if (!value) return "暂无记录";
+  return value.replace("T", " ").slice(0, 19);
+}
+
+export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, operationFlow, onOpenPage }: Props) {
+  const [networkCount, setNetworkCount] = useState(0);
+  const [timeline, setTimeline] = useState<TaskTimelineResponse | null>(null);
+  const [results, setResults] = useState<InferenceResultItem[]>([]);
+  const [loadMessage, setLoadMessage] = useState("");
+
   const nextAction = hasNetwork
     ? { title: "进入智能研判", detail: "当前网络已就绪，可以直接进入任务编排与风险识别。", page: "analysis" as AppPage }
-    : { title: "接入业务网络", detail: "先选择内置网络或导入业务文件，建立后续分析基础。", page: "access" as AppPage };
-  const statusText = hasNetwork ? "高风险" : "待接入";
-  const statusTone = hasNetwork ? "danger" : "pending";
-  const metricTones = ["network", "risk", "task", "health"];
+    : { title: "接入业务网络", detail: "请先上传 CSV 文件，生成业务网络、人员身份和关系结构。", page: "access" as AppPage };
   const actionPages: AppPage[] = ["access", "network", "analysis", "cases"];
+  const metricTones = ["network", "risk", "task", "health"];
+  const suspiciousCount = results.filter((item) => item.risk_label === "suspicious" || item.risk_score >= 0.75).length;
+  const latestEvent = timeline?.events?.[timeline.events.length - 1];
+  const progress = timeline?.task ? `${Math.round(timeline.task.progress * 100)}%` : hasNetwork ? "0%" : "0%";
+  const statusText = !hasNetwork ? "待接入" : suspiciousCount ? "存在风险" : timeline?.task?.status === "completed" ? "已完成" : "待研判";
+  const statusTone = !hasNetwork ? "pending" : suspiciousCount ? "danger" : "health";
+
+  const metrics = useMemo(
+    () => [
+      { label: "接入网络数", value: `${networkCount} 个`, detail: networkCount ? "来自数据库实时统计" : "暂无已接入网络" },
+      { label: "待复核风险对象", value: `${suspiciousCount} 个`, detail: results.length ? "来自最近一次研判结果" : "完成研判后生成" },
+      { label: "最近研判状态", value: statusLabel(timeline?.task?.status), detail: timeline?.task?.message ?? "暂无研判任务" },
+      { label: "系统可用状态", value: "正常", detail: loadMessage || "服务连接正常" }
+    ],
+    [loadMessage, networkCount, results.length, suspiciousCount, timeline]
+  );
+
+  useEffect(() => {
+    let canceled = false;
+    listDatasets()
+      .then((items) => {
+        if (!canceled) setNetworkCount(items.length);
+      })
+      .catch((error) => {
+        if (!canceled) setLoadMessage(error instanceof Error ? error.message : "网络统计加载失败");
+      });
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let canceled = false;
+    setTimeline(null);
+    setResults([]);
+    if (!selectedDatasetId) return;
+    Promise.all([
+      fetchTimeline(selectedDatasetId).catch(() => null),
+      listInferenceResults(selectedDatasetId).catch(() => [])
+    ]).then(([timelineResult, resultItems]) => {
+      if (canceled) return;
+      setTimeline(timelineResult);
+      setResults(resultItems);
+    });
+    return () => {
+      canceled = true;
+    };
+  }, [selectedDatasetId]);
 
   return (
     <div className="monitor-workspace">
@@ -101,7 +164,7 @@ export function MonitorView({ currentNetwork, hasNetwork, monitorCards, operatio
           <WorkbenchIcon tone="task" />
           <div>
             <span>最近分析时间</span>
-            <strong>{hasNetwork ? "2025-05-20 10:30:45" : "等待接入"}</strong>
+            <strong>{formatTime(latestEvent?.created_at)}</strong>
           </div>
         </div>
         <div className="risk-context-item">
@@ -115,13 +178,13 @@ export function MonitorView({ currentNetwork, hasNetwork, monitorCards, operatio
           <WorkbenchIcon tone="health" />
           <div>
             <span>处理进度</span>
-            <strong>{hasNetwork ? "68%" : "0%"}</strong>
+            <strong>{progress}</strong>
           </div>
         </div>
       </section>
 
       <section className="risk-kpi-grid" aria-label="风险工作台指标">
-        {monitorCards.map((card, index) => (
+        {metrics.map((card, index) => (
           <article key={card.label} className="risk-kpi-card">
             <WorkbenchIcon tone={metricTones[index] ?? "network"} />
             <div>
@@ -142,28 +205,38 @@ export function MonitorView({ currentNetwork, hasNetwork, monitorCards, operatio
             </div>
             <button type="button" className="text-link-button" onClick={() => onOpenPage("cases")}>查看全部</button>
           </div>
-          <div className="risk-object-table">
-            <div className="risk-object-table__head">
-              <span>风险对象</span>
-              <span>风险等级</span>
-              <span>关联数量</span>
-              <span>处理状态</span>
+          {results.length ? (
+            <div className="risk-object-table">
+              <div className="risk-object-table__head">
+                <span>风险对象</span>
+                <span>风险等级</span>
+                <span>风险分数</span>
+                <span>处理状态</span>
+              </div>
+              {results.slice(0, 5).map((item) => {
+                const tone = riskTone(item.risk_score);
+                return (
+                  <button key={item.node_id} type="button" className="risk-object-row" onClick={() => onOpenPage("cases")}>
+                    <span className="risk-object-profile">
+                      <span className={`risk-avatar risk-avatar--${tone}`} aria-hidden="true" />
+                      <span>
+                        <strong>{item.display_name}</strong>
+                        <small>{item.region || "人员对象"}</small>
+                      </span>
+                    </span>
+                    <span className={`risk-badge risk-badge--${tone}`}>{riskLabel(item.risk_score, item.risk_label)}</span>
+                    <span>{item.risk_score.toFixed(3)}</span>
+                    <span className="risk-state risk-state--waiting">待复核</span>
+                  </button>
+                );
+              })}
             </div>
-            {riskObjects.map((item) => (
-              <button key={item.name} type="button" className="risk-object-row" onClick={() => onOpenPage("cases")}>
-                <span className="risk-object-profile">
-                  <span className={`risk-avatar risk-avatar--${item.tone}`} aria-hidden="true" />
-                  <span>
-                    <strong>{item.name}</strong>
-                    <small>{item.type}</small>
-                  </span>
-                </span>
-                <span className={`risk-badge risk-badge--${item.tone}`}>{item.level}</span>
-                <span>{item.count}</span>
-                <span className={`risk-state risk-state--${item.status === "处理中" ? "active" : "waiting"}`}>{item.status}</span>
-              </button>
-            ))}
-          </div>
+          ) : (
+            <div className="empty-network-state">
+              <strong>暂无待处理风险</strong>
+              <span>{hasNetwork ? "完成智能研判后，这里会展示真实风险对象。" : "请先接入业务网络。"}</span>
+            </div>
+          )}
         </article>
 
         <article className="risk-board-panel">
@@ -181,61 +254,81 @@ export function MonitorView({ currentNetwork, hasNetwork, monitorCards, operatio
                 <small>{nextAction.detail}</small>
               </span>
             </button>
-          {operationFlow.map((step, index) => {
+            {operationFlow.map((step, index) => {
               const target = actionPages[index];
-            return (
+              return (
                 <button key={step.title} type="button" className="risk-action-card" onClick={() => onOpenPage(target)}>
                   <WorkbenchIcon tone={metricTones[index] ?? "network"} />
                   <span>
                     <strong>{step.title}</strong>
                     <small>{step.detail}</small>
                   </span>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
           </div>
         </article>
       </section>
 
       <section className="risk-record-grid">
-        <article className="risk-board-panel">
-          <div className="risk-board-heading">
-            <div>
-              <p className="eyebrow">Operation Logs</p>
-              <h3>最近操作记录</h3>
-            </div>
-          </div>
-          <div className="risk-mini-table">
-            {operationRecords.map((record) => (
-              <div key={`${record.time}-${record.action}`}>
-                <span>{record.time}</span>
-                <span>{record.operator}</span>
-                <strong>{record.action}</strong>
-                <em>{record.result}</em>
-              </div>
-            ))}
-          </div>
-        </article>
-        <article className="risk-board-panel">
-          <div className="risk-board-heading">
-            <div>
-              <p className="eyebrow">Analysis Logs</p>
-              <h3>最近分析记录</h3>
-            </div>
-            <button type="button" className="text-link-button" onClick={() => onOpenPage("analysis")}>查看全部</button>
-          </div>
-          <div className="risk-mini-table risk-mini-table--analysis">
-            {analysisRecords.map((record) => (
-              <div key={`${record.time}-${record.high}`}>
-                <span>{record.time}</span>
-                <strong>{record.scope}</strong>
-                <span>高风险 {record.high} / 中风险 {record.medium}</span>
-                <em>{record.analyst}</em>
-              </div>
-            ))}
-          </div>
-        </article>
+        <TimelinePanel
+          title="最近操作记录"
+          eyebrow="Operation Logs"
+          events={timeline?.events ?? []}
+          emptyText={hasNetwork ? "暂无操作记录，启动处理任务后自动生成。" : "接入业务网络后显示操作记录。"}
+        />
+        <TimelinePanel
+          title="最近分析记录"
+          eyebrow="Analysis Logs"
+          events={(timeline?.events ?? []).filter((item) => item.stage === "inference" || item.stage === "feature")}
+          emptyText={hasNetwork ? "暂无分析记录，完成特征处理或研判后自动生成。" : "接入业务网络后显示分析记录。"}
+          action={() => onOpenPage("analysis")}
+        />
       </section>
     </div>
+  );
+}
+
+function TimelinePanel({
+  title,
+  eyebrow,
+  events,
+  emptyText,
+  action
+}: {
+  title: string;
+  eyebrow: string;
+  events: ProcessingEventItem[];
+  emptyText: string;
+  action?: () => void;
+}) {
+  const displayEvents = [...events].slice(-4).reverse();
+  return (
+    <article className="risk-board-panel">
+      <div className="risk-board-heading">
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h3>{title}</h3>
+        </div>
+        {action ? <button type="button" className="text-link-button" onClick={action}>查看全部</button> : null}
+      </div>
+      {displayEvents.length ? (
+        <div className="risk-mini-table">
+          {displayEvents.map((event) => (
+            <div key={event.id}>
+              <span>{formatTime(event.created_at)}</span>
+              <span>{event.stage}</span>
+              <strong>{event.title}</strong>
+              <em>{Math.round(event.progress * 100)}%</em>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-network-state compact-empty-state">
+          <strong>暂无记录</strong>
+          <span>{emptyText}</span>
+        </div>
+      )}
+    </article>
   );
 }

@@ -187,10 +187,16 @@ export function listDatasets() {
   return request<DatasetSummary[]>("/datasets");
 }
 
-export function uploadDataset(file: File, useLlm = false) {
+export function uploadDataset(file: File, useLlm = false, networkName = "", eventName = "") {
   const form = new FormData();
   form.append("file", file);
   form.append("use_llm", String(useLlm));
+  if (networkName.trim()) {
+    form.append("network_name", networkName.trim());
+  }
+  if (eventName.trim()) {
+    form.append("event_name", eventName.trim());
+  }
   return request<DatasetSummary>("/datasets/upload", {
     method: "POST",
     body: form
@@ -199,6 +205,17 @@ export function uploadDataset(file: File, useLlm = false) {
 
 export function createDemoDataset(datasetName: string) {
   return request<DatasetSummary>(`/datasets/demo/${datasetName}`, { method: "POST" });
+}
+
+export function updateDataset(datasetId: number, businessName: string) {
+  return request<DatasetSummary>(`/datasets/${datasetId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ business_name: businessName })
+  });
+}
+
+export function deleteDataset(datasetId: number) {
+  return request<{ message: string }>(`/datasets/${datasetId}`, { method: "DELETE" });
 }
 
 export function fetchGraph(datasetId: number) {

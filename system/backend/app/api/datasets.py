@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import shutil
+import hashlib
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import UPLOAD_ROOT
 from app.database import get_db
-from app.models import DatasetUpload, GraphEdge, InferenceResult, PersonNode
+from app.models import DatasetUpload, GraphEdge, InferenceResult, PersonNode, ProcessingEvent, ProcessingTask
 from app.schemas import (
     DatasetSummary,
+    DatasetUpdateRequest,
     GraphEdgeItem,
     GraphNode,
     GraphResponse,
@@ -47,6 +49,20 @@ from app.services.synthetic_identity import synthetic_person_for_node
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 
+FRAUD_EVENT_PROFILES = [
+    "异常资金快进快出",
+    "多账户协同套现",
+    "虚假商户交易团伙",
+    "高频小额试探交易",
+    "跨区域异常转移",
+    "账号接管风险事件",
+    "疑似洗钱链路扩散",
+    "空壳企业关联交易",
+    "设备集群异常注册",
+    "黑灰产中介撮合",
+]
+
+
 @router.get("", response_model=list[DatasetSummary])
 def list_datasets(db: Session = Depends(get_db)) -> list[DatasetSummary]:
     datasets = db.scalars(select(DatasetUpload).order_by(DatasetUpload.created_at.desc())).all()
@@ -56,6 +72,8 @@ def list_datasets(db: Session = Depends(get_db)) -> list[DatasetSummary]:
 @router.post("/upload", response_model=DatasetSummary)
 def upload_dataset(
     file: UploadFile = File(...),
+    network_name: str | None = Form(None),
+    event_name: str | None = Form(None),
     use_llm: bool = Form(False),
     db: Session = Depends(get_db),
 ) -> DatasetSummary:
@@ -85,6 +103,8 @@ def upload_dataset(
         "mapping_message": mapping_message,
         "source": "uploaded_csv",
     }
+    business_name = _normalize_business_name(network_name) or _business_name_for_upload(storage_path.stem)
+    fraud_event = _normalize_event_name(event_name, seed=storage_path.stem)
     dataset = DatasetUpload(
         name=storage_path.stem,
         original_filename=safe_name,
@@ -97,7 +117,15 @@ def upload_dataset(
     db.add(dataset)
     db.flush()
 
-    inserted_nodes = _insert_nodes(db=db, dataset_id=dataset.id, frame=frame, mapping=mapping)
+    business_id = _business_id_for(dataset.id)
+    inserted_nodes = _insert_nodes(
+        db=db,
+        dataset_id=dataset.id,
+        frame=frame,
+        mapping=mapping,
+        business_id=business_id,
+        fraud_event=fraud_event,
+    )
     inserted_edges = _insert_edges(db=db, dataset_id=dataset.id, frame=frame, mapping=mapping)
     dataset.summary_json = build_dataset_summary(
         node_count=inserted_nodes,
@@ -107,10 +135,14 @@ def upload_dataset(
     )
     dataset.summary_json.update(
         {
-            "business_name": _business_name_for_upload(storage_path.stem),
+            "business_id": business_id,
+            "business_name": business_name,
             "source_description": f"自定义上传文件 · {safe_name}",
             "technical_name": storage_path.stem,
             "ingest_mode": "uploaded_csv",
+            "fraud_event": fraud_event,
+            "risk_object_type": "person",
+            "identity_mode": "synthetic_person",
         }
     )
     task = create_task(
@@ -137,6 +169,40 @@ def upload_dataset(
     db.commit()
     db.refresh(dataset)
     return _dataset_summary(dataset)
+
+
+@router.patch("/{dataset_id}", response_model=DatasetSummary)
+def update_dataset(
+    dataset_id: int,
+    payload: DatasetUpdateRequest,
+    db: Session = Depends(get_db),
+) -> DatasetSummary:
+    dataset = db.get(DatasetUpload, dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    summary = dict(dataset.summary_json or {})
+    summary["business_name"] = payload.business_name.strip()
+    dataset.summary_json = summary
+    db.commit()
+    db.refresh(dataset)
+    return _dataset_summary(dataset)
+
+
+@router.delete("/{dataset_id}")
+def delete_dataset(dataset_id: int, db: Session = Depends(get_db)) -> dict[str, str]:
+    dataset = db.get(DatasetUpload, dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    for model in (InferenceResult, GraphEdge, PersonNode):
+        db.execute(delete(model).where(model.dataset_id == dataset_id))
+    db.execute(delete(ProcessingEvent).where(ProcessingEvent.dataset_id == dataset_id))
+    db.execute(delete(ProcessingTask).where(ProcessingTask.dataset_id == dataset_id))
+    storage_path = Path(dataset.storage_path)
+    db.delete(dataset)
+    db.commit()
+    if storage_path.exists() and storage_path.is_file() and storage_path.parent == UPLOAD_ROOT:
+        storage_path.unlink(missing_ok=True)
+    return {"message": "business network deleted"}
 
 
 @router.get("/{dataset_id}/mapping", response_model=MappingResponse)
@@ -373,8 +439,10 @@ def _presentation_summary(dataset: DatasetUpload) -> dict[str, Any]:
             summary.setdefault("technical_label", profile["technical_label"])
     else:
         summary.setdefault("business_name", _business_name_for_upload(dataset.name))
+        summary.setdefault("business_id", _business_id_for(dataset.id))
         summary.setdefault("source_description", f"自定义上传文件 · {dataset.original_filename}")
         summary.setdefault("technical_name", dataset.name)
+        summary.setdefault("risk_object_type", "person")
     return summary
 
 
@@ -475,6 +543,10 @@ def _result_items(
     return items
 
 
+def _business_id_for(dataset_id: int) -> str:
+    return f"BN-{dataset_id:04d}"
+
+
 def _business_name_for_upload(raw_name: str) -> str:
     cleaned = raw_name.replace("_", " ").replace("-", " ").strip()
     if not cleaned:
@@ -482,13 +554,48 @@ def _business_name_for_upload(raw_name: str) -> str:
     return f"自定义关系网络 · {cleaned.title()}"
 
 
-def _insert_nodes(*, db: Session, dataset_id: int, frame: pd.DataFrame, mapping: dict[str, Any]) -> int:
+def _normalize_business_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    return text[:80] if text else None
+
+
+def _normalize_event_name(value: str | None, *, seed: str) -> str:
+    if value is not None and value.strip():
+        return value.strip()[:80]
+    index = _stable_bucket(seed, len(FRAUD_EVENT_PROFILES))
+    return FRAUD_EVENT_PROFILES[index]
+
+
+def _gang_id_for(*, dataset_id: int, node_id: str, fraud_event: str) -> str:
+    bucket = _stable_bucket(f"{dataset_id}:{fraud_event}:{node_id}", 12) + 1
+    return f"FG-{dataset_id:04d}-{bucket:02d}"
+
+
+def _stable_bucket(value: str, size: int) -> int:
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return int(digest[:12], 16) % size
+
+
+def _insert_nodes(
+    *,
+    db: Session,
+    dataset_id: int,
+    frame: pd.DataFrame,
+    mapping: dict[str, Any],
+    business_id: str,
+    fraud_event: str,
+) -> int:
     node_column = mapping["node_id"]
     feature_columns = mapping.get("feature_columns") or []
     seen: set[str] = set()
     inserted = 0
     for row in frame.head(5000).to_dict(orient="records"):
-        node_id = str(row.get(node_column))
+        raw_node_id = row.get(node_column)
+        if raw_node_id is None or pd.isna(raw_node_id):
+            continue
+        node_id = str(raw_node_id)
         if not node_id or node_id in seen:
             continue
         seen.add(node_id)
@@ -498,11 +605,20 @@ def _insert_nodes(*, db: Session, dataset_id: int, frame: pd.DataFrame, mapping:
             for column in feature_columns
             if _is_numeric(row.get(column))
         }
+        object_id = f"P-{dataset_id:04d}-{inserted + 1:06d}"
         db.add(
             PersonNode(
                 dataset_id=dataset_id,
                 node_id=node_id,
-                raw_json={key: _json_value(value) for key, value in row.items()},
+                raw_json={
+                    "source": "uploaded_csv",
+                    "object_type": "person",
+                    "business_id": business_id,
+                    "person_object_id": object_id,
+                    "fraud_event": fraud_event,
+                    "gang_id": _gang_id_for(dataset_id=dataset_id, node_id=node_id, fraud_event=fraud_event),
+                    "original_row": {key: _json_value(value) for key, value in row.items()},
+                },
                 feature_json=features,
                 **person,
             )

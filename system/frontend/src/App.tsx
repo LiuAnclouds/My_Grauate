@@ -14,15 +14,8 @@ const navItems: NavItem[] = [
   { key: "admin", label: "系统设置", eyebrow: "System", description: "管理账号、状态与系统配置", shortLabel: "设置" }
 ];
 
-const monitorCards = [
-  { label: "接入网络数", value: "3 个", detail: "较昨日 +2" },
-  { label: "待复核风险对象", value: "128 个", detail: "较昨日 +15" },
-  { label: "最近研判状态", value: "进行中", detail: "高风险线索 36 条" },
-  { label: "系统可用状态", value: "99.9%", detail: "健康运行中" }
-];
-
 const operationFlow = [
-  { title: "选择业务网络", detail: "从默认网络进入，也可以导入业务 CSV 文件。" },
+  { title: "接入业务网络", detail: "上传 CSV 文件并生成可分析的人员关系网络。" },
   { title: "查看关系结构", detail: "在关系网络中定位对象、交易方向和异常关联。" },
   { title: "启动智能研判", detail: "执行特征整理、邻域聚合和模型风险识别。" },
   { title: "复核风险名单", detail: "查看高风险对象画像、分数、原因和关联对象。" }
@@ -46,9 +39,9 @@ export default function App() {
     return selectedNetworkName || (selectedDatasetId ? "已接入业务网络" : "尚未接入业务网络");
   }, [selectedDatasetId, selectedNetworkName]);
 
-  function handleBusinessSelect(datasetId: number, networkName?: string) {
+  function handleBusinessSelect(datasetId: number | null, networkName?: string) {
     setSelectedDatasetId(datasetId);
-    setSelectedNetworkName(networkName ?? "已接入业务网络");
+    setSelectedNetworkName(datasetId ? networkName ?? "已接入业务网络" : "");
     setHighlightedNodeId(null);
     setActiveTimelineNodeId(null);
   }
@@ -66,7 +59,6 @@ export default function App() {
       graphRefreshKey={graphRefreshKey}
       highlightedNodeId={highlightedNodeId}
       activeTimelineNodeId={activeTimelineNodeId}
-      monitorCards={monitorCards}
       operationFlow={operationFlow}
       adminCards={adminCards}
       onLogout={() => setSession(null)}

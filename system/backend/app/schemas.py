@@ -52,6 +52,10 @@ class DatasetSummary(BaseModel):
     summary: dict[str, Any] = {}
 
 
+class DatasetUpdateRequest(BaseModel):
+    business_name: str = Field(min_length=1, max_length=80)
+
+
 class MappingResponse(BaseModel):
     dataset_id: int | None = None
     mapping: dict[str, Any]

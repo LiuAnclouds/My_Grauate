@@ -20,7 +20,6 @@ export type NavItem = {
   shortLabel: string;
 };
 
-type MonitorCard = { label: string; value: string; detail: string };
 type OperationStep = { title: string; detail: string };
 type AdminCard = { title: string; detail: string };
 
@@ -32,11 +31,10 @@ type Props = {
   graphRefreshKey: number;
   highlightedNodeId: string | null;
   activeTimelineNodeId: string | null;
-  monitorCards: MonitorCard[];
   operationFlow: OperationStep[];
   adminCards: AdminCard[];
   onLogout: () => void;
-  onBusinessSelect: (datasetId: number, networkName?: string) => void;
+  onBusinessSelect: (datasetId: number | null, networkName?: string) => void;
   onGraphRefresh: () => void;
   onHighlightNode: (nodeId: string | null) => void;
   onTimelineNode: (nodeId: string | null) => void;
@@ -50,7 +48,6 @@ export function AuthenticatedAppShell({
   graphRefreshKey,
   highlightedNodeId,
   activeTimelineNodeId,
-  monitorCards,
   operationFlow,
   adminCards,
   onLogout,
@@ -109,7 +106,7 @@ export function AuthenticatedAppShell({
 
           <div className="app-page-stack">
             {activePage === "monitor" ? (
-              <MonitorView currentNetwork={currentNetwork} hasNetwork={hasNetwork} monitorCards={monitorCards} operationFlow={operationFlow} onOpenPage={openPage} />
+              <MonitorView currentNetwork={currentNetwork} selectedDatasetId={selectedDatasetId} hasNetwork={hasNetwork} operationFlow={operationFlow} onOpenPage={openPage} />
             ) : null}
 
             {activePage === "access" ? (
