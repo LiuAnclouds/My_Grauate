@@ -255,7 +255,7 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
               <input value={networkName} onChange={(event) => setNetworkName(event.target.value)} placeholder="例如：华东支付异常事件" />
             </label>
             <label className="network-edit-field">
-              <span>欺诈事件映射</span>
+              <span>欺诈类型</span>
               <select value={eventName} onChange={(event) => setEventName(event.target.value)}>
                 {fraudEvents.map((item) => (
                   <option key={item} value={item}>{item}</option>
