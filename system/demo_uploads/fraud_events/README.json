@@ -1,0 +1,82 @@
+[
+  {
+    "file": "01_xinye_event_fast_fund_flow.csv",
+    "dataset": "xinye_dgraph",
+    "event_key": "event_fast_fund_flow",
+    "event_label": "异常资金快进快出",
+    "rows": 500,
+    "feature_columns": 12
+  },
+  {
+    "file": "02_xinye_event_multi_account_cashout.csv",
+    "dataset": "xinye_dgraph",
+    "event_key": "event_multi_account_cashout",
+    "event_label": "多账户协同套现",
+    "rows": 500,
+    "feature_columns": 12
+  },
+  {
+    "file": "03_xinye_event_fake_merchant_ring.csv",
+    "dataset": "xinye_dgraph",
+    "event_key": "event_fake_merchant_ring",
+    "event_label": "虚假商户交易团伙",
+    "rows": 500,
+    "feature_columns": 12
+  },
+  {
+    "file": "04_et_event_high_freq_micro_probe.csv",
+    "dataset": "elliptic_transactions",
+    "event_key": "event_high_freq_micro_probe",
+    "event_label": "高频小额试探交易",
+    "rows": 500,
+    "feature_columns": 12
+  },
+  {
+    "file": "05_et_event_cross_region_transfer.csv",
+    "dataset": "elliptic_transactions",
+    "event_key": "event_cross_region_transfer",
+    "event_label": "跨区域异常转移",
+    "rows": 500,
+    "feature_columns": 12
+  },
+  {
+    "file": "06_et_event_account_takeover.csv",
+    "dataset": "elliptic_transactions",
+    "event_key": "event_account_takeover",
+    "event_label": "账号接管风险事件",
+    "rows": 500,
+    "feature_columns": 12
+  },
+  {
+    "file": "07_epp_event_laundering_chain.csv",
+    "dataset": "ellipticpp_transactions",
+    "event_key": "event_laundering_chain",
+    "event_label": "疑似洗钱链路扩散",
+    "rows": 500,
+    "feature_columns": 12
+  },
+  {
+    "file": "08_epp_event_shell_company_trade.csv",
+    "dataset": "ellipticpp_transactions",
+    "event_key": "event_shell_company_trade",
+    "event_label": "空壳企业关联交易",
+    "rows": 500,
+    "feature_columns": 12
+  },
+  {
+    "file": "09_epp_event_device_cluster_signup.csv",
+    "dataset": "ellipticpp_transactions",
+    "event_key": "event_device_cluster_signup",
+    "event_label": "设备集群异常注册",
+    "rows": 500,
+    "feature_columns": 12
+  },
+  {
+    "file": "10_mixed_event_black_market_broker.csv",
+    "dataset": "xinye_dgraph",
+    "event_key": "event_black_market_broker",
+    "event_label": "黑灰产中介撮合",
+    "rows": 500,
+    "feature_columns": 12
+  }
+]
