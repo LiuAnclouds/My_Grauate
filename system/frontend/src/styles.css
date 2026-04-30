@@ -4348,12 +4348,12 @@ tbody tr:hover {
   --app-radius-sm: 14px;
   --app-sidebar-width: 248px;
   --app-sidebar-collapsed: 88px;
-  --app-topbar-height: 86px;
+  --app-topbar-height: 78px;
 }
 
 .nextgen-shell {
   min-height: 100vh;
-  padding: 14px;
+  padding: 12px;
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 26%),
     radial-gradient(circle at right top, rgba(15, 23, 42, 0.06), transparent 22%),
@@ -4365,7 +4365,7 @@ tbody tr:hover {
   grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
   gap: 14px;
   align-items: stretch;
-  min-height: calc(100vh - 28px);
+  min-height: calc(100vh - 24px);
 }
 
 .app-shell-grid.is-collapsed {
@@ -4377,13 +4377,13 @@ tbody tr:hover {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
-  min-height: calc(100vh - 28px);
+  min-height: calc(100vh - 24px);
 }
 
 .app-page-stack {
   display: grid;
   gap: 14px;
-  min-height: 0;
+  min-height: 100%;
 }
 
 .app-sidebar {
@@ -4649,8 +4649,8 @@ tbody tr:hover {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.58fr) auto;
   align-items: center;
-  gap: 14px;
-  padding: 12px 18px;
+  gap: 12px;
+  padding: 10px 16px;
   min-height: var(--app-topbar-height);
   border-radius: var(--app-radius-xl);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 251, 255, 0.98) 100%);
@@ -4680,7 +4680,7 @@ tbody tr:hover {
 .app-topbar-shell__right .account-pill,
 .app-topbar-shell__right .role-pill,
 .app-topbar-shell__right .app-logout-button {
-  min-height: 38px;
+  min-height: 34px;
 }
 
 .app-topbar-shell__right .account-pill,
@@ -4695,8 +4695,8 @@ tbody tr:hover {
 }
 
 .app-topbar-brand-mark {
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
   border-radius: 16px;
@@ -4721,7 +4721,7 @@ tbody tr:hover {
 .app-topbar-shell__title-block h1 {
   margin: 0;
   color: var(--app-text);
-  font-size: 26px;
+  font-size: 24px;
   line-height: 1.1;
   letter-spacing: -0.03em;
 }
@@ -4736,7 +4736,7 @@ tbody tr:hover {
 .app-topbar-shell__summary-card {
   display: grid;
   gap: 2px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 16px;
   background: linear-gradient(135deg, rgba(219, 234, 254, 0.62) 0%, rgba(240, 249, 255, 0.96) 100%);
   border: 1px solid rgba(96, 165, 250, 0.2);
@@ -4750,7 +4750,7 @@ tbody tr:hover {
 .app-topbar-shell__center {
   display: grid;
   gap: 2px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 16px;
   background: linear-gradient(135deg, rgba(219, 234, 254, 0.74) 0%, rgba(236, 253, 245, 0.8) 100%);
   border: 1px solid rgba(96, 165, 250, 0.24);
@@ -4773,7 +4773,7 @@ tbody tr:hover {
 }
 
 .app-logout-button {
-  min-height: 42px;
+  min-height: 36px;
 }
 
 .app-page-header {
@@ -4855,6 +4855,11 @@ tbody tr:hover {
   gap: 18px;
 }
 
+.app-page-grid {
+  min-height: 100%;
+  align-items: stretch;
+}
+
 .analysis-command-grid {
   grid-template-columns: minmax(360px, 0.92fr) minmax(0, 1.08fr);
   align-items: start;
@@ -4863,6 +4868,11 @@ tbody tr:hover {
 .app-page-primary,
 .app-page-secondary {
   min-width: 0;
+}
+
+.app-page-primary {
+  display: grid;
+  min-height: 100%;
 }
 
 .app-panel,
@@ -4935,6 +4945,10 @@ tbody tr:hover {
 .admin-workspace {
   display: grid;
   gap: 18px;
+}
+
+.monitor-workspace {
+  min-height: calc(100vh - var(--app-topbar-height) - 50px);
 }
 
 .ops-overview-hero {
@@ -5637,7 +5651,7 @@ tbody tr:hover {
 
 .app-module-page {
   display: grid;
-  min-height: calc(100vh - var(--app-topbar-height) - 56px);
+  min-height: calc(100vh - var(--app-topbar-height) - 50px);
 }
 
 .business-network-layout {
@@ -5964,7 +5978,7 @@ tbody tr:hover {
 /* Business network page: one clear directory plus one import panel. */
 .business-network-layout {
   grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
-  min-height: calc(100vh - var(--app-topbar-height) - 56px);
+  min-height: calc(100vh - var(--app-topbar-height) - 50px);
   align-items: stretch;
 }
 
@@ -6371,6 +6385,10 @@ tbody tr:hover {
   .admin-note-panel {
     padding: 18px;
     border-radius: 22px;
+  }
+
+  .app-topbar-shell {
+    padding: 14px;
   }
 
   .app-topbar-shell__title-block h1 {

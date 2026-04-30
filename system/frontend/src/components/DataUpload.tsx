@@ -203,7 +203,7 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
             </div>
             <div className="network-import-intro">
               <h3>上传业务记录</h3>
-              <p>生成独立网络 ID，并进入后续分析流程。</p>
+              <p>生成网络 ID，进入分析。</p>
             </div>
             <label className="network-edit-field">
               <span>网络名称</span>

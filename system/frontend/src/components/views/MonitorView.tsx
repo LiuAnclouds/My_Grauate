@@ -87,8 +87,8 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
   const [loadMessage, setLoadMessage] = useState("");
 
   const nextAction = hasNetwork
-    ? { title: "进入智能研判", detail: "当前网络已就绪，可以直接进入任务编排与风险识别。", page: "analysis" as AppPage }
-    : { title: "接入业务网络", detail: "请先上传 CSV 文件，生成业务网络、人员身份和关系结构。", page: "access" as AppPage };
+    ? { title: "进入智能研判", detail: "网络已就绪，开始识别。", page: "analysis" as AppPage }
+    : { title: "接入业务网络", detail: "先上传业务记录。", page: "access" as AppPage };
   const actionPages: AppPage[] = ["access", "network", "analysis", "cases"];
   const metricTones = ["network", "risk", "task", "health"];
   const suspiciousCount = results.filter((item) => item.risk_label === "suspicious" || item.risk_score >= 0.75).length;
@@ -99,12 +99,12 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
 
   const metrics = useMemo(
     () => [
-      { label: "接入网络数", value: `${networkCount} 个`, detail: networkCount ? "来自数据库实时统计" : "暂无已接入网络" },
-      { label: "待复核风险对象", value: `${suspiciousCount} 个`, detail: results.length ? "来自最近一次研判结果" : "完成研判后生成" },
-      { label: "最近研判状态", value: statusLabel(timeline?.task?.status), detail: timeline?.task?.message ?? "暂无研判任务" },
-      { label: "系统可用状态", value: "正常", detail: loadMessage || "服务连接正常" }
+      { label: "接入网络数", value: `${networkCount} 个`, detail: networkCount ? "已接入" : "暂无网络" },
+      { label: "待复核风险对象", value: `${suspiciousCount} 个`, detail: results.length ? "待处理" : "待生成" },
+      { label: "最近研判状态", value: statusLabel(timeline?.task?.status), detail: timeline?.task ? `${progress} 完成` : "暂无任务" },
+      { label: "系统可用状态", value: "正常", detail: loadMessage || "连接正常" }
     ],
-    [loadMessage, networkCount, results.length, suspiciousCount, timeline]
+    [loadMessage, networkCount, progress, results.length, suspiciousCount, timeline]
   );
 
   useEffect(() => {
@@ -145,7 +145,7 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
         <div>
           <p className="eyebrow">Risk Operations</p>
           <h2>风险工作台</h2>
-          <p>风险态势全局感知，风险对象高效处置。</p>
+          <p>风险态势与处置入口。</p>
         </div>
         <button className="secondary risk-workbench-hero__button" type="button" onClick={() => onOpenPage(nextAction.page)}>
           {nextAction.title}
@@ -234,7 +234,7 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
           ) : (
             <div className="empty-network-state">
               <strong>暂无待处理风险</strong>
-              <span>{hasNetwork ? "完成智能研判后，这里会展示真实风险对象。" : "请先接入业务网络。"}</span>
+              <span>{hasNetwork ? "研判后显示风险对象。" : "请先接入业务网络。"}</span>
             </div>
           )}
         </article>
@@ -281,7 +281,7 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
           title="最近分析记录"
           eyebrow="Analysis Logs"
           events={(timeline?.events ?? []).filter((item) => item.stage === "inference" || item.stage === "feature")}
-          emptyText={hasNetwork ? "暂无分析记录，完成特征处理或研判后自动生成。" : "接入业务网络后显示分析记录。"}
+          emptyText={hasNetwork ? "任务启动后生成。" : "接入业务网络后显示记录。"}
           action={() => onOpenPage("analysis")}
         />
       </section>
