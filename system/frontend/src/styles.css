@@ -5959,8 +5959,9 @@ tbody tr:hover {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 2px;
+  gap: clamp(10px, 1.15vh, 14px);
+  justify-content: flex-start;
+  padding-bottom: clamp(4px, 0.9vh, 8px);
 }
 
 .app-nav-group {
@@ -5968,38 +5969,36 @@ tbody tr:hover {
 }
 
 .app-nav-group--analysis {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
 }
 
 .app-nav-group--analysis .app-nav-group__items {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  grid-template-rows: repeat(5, minmax(clamp(68px, 8vh, 84px), auto));
+  gap: clamp(7px, 0.85vh, 10px);
 }
 
 .app-nav-group--analysis .app-nav-item {
-  flex: 1 1 0;
-  min-height: 74px;
-  max-height: 92px;
+  min-height: clamp(68px, 8vh, 84px);
+  max-height: none;
 }
 
 .app-nav-group--system {
   flex: 0 0 auto;
-  margin-top: 0;
+  margin-top: clamp(4px, 1vh, 12px);
 }
 
 .app-nav-group--system .app-nav-item {
-  min-height: 78px;
+  min-height: clamp(68px, 7.6vh, 78px);
 }
 
 .app-nav-item {
   align-items: center;
-  padding: 12px 12px;
+  padding: clamp(10px, 1.05vh, 12px) 12px;
 }
 
 .app-nav-item__copy {
@@ -6040,20 +6039,20 @@ tbody tr:hover {
 }
 
 .is-collapsed .app-sidebar__nav-list {
-  gap: 10px;
+  gap: clamp(8px, 1vh, 12px);
 }
 
 .is-collapsed .app-nav-group--analysis .app-nav-group__items {
-  gap: 7px;
+  gap: clamp(6px, 0.75vh, 8px);
 }
 
 .is-collapsed .app-nav-group--analysis .app-nav-item {
-  min-height: 70px;
-  max-height: 82px;
+  min-height: clamp(62px, 7.6vh, 76px);
+  max-height: none;
 }
 
 .is-collapsed .app-nav-group--system .app-nav-item {
-  min-height: 70px;
+  min-height: clamp(62px, 7.2vh, 72px);
 }
 
 .is-collapsed .app-nav-item__copy strong {
@@ -6070,7 +6069,6 @@ tbody tr:hover {
   }
 
   .app-nav-group--analysis .app-nav-item {
-    flex: 0 0 auto;
     min-height: 66px;
   }
 
