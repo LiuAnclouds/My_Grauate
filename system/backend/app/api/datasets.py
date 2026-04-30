@@ -7,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import UPLOAD_ROOT
@@ -66,7 +66,7 @@ FRAUD_EVENT_PROFILES = [
 @router.get("", response_model=list[DatasetSummary])
 def list_datasets(db: Session = Depends(get_db)) -> list[DatasetSummary]:
     datasets = db.scalars(select(DatasetUpload).order_by(DatasetUpload.created_at.desc())).all()
-    return [_dataset_summary(item) for item in datasets]
+    return [_dataset_summary(item, db=db) for item in datasets]
 
 
 @router.post("/upload", response_model=DatasetSummary)
@@ -168,7 +168,7 @@ def upload_dataset(
     )
     db.commit()
     db.refresh(dataset)
-    return _dataset_summary(dataset)
+    return _dataset_summary(dataset, db=db)
 
 
 @router.patch("/{dataset_id}", response_model=DatasetSummary)
@@ -185,7 +185,7 @@ def update_dataset(
     dataset.summary_json = summary
     db.commit()
     db.refresh(dataset)
-    return _dataset_summary(dataset)
+    return _dataset_summary(dataset, db=db)
 
 
 @router.delete("/{dataset_id}")
@@ -235,7 +235,7 @@ def create_demo_dataset(
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return _dataset_summary(dataset)
+    return _dataset_summary(dataset, db=db)
 
 
 @router.get("/{dataset_id}/graph", response_model=GraphResponse)
@@ -414,7 +414,7 @@ def list_inference_results(
     return _result_items(db=db, dataset_id=dataset_id, records=records)
 
 
-def _dataset_summary(dataset: DatasetUpload) -> DatasetSummary:
+def _dataset_summary(dataset: DatasetUpload, *, db: Session | None = None) -> DatasetSummary:
     return DatasetSummary(
         id=dataset.id,
         name=dataset.name,
@@ -422,11 +422,11 @@ def _dataset_summary(dataset: DatasetUpload) -> DatasetSummary:
         row_count=dataset.row_count,
         status=dataset.status,
         created_at=dataset.created_at,
-        summary=_presentation_summary(dataset),
+        summary=_presentation_summary(dataset, db=db),
     )
 
 
-def _presentation_summary(dataset: DatasetUpload) -> dict[str, Any]:
+def _presentation_summary(dataset: DatasetUpload, *, db: Session | None = None) -> dict[str, Any]:
     summary = dict(dataset.summary_json or {})
     mapping = dict(dataset.mapping_json or {})
     if mapping.get("source") == "official_validation":
@@ -443,6 +443,17 @@ def _presentation_summary(dataset: DatasetUpload) -> dict[str, Any]:
         summary.setdefault("source_description", f"自定义上传文件 · {dataset.original_filename}")
         summary.setdefault("technical_name", dataset.name)
         summary.setdefault("risk_object_type", "person")
+    summary.setdefault("business_id", _business_id_for(dataset.id))
+    summary.setdefault("risk_object_type", "person")
+    if db is not None:
+        if summary.get("node_count") is None:
+            summary["node_count"] = int(
+                db.scalar(select(func.count()).select_from(PersonNode).where(PersonNode.dataset_id == dataset.id)) or 0
+            )
+        if summary.get("edge_count") is None:
+            summary["edge_count"] = int(
+                db.scalar(select(func.count()).select_from(GraphEdge).where(GraphEdge.dataset_id == dataset.id)) or 0
+            )
     return summary
 
 
