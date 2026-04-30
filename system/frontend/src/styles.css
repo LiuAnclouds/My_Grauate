@@ -6105,6 +6105,96 @@ tbody tr:hover {
   font-weight: 900;
 }
 
+/* Business network list: fixed anchors for status, metrics, and actions. */
+.network-directory-list .network-row {
+  grid-template-columns: minmax(260px, 1fr) 176px 150px;
+  gap: 18px;
+  min-height: 110px;
+  align-items: center;
+}
+
+.network-directory-list .network-row-main {
+  min-height: 72px;
+  align-content: center;
+}
+
+.network-directory-list .network-row-stats {
+  display: grid;
+  gap: 7px;
+  justify-items: start;
+  align-content: center;
+  min-width: 176px;
+  text-align: left;
+}
+
+.network-status-lamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 112px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.82);
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.network-status-lamp::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.network-status-lamp.status-normalized {
+  color: #2563eb;
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(239, 246, 255, 0.88);
+}
+
+.network-status-lamp.status-official_validation,
+.network-status-lamp.status-feature_ready {
+  color: #0f766e;
+  border-color: rgba(45, 212, 191, 0.24);
+  background: rgba(240, 253, 250, 0.86);
+}
+
+.network-status-lamp.status-inference_completed {
+  color: #dc2626;
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(254, 242, 242, 0.86);
+}
+
+.network-row-metrics {
+  display: grid;
+  gap: 2px;
+  padding-left: 2px;
+}
+
+.network-row-metrics strong {
+  color: #17345a;
+  font-size: 15px;
+  line-height: 1.1;
+}
+
+.network-row-metrics small {
+  color: #526a84;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.network-directory-list .network-row-actions {
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 150px;
+}
+
 .app-mobile-backdrop {
   display: none;
 }

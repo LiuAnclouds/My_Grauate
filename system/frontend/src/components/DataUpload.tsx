@@ -35,6 +35,11 @@ function formatStatus(status: string) {
   return map[status] ?? "处理中";
 }
 
+function statusClassFor(status: string) {
+  const normalized = status.replace(/[^a-z0-9_-]/gi, "-").toLowerCase();
+  return `network-status-lamp status-${normalized}`;
+}
+
 function displayNameFor(item: DatasetSummary) {
   return String(item.summary?.business_name ?? networkIdFor(item));
 }
@@ -165,9 +170,11 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
                     <small>{descriptionFor(dataset)}</small>
                   </button>
                   <div className="network-row-stats">
-                    <span>{formatStatus(dataset.status)}</span>
-                    <strong>{countText(dataset.summary?.node_count ?? dataset.row_count)} 人</strong>
-                    <small>{countText(dataset.summary?.edge_count)} 条关系</small>
+                    <span className={statusClassFor(dataset.status)}>{formatStatus(dataset.status)}</span>
+                    <div className="network-row-metrics">
+                      <strong>{countText(dataset.summary?.node_count ?? dataset.row_count)} 人</strong>
+                      <small>{countText(dataset.summary?.edge_count)} 条关系</small>
+                    </div>
                   </div>
                   <div className="network-row-actions">
                     <button className="network-row-action" onClick={() => onSelect(dataset.id, displayNameFor(dataset))} type="button">
