@@ -15,10 +15,10 @@ const navItems: NavItem[] = [
 ];
 
 const monitorCards = [
-  { label: "风险识别模式", value: "纯 GNN", detail: "推理阶段不使用标签，只复用训练完成的模型权重。" },
-  { label: "默认业务网络", value: "3 套", detail: "覆盖零售交易、支付链路与综合关系三类演示场景。" },
-  { label: "处置闭环", value: "5 步", detail: "接入、建图、处理、研判、名单复核形成业务闭环。" },
-  { label: "当前状态", value: "可运行", detail: "后端服务、邮件验证和前端系统均已接入。" }
+  { label: "接入网络数", value: "3 个", detail: "较昨日 +2" },
+  { label: "待复核风险对象", value: "128 个", detail: "较昨日 +15" },
+  { label: "最近研判状态", value: "进行中", detail: "高风险线索 36 条" },
+  { label: "系统可用状态", value: "99.9%", detail: "健康运行中" }
 ];
 
 const operationFlow = [

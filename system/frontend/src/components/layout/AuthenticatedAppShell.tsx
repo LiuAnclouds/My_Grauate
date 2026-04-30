@@ -94,16 +94,18 @@ export function AuthenticatedAppShell({
             onLogout={onLogout}
           />
 
-          <PageHeader
-            eyebrow={activeNav.eyebrow}
-            title={activeNav.label}
-            description={activeNav.description}
-            status={hasNetwork ? "业务网络已接入" : "等待业务网络接入"}
-            meta={[
-              { label: "工作模式", value: activePage === "analysis" ? "研判工作台" : "系统工作区" },
-              { label: "用户角色", value: session.is_admin ? "管理员" : "分析员" }
-            ]}
-          />
+          {activePage !== "monitor" ? (
+            <PageHeader
+              eyebrow={activeNav.eyebrow}
+              title={activeNav.label}
+              description={activeNav.description}
+              status={hasNetwork ? "业务网络已接入" : "等待业务网络接入"}
+              meta={[
+                { label: "工作模式", value: activePage === "analysis" ? "研判工作台" : "系统工作区" },
+                { label: "用户角色", value: session.is_admin ? "管理员" : "分析员" }
+              ]}
+            />
+          ) : null}
 
           <div className="app-page-stack">
             {activePage === "monitor" ? (

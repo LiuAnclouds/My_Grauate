@@ -5110,6 +5110,449 @@ tbody tr:hover {
   color: #eff6ff;
 }
 
+.risk-workbench-hero {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: var(--app-radius-xl);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(239, 246, 255, 0.72)),
+    radial-gradient(circle at 84% 18%, rgba(20, 184, 166, 0.13), transparent 0 36%);
+  box-shadow: var(--app-shadow);
+  backdrop-filter: blur(22px) saturate(1.08);
+}
+
+.risk-workbench-hero h2,
+.risk-board-heading h3 {
+  margin: 0;
+  color: var(--app-text);
+  letter-spacing: 0;
+}
+
+.risk-workbench-hero h2 {
+  margin-top: 4px;
+  font-size: clamp(28px, 2.8vw, 38px);
+  line-height: 1.08;
+}
+
+.risk-workbench-hero p:not(.eyebrow) {
+  margin: 8px 0 0;
+  color: var(--app-text-soft);
+  line-height: 1.6;
+}
+
+.risk-workbench-hero__button {
+  flex: 0 0 auto;
+}
+
+.risk-context-strip,
+.risk-kpi-grid,
+.risk-workbench-main,
+.risk-record-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.risk-context-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: var(--app-radius-lg);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.risk-context-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.86), rgba(255, 255, 255, 0.7));
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.risk-context-item span,
+.risk-kpi-card span,
+.risk-object-table__head,
+.risk-mini-table span {
+  color: var(--app-text-faint);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.risk-context-item strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--app-text);
+  font-size: 15px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.risk-context-status--danger {
+  color: var(--app-danger) !important;
+}
+
+.risk-context-status--pending {
+  color: var(--app-amber) !important;
+}
+
+.workbench-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 17px;
+  color: #2563eb;
+  background: linear-gradient(180deg, rgba(219, 234, 254, 0.88), rgba(255, 255, 255, 0.72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 12px 26px rgba(37, 99, 235, 0.12);
+}
+
+.workbench-icon svg {
+  width: 25px;
+  height: 25px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.workbench-icon--risk,
+.workbench-icon--danger {
+  color: var(--app-danger);
+  background: linear-gradient(180deg, rgba(255, 237, 213, 0.94), rgba(255, 255, 255, 0.72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 12px 26px rgba(234, 88, 12, 0.12);
+}
+
+.workbench-icon--task,
+.workbench-icon--pending {
+  color: #6d5dfc;
+  background: linear-gradient(180deg, rgba(237, 233, 254, 0.95), rgba(255, 255, 255, 0.72));
+}
+
+.workbench-icon--health {
+  color: var(--app-success);
+  background: linear-gradient(180deg, rgba(209, 250, 229, 0.92), rgba(255, 255, 255, 0.72));
+}
+
+.risk-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.risk-kpi-card,
+.risk-board-panel {
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 251, 255, 0.74)),
+    rgba(255, 255, 255, 0.72);
+  box-shadow: var(--app-shadow);
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+.risk-kpi-card {
+  min-height: 154px;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border-radius: var(--app-radius-lg);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.risk-kpi-card:hover,
+.risk-action-card:hover,
+.risk-object-row:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59, 130, 246, 0.24);
+  box-shadow: 0 22px 46px rgba(15, 23, 42, 0.09);
+}
+
+.risk-kpi-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #1155c9;
+  font-size: clamp(24px, 2vw, 34px);
+  line-height: 1;
+}
+
+.risk-kpi-card p {
+  margin: 10px 0 0;
+  color: var(--app-text-soft);
+  line-height: 1.5;
+}
+
+.risk-workbench-main {
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+}
+
+.risk-record-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.risk-board-panel {
+  min-width: 0;
+  padding: 18px;
+  border-radius: var(--app-radius-lg);
+}
+
+.risk-board-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.risk-board-heading h3 {
+  margin-top: 4px;
+  font-size: 19px;
+  line-height: 1.2;
+}
+
+.text-link-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: #2563eb;
+  background: rgba(239, 246, 255, 0.76);
+  border: 1px solid rgba(147, 197, 253, 0.32);
+  font-weight: 700;
+}
+
+.risk-object-table {
+  display: grid;
+  gap: 8px;
+}
+
+.risk-object-table__head,
+.risk-object-row {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.2fr) 96px 86px 90px;
+  align-items: center;
+  gap: 12px;
+}
+
+.risk-object-table__head {
+  padding: 0 12px 2px;
+  font-weight: 800;
+}
+
+.risk-object-row {
+  width: 100%;
+  min-height: 62px;
+  padding: 9px 12px;
+  text-align: left;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.risk-object-profile {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.risk-object-profile strong,
+.risk-action-card strong,
+.risk-mini-table strong {
+  color: var(--app-text);
+  line-height: 1.3;
+}
+
+.risk-object-profile small,
+.risk-action-card small {
+  display: block;
+  margin-top: 3px;
+  color: var(--app-text-soft);
+  line-height: 1.4;
+}
+
+.risk-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 15px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.95) 0 12%, transparent 13%),
+    radial-gradient(circle at 50% 78%, rgba(255, 255, 255, 0.9) 0 24%, transparent 25%),
+    linear-gradient(180deg, #60a5fa, #2563eb);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.16);
+}
+
+.risk-avatar--danger {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.95) 0 12%, transparent 13%),
+    radial-gradient(circle at 50% 78%, rgba(255, 255, 255, 0.9) 0 24%, transparent 25%),
+    linear-gradient(180deg, #fb923c, #ea580c);
+}
+
+.risk-avatar--warning {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.95) 0 12%, transparent 13%),
+    radial-gradient(circle at 50% 78%, rgba(255, 255, 255, 0.9) 0 24%, transparent 25%),
+    linear-gradient(180deg, #a78bfa, #6d5dfc);
+}
+
+.risk-avatar--success {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.95) 0 12%, transparent 13%),
+    radial-gradient(circle at 50% 78%, rgba(255, 255, 255, 0.9) 0 24%, transparent 25%),
+    linear-gradient(180deg, #5eead4, #0f9f8f);
+}
+
+.risk-badge,
+.risk-state {
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.risk-badge--danger {
+  color: var(--app-danger);
+  background: rgba(254, 215, 170, 0.5);
+}
+
+.risk-badge--warning {
+  color: var(--app-amber);
+  background: rgba(254, 243, 199, 0.7);
+}
+
+.risk-badge--success {
+  color: var(--app-success);
+  background: rgba(209, 250, 229, 0.72);
+}
+
+.risk-state--waiting {
+  color: var(--app-amber);
+  background: rgba(255, 247, 237, 0.9);
+}
+
+.risk-state--active {
+  color: #2563eb;
+  background: rgba(219, 234, 254, 0.72);
+}
+
+.risk-action-list {
+  display: grid;
+  gap: 11px;
+}
+
+.risk-action-card {
+  width: 100%;
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 13px;
+  padding: 12px;
+  text-align: left;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(239, 246, 255, 0.66));
+  border: 1px solid rgba(147, 197, 253, 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.risk-mini-table {
+  display: grid;
+  gap: 8px;
+}
+
+.risk-mini-table div {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 1.2fr 0.48fr 1fr 0.36fr;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.risk-mini-table--analysis div {
+  grid-template-columns: 1.05fr 1.08fr 0.86fr 0.34fr;
+}
+
+.risk-mini-table em {
+  justify-self: end;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--app-success);
+  background: rgba(209, 250, 229, 0.7);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .risk-context-strip,
+  .risk-kpi-grid,
+  .risk-workbench-main,
+  .risk-record-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .risk-workbench-main,
+  .risk-record-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .risk-workbench-hero,
+  .risk-board-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .risk-context-strip,
+  .risk-kpi-grid,
+  .risk-workbench-main,
+  .risk-record-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .risk-object-table {
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .risk-object-table__head,
+  .risk-object-row {
+    min-width: 640px;
+  }
+
+  .risk-mini-table {
+    overflow-x: auto;
+  }
+
+  .risk-mini-table div {
+    min-width: 620px;
+  }
+}
+
 .app-module-page {
   display: grid;
 }
