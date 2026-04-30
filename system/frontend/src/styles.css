@@ -6107,23 +6107,31 @@ tbody tr:hover {
 
 /* Business network list: fixed anchors for status, metrics, and actions. */
 .network-directory-list .network-row {
-  grid-template-columns: minmax(260px, 1fr) 176px 150px;
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   min-height: 110px;
   align-items: center;
+  padding: 18px 336px 18px 18px;
 }
 
 .network-directory-list .network-row-main {
   min-height: 72px;
   align-content: center;
+  width: 100%;
 }
 
 .network-directory-list .network-row-stats {
+  position: absolute;
+  top: 50%;
+  right: 174px;
+  transform: translateY(-50%);
   display: grid;
   gap: 7px;
-  justify-items: start;
+  width: 142px;
+  min-width: 142px;
+  justify-items: stretch;
   align-content: center;
-  min-width: 176px;
   text-align: left;
 }
 
@@ -6131,7 +6139,9 @@ tbody tr:hover {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-width: 112px;
+  width: 136px;
+  min-width: 136px;
+  max-width: 136px;
   height: 28px;
   padding: 0 10px;
   border: 1px solid rgba(148, 163, 184, 0.16);
@@ -6174,7 +6184,7 @@ tbody tr:hover {
 .network-row-metrics {
   display: grid;
   gap: 2px;
-  padding-left: 2px;
+  padding-left: 0;
 }
 
 .network-row-metrics strong {
@@ -6190,9 +6200,33 @@ tbody tr:hover {
 }
 
 .network-directory-list .network-row-actions {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
   justify-content: flex-end;
   align-items: center;
-  min-width: 150px;
+  width: 140px;
+  min-width: 140px;
+}
+
+@media (max-width: 760px) {
+  .network-directory-list .network-row {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .network-directory-list .network-row-stats,
+  .network-directory-list .network-row-actions {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    transform: none;
+  }
+
+  .network-directory-list .network-row-actions {
+    justify-content: flex-start;
+  }
 }
 
 .app-mobile-backdrop {
