@@ -137,7 +137,7 @@ def upload_dataset(
         {
             "business_id": business_id,
             "business_name": business_name,
-            "source_description": f"自定义上传文件 · {safe_name}",
+            "source_description": "用户接入业务网络",
             "technical_name": storage_path.stem,
             "ingest_mode": "uploaded_csv",
             "fraud_event": fraud_event,
@@ -438,9 +438,9 @@ def _presentation_summary(dataset: DatasetUpload, *, db: Session | None = None) 
             summary.setdefault("technical_name", dataset_key)
             summary.setdefault("technical_label", profile["technical_label"])
     else:
-        summary.setdefault("business_name", _business_name_for_upload(dataset.name))
+        summary.setdefault("business_name", f"业务网络 {_business_id_for(dataset.id)}")
         summary.setdefault("business_id", _business_id_for(dataset.id))
-        summary.setdefault("source_description", f"自定义上传文件 · {dataset.original_filename}")
+        summary.setdefault("source_description", "用户接入业务网络")
         summary.setdefault("technical_name", dataset.name)
         summary.setdefault("risk_object_type", "person")
     summary.setdefault("business_id", _business_id_for(dataset.id))
@@ -558,11 +558,8 @@ def _business_id_for(dataset_id: int) -> str:
     return f"BN-{dataset_id:04d}"
 
 
-def _business_name_for_upload(raw_name: str) -> str:
-    cleaned = raw_name.replace("_", " ").replace("-", " ").strip()
-    if not cleaned:
-        return "自定义关系网络"
-    return f"自定义关系网络 · {cleaned.title()}"
+def _business_name_for_upload(_raw_name: str) -> str:
+    return "未命名业务网络"
 
 
 def _normalize_business_name(value: str | None) -> str | None:

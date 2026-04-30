@@ -2,10 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   DatasetSummary,
   deleteDataset,
-  fetchMapping,
   listDatasets,
-  MappingResponse,
-  updateDataset,
   uploadDataset
 } from "../services/api";
 
@@ -39,12 +36,12 @@ function formatStatus(status: string) {
 }
 
 function displayNameFor(item: DatasetSummary) {
-  return String(item.summary?.business_name ?? item.name);
+  return String(item.summary?.business_name ?? networkIdFor(item));
 }
 
 function descriptionFor(item: DatasetSummary) {
-  const eventName = item.summary?.fraud_event ? ` · ${String(item.summary.fraud_event)}` : "";
-  return `${String(item.summary?.source_description ?? item.original_filename)}${eventName}`;
+  const eventName = item.summary?.fraud_event ? String(item.summary.fraud_event) : "待标记";
+  return `欺诈类型：${eventName}`;
 }
 
 function networkIdFor(item: DatasetSummary) {
@@ -55,21 +52,17 @@ function countText(value: unknown, fallback = "-") {
   return value === null || value === undefined ? fallback : String(value);
 }
 
-export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
+export function DataUpload({ selectedDatasetId, onSelect }: Props) {
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [query, setQuery] = useState("");
   const [networkName, setNetworkName] = useState("");
   const [eventName, setEventName] = useState(fraudEvents[0]);
-  const [editName, setEditName] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [useLlm, setUseLlm] = useState(false);
-  const [mapping, setMapping] = useState<MappingResponse | null>(null);
-  const [message, setMessage] = useState("当前还没有业务网络，请先导入 CSV 文件完成接入。");
+  const [lastImported, setLastImported] = useState<DatasetSummary | null>(null);
+  const [message, setMessage] = useState("选择文件并填写网络名称后，即可接入新的业务网络。");
   const [busy, setBusy] = useState(false);
-
-  const selectedDataset = useMemo(
-    () => datasets.find((item) => item.id === selectedDatasetId) ?? null,
-    [datasets, selectedDatasetId]
-  );
 
   const filteredDatasets = useMemo(() => {
     const text = query.trim().toLowerCase();
@@ -93,34 +86,27 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
     return items;
   }
 
-  async function handleFile(file: File | null) {
-    if (!file) return;
+  async function handleImport() {
+    if (!pendingFile) {
+      setMessage("请先选择需要接入的 CSV 文件。");
+      return;
+    }
+    if (!networkName.trim()) {
+      setMessage("请先填写业务网络名称，方便后续识别。");
+      return;
+    }
     setBusy(true);
     try {
-      const dataset = await uploadDataset(file, useLlm, networkName, eventName);
-      const mappingResult = await fetchMapping(dataset.id);
-      setMapping(mappingResult);
-      setMessage(`业务网络已接入：${displayNameFor(dataset)}，共 ${dataset.row_count} 条记录。`);
+      const dataset = await uploadDataset(pendingFile, useLlm, networkName, eventName);
+      setLastImported(dataset);
+      setMessage(`接入完成：${displayNameFor(dataset)}，已生成 ${countText(dataset.summary?.node_count ?? dataset.row_count)} 个风险对象。`);
       await refresh();
       onSelect(dataset.id, displayNameFor(dataset));
       setNetworkName("");
+      setPendingFile(null);
+      setFileInputKey((value) => value + 1);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "业务文件导入失败。");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRename() {
-    if (!selectedDataset || !editName.trim()) return;
-    setBusy(true);
-    try {
-      const dataset = await updateDataset(selectedDataset.id, editName);
-      setMessage(`业务网络已重命名为：${displayNameFor(dataset)}。`);
-      await refresh();
-      onSelect(dataset.id, displayNameFor(dataset));
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "业务网络重命名失败。");
     } finally {
       setBusy(false);
     }
@@ -133,6 +119,9 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
       await deleteDataset(dataset.id);
       const items = await refresh();
       setMessage(`业务网络已删除：${displayNameFor(dataset)}。`);
+      if (lastImported?.id === dataset.id) {
+        setLastImported(null);
+      }
       if (selectedDatasetId === dataset.id) {
         const next = items[0] ?? null;
         onSelect(next?.id ?? null, next ? displayNameFor(next) : "");
@@ -147,10 +136,6 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
   useEffect(() => {
     refresh().catch((error) => setMessage(error.message));
   }, []);
-
-  useEffect(() => {
-    setEditName(selectedDataset ? displayNameFor(selectedDataset) : "");
-  }, [selectedDataset]);
 
   return (
     <section className="business-network-page app-module-page">
@@ -175,7 +160,7 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
               filteredDatasets.map((dataset) => (
                 <article key={dataset.id} className={dataset.id === selectedDatasetId ? "network-row active" : "network-row"}>
                   <button className="network-row-main" onClick={() => onSelect(dataset.id, displayNameFor(dataset))} type="button">
-                    <span className="network-id">{networkIdFor(dataset)}</span>
+                    <span className="network-id"><b>网络ID</b>{networkIdFor(dataset)}</span>
                     <strong>{displayNameFor(dataset)}</strong>
                     <small>{descriptionFor(dataset)}</small>
                   </button>
@@ -204,51 +189,14 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
         </div>
 
         <aside className="network-side-stack app-context-rail">
-          <div className="selected-network-card app-panel emphasis-panel">
-            <div className="side-card-heading">
-              <span>当前网络</span>
-              {selectedDataset ? <em className={`status-badge status-${selectedDataset.status}`}>{formatStatus(selectedDataset.status)}</em> : null}
-            </div>
-            {selectedDataset ? (
-              <>
-                <strong>{displayNameFor(selectedDataset)}</strong>
-                <small>{networkIdFor(selectedDataset)}</small>
-                <p>{descriptionFor(selectedDataset)}</p>
-                <div className="selected-network-stats">
-                  <div>
-                    <span>人员</span>
-                    <strong>{countText(selectedDataset.summary?.node_count ?? selectedDataset.row_count)}</strong>
-                  </div>
-                  <div>
-                    <span>关系</span>
-                    <strong>{countText(selectedDataset.summary?.edge_count)}</strong>
-                  </div>
-                </div>
-                <label className="network-edit-field">
-                  <span>网络名称</span>
-                  <input value={editName} onChange={(event) => setEditName(event.target.value)} />
-                </label>
-                <div className="selected-network-actions">
-                  <button className="secondary" onClick={handleRename} disabled={busy || !editName.trim()} type="button">
-                    保存名称
-                  </button>
-                  <button className="secondary" onClick={() => onOpenPage?.("network")} type="button">
-                    查看关系
-                  </button>
-                  <button className="primary" onClick={() => onOpenPage?.("analysis")} type="button">
-                    开始研判
-                  </button>
-                </div>
-              </>
-            ) : (
-              <p>当前没有选中的业务网络。请先上传 CSV 文件完成接入。</p>
-            )}
-          </div>
-
           <div className="network-import-card app-panel">
             <div className="side-card-heading">
               <span>接入业务网络</span>
-              <em>CSV</em>
+              <em>新建</em>
+            </div>
+            <div className="network-import-intro">
+              <h3>上传业务记录，生成可分析的人员关系网络</h3>
+              <p>每次接入都会生成独立的网络 ID，可在左侧目录中选择、查看或删除。</p>
             </div>
             <label className="network-edit-field">
               <span>网络名称</span>
@@ -262,28 +210,34 @@ export function DataUpload({ selectedDatasetId, onSelect, onOpenPage }: Props) {
                 ))}
               </select>
             </label>
-            <label className="upload-label compact-upload">
+            <label className="network-file-picker">
               <span>选择待分析文件</span>
-              <input type="file" accept=".csv" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} disabled={busy} />
+              <input key={fileInputKey} type="file" accept=".csv" onChange={(event) => setPendingFile(event.target.files?.[0] ?? null)} disabled={busy} />
+              <strong>{pendingFile ? "已选择 1 个 CSV 文件" : "点击选择 CSV 文件"}</strong>
             </label>
             <label className="inline-check compact-check">
               <input type="checkbox" checked={useLlm} onChange={(event) => setUseLlm(event.target.checked)} />
-              自动识别文件结构
+              自动整理字段
             </label>
-          </div>
 
-          {mapping ? (
-            <div className="network-import-result app-panel success-panel">
-              <div className="side-card-heading">
-                <span>文件已识别</span>
-                <em>{mapping.method}</em>
+            <button className="primary network-import-submit" onClick={handleImport} disabled={busy || !pendingFile || !networkName.trim()} type="button">
+              {busy ? "正在接入..." : "接入业务网络"}
+            </button>
+
+            {lastImported ? (
+              <div className="network-import-status">
+                <span>最近接入</span>
+                <strong>{displayNameFor(lastImported)}</strong>
+                <small>{networkIdFor(lastImported)} · {descriptionFor(lastImported)}</small>
+                <div className="network-import-status__stats">
+                  <em>{countText(lastImported.summary?.node_count ?? lastImported.row_count)} 人</em>
+                  <em>{countText(lastImported.summary?.edge_count)} 条关系</em>
+                </div>
               </div>
-              <p>{mapping.message}</p>
-              <small>系统已生成业务网络 ID、人员身份、团伙归属和分析字段。</small>
-            </div>
-          ) : null}
+            ) : null}
 
-          <p className="network-feedback">{message}</p>
+            <p className="network-feedback">{message}</p>
+          </div>
         </aside>
       </div>
     </section>
