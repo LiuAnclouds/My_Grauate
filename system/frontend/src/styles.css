@@ -3428,15 +3428,15 @@ tbody tr:hover {
 .business-module-heading h2 {
   margin: 3px 0 0;
   color: #0d1b2f;
-  font-size: 24px;
+  font-size: 23px;
   line-height: 1.12;
 }
 
 .business-module-heading p {
-  margin: 7px 0 0;
+  margin: 5px 0 0;
   max-width: 640px;
   color: #64748b;
-  line-height: 1.6;
+  line-height: 1.45;
 }
 
 .directory-count {
@@ -4348,11 +4348,12 @@ tbody tr:hover {
   --app-radius-sm: 14px;
   --app-sidebar-width: 248px;
   --app-sidebar-collapsed: 88px;
-  --app-topbar-height: 108px;
+  --app-topbar-height: 86px;
 }
 
 .nextgen-shell {
-  padding: 18px;
+  min-height: 100vh;
+  padding: 14px;
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 26%),
     radial-gradient(circle at right top, rgba(15, 23, 42, 0.06), transparent 22%),
@@ -4362,8 +4363,9 @@ tbody tr:hover {
 .app-shell-grid {
   display: grid;
   grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
-  gap: 18px;
-  align-items: start;
+  gap: 14px;
+  align-items: stretch;
+  min-height: calc(100vh - 28px);
 }
 
 .app-shell-grid.is-collapsed {
@@ -4373,12 +4375,15 @@ tbody tr:hover {
 .app-workspace {
   min-width: 0;
   display: grid;
-  gap: 18px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  min-height: calc(100vh - 28px);
 }
 
 .app-page-stack {
   display: grid;
-  gap: 18px;
+  gap: 14px;
+  min-height: 0;
 }
 
 .app-sidebar {
@@ -4642,10 +4647,10 @@ tbody tr:hover {
 
 .app-topbar-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.72fr) auto;
+  grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.58fr) auto;
   align-items: center;
-  gap: 18px;
-  padding: 18px 22px;
+  gap: 14px;
+  padding: 12px 18px;
   min-height: var(--app-topbar-height);
   border-radius: var(--app-radius-xl);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 251, 255, 0.98) 100%);
@@ -4672,16 +4677,29 @@ tbody tr:hover {
   gap: 12px;
 }
 
+.app-topbar-shell__right .account-pill,
+.app-topbar-shell__right .role-pill,
+.app-topbar-shell__right .app-logout-button {
+  min-height: 38px;
+}
+
+.app-topbar-shell__right .account-pill,
+.app-topbar-shell__right .role-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+}
+
 .app-topbar-shell__brand-cluster {
-  gap: 14px;
+  gap: 12px;
 }
 
 .app-topbar-brand-mark {
-  width: 52px;
-  height: 52px;
+  width: 46px;
+  height: 46px;
   display: grid;
   place-items: center;
-  border-radius: 18px;
+  border-radius: 16px;
   background: linear-gradient(135deg, #1d4ed8 0%, #0f9fb8 100%);
   color: #eff6ff;
   font-size: 15px;
@@ -4697,13 +4715,13 @@ tbody tr:hover {
 .app-topbar-shell__title-block {
   min-width: 0;
   display: grid;
-  gap: 6px;
+  gap: 3px;
 }
 
 .app-topbar-shell__title-block h1 {
   margin: 0;
   color: var(--app-text);
-  font-size: 30px;
+  font-size: 26px;
   line-height: 1.1;
   letter-spacing: -0.03em;
 }
@@ -4711,42 +4729,43 @@ tbody tr:hover {
 .app-topbar-shell__title-block p:last-child {
   margin: 0;
   color: var(--app-text-soft);
-  line-height: 1.6;
+  line-height: 1.35;
+  font-size: 13px;
 }
 
 .app-topbar-shell__summary-card {
   display: grid;
-  gap: 4px;
-  padding: 14px 16px;
-  border-radius: 18px;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 16px;
   background: linear-gradient(135deg, rgba(219, 234, 254, 0.62) 0%, rgba(240, 249, 255, 0.96) 100%);
   border: 1px solid rgba(96, 165, 250, 0.2);
 }
 
 .app-topbar-shell__summary-card small {
   color: var(--app-text-soft);
-  line-height: 1.5;
+  line-height: 1.25;
 }
 
 .app-topbar-shell__center {
   display: grid;
-  gap: 4px;
-  padding: 14px 16px;
-  border-radius: 18px;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 16px;
   background: linear-gradient(135deg, rgba(219, 234, 254, 0.74) 0%, rgba(236, 253, 245, 0.8) 100%);
   border: 1px solid rgba(96, 165, 250, 0.24);
 }
 
 .app-topbar-shell__context-label {
   color: var(--app-text-faint);
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .app-topbar-shell__center strong {
   color: var(--app-text);
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .app-mobile-nav-trigger {
@@ -5618,12 +5637,15 @@ tbody tr:hover {
 
 .app-module-page {
   display: grid;
+  min-height: calc(100vh - var(--app-topbar-height) - 56px);
 }
 
 .business-network-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.72fr);
   gap: 18px;
+  min-height: inherit;
+  align-items: stretch;
 }
 
 .network-directory-panel,
@@ -5638,6 +5660,7 @@ tbody tr:hover {
 
 .network-directory-panel {
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 18px;
 }
 
@@ -5941,17 +5964,19 @@ tbody tr:hover {
 /* Business network page: one clear directory plus one import panel. */
 .business-network-layout {
   grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
-  align-items: start;
+  min-height: calc(100vh - var(--app-topbar-height) - 56px);
+  align-items: stretch;
 }
 
 .network-side-stack {
   align-content: start;
+  height: 100%;
 }
 
 .network-side-stack .network-import-card {
   position: sticky;
-  top: 92px;
-  min-height: min(620px, calc(100vh - 150px));
+  top: 72px;
+  min-height: 100%;
   padding: 22px;
   overflow: hidden;
   border-color: rgba(96, 165, 250, 0.2);
@@ -5976,8 +6001,8 @@ tbody tr:hover {
 
 .network-import-intro {
   display: grid;
-  gap: 7px;
-  padding: 14px;
+  gap: 5px;
+  padding: 13px;
   border: 1px solid rgba(203, 213, 225, 0.58);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.64);
@@ -5986,7 +6011,7 @@ tbody tr:hover {
 .network-import-intro h3 {
   margin: 0;
   color: var(--app-text);
-  font-size: 18px;
+  font-size: 17px;
   line-height: 1.25;
 }
 
@@ -5994,7 +6019,7 @@ tbody tr:hover {
   margin: 0;
   color: var(--app-text-soft);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.45;
 }
 
 .network-file-picker {

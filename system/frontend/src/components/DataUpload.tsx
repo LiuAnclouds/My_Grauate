@@ -66,7 +66,7 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [useLlm, setUseLlm] = useState(false);
   const [lastImported, setLastImported] = useState<DatasetSummary | null>(null);
-  const [message, setMessage] = useState("选择文件并填写网络名称后，即可接入新的业务网络。");
+  const [message, setMessage] = useState("填写名称并选择文件后接入。");
   const [busy, setBusy] = useState(false);
 
   const filteredDatasets = useMemo(() => {
@@ -93,18 +93,18 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
 
   async function handleImport() {
     if (!pendingFile) {
-      setMessage("请先选择需要接入的 CSV 文件。");
+      setMessage("请先选择 CSV 文件。");
       return;
     }
     if (!networkName.trim()) {
-      setMessage("请先填写业务网络名称，方便后续识别。");
+      setMessage("请先填写网络名称。");
       return;
     }
     setBusy(true);
     try {
       const dataset = await uploadDataset(pendingFile, useLlm, networkName, eventName);
       setLastImported(dataset);
-      setMessage(`接入完成：${displayNameFor(dataset)}，已生成 ${countText(dataset.summary?.node_count ?? dataset.row_count)} 个风险对象。`);
+      setMessage(`接入完成：${displayNameFor(dataset)}。`);
       await refresh();
       onSelect(dataset.id, displayNameFor(dataset));
       setNetworkName("");
@@ -150,7 +150,7 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
             <div>
               <p className="eyebrow">Business Networks</p>
               <h2>业务网络目录</h2>
-              <p>上传 CSV 后生成业务网络、人员身份、关系结构与分析字段，作为后续图谱和研判的统一入口。</p>
+              <p>管理已接入的业务网络。</p>
             </div>
             <span className="directory-count">{datasets.length} 个网络</span>
           </div>
@@ -189,7 +189,7 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
             ) : (
               <div className="empty-network-state">
                 <strong>{datasets.length ? "没有匹配的业务网络" : "暂无已接入的业务网络"}</strong>
-                <span>{datasets.length ? "请调整检索条件。" : "请从右侧上传 CSV 文件，系统会自动生成可分析的人员关系网络。"}</span>
+                <span>{datasets.length ? "请调整检索条件。" : "从右侧接入新的业务网络。"}</span>
               </div>
             )}
           </div>
@@ -202,8 +202,8 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
               <em>新建</em>
             </div>
             <div className="network-import-intro">
-              <h3>上传业务记录，生成可分析的人员关系网络</h3>
-              <p>每次接入都会生成独立的网络 ID，可在左侧目录中选择、查看或删除。</p>
+              <h3>上传业务记录</h3>
+              <p>生成独立网络 ID，并进入后续分析流程。</p>
             </div>
             <label className="network-edit-field">
               <span>网络名称</span>

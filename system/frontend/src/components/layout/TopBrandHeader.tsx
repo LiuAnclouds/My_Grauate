@@ -20,16 +20,16 @@ export function TopBrandHeader({ session, currentNetwork, currentPageLabel, curr
         </button>
         <div className="app-topbar-brand-mark" aria-hidden="true">SH</div>
         <div className="app-topbar-shell__title-block">
-          <p className="eyebrow">StarHubGraph · Anti-Fraud Operations Console</p>
+          <p className="eyebrow">StarHubGraph</p>
           <h1>星枢反欺诈分析平台</h1>
-          <p>{currentPageLabel} · {currentPageDescription}</p>
+          <p>{currentPageDescription}</p>
         </div>
       </div>
 
       <div className="app-topbar-shell__center app-topbar-shell__summary-card">
-        <span className="app-topbar-shell__context-label">业务上下文</span>
+        <span className="app-topbar-shell__context-label">当前业务</span>
         <strong>{currentNetwork}</strong>
-        <small>当前页面：{currentPageLabel}</small>
+        <small>{currentPageLabel}</small>
       </div>
 
       <div className="app-topbar-shell__right">
