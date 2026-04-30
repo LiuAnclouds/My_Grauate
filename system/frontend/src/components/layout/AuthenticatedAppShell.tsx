@@ -5,7 +5,6 @@ import { DataUpload } from "../DataUpload";
 import { GraphWorkspace } from "../GraphWorkspace";
 import { InferenceResults } from "../InferenceResults";
 import { PipelinePanel } from "../PipelinePanel";
-import { PageHeader } from "./PageHeader";
 import { PageSurface } from "./PageSurface";
 import { SidebarNav } from "./SidebarNav";
 import { TopBrandHeader } from "./TopBrandHeader";
@@ -90,19 +89,6 @@ export function AuthenticatedAppShell({
             onOpenMobileNav={() => setMobileNavOpen(true)}
             onLogout={onLogout}
           />
-
-          {activePage !== "monitor" ? (
-            <PageHeader
-              eyebrow={activeNav.eyebrow}
-              title={activeNav.label}
-              description={activeNav.description}
-              status={hasNetwork ? "业务网络已接入" : "等待业务网络接入"}
-              meta={[
-                { label: "工作模式", value: activePage === "analysis" ? "研判工作台" : "系统工作区" },
-                { label: "用户角色", value: session.is_admin ? "管理员" : "分析员" }
-              ]}
-            />
-          ) : null}
 
           <div className="app-page-stack">
             {activePage === "monitor" ? (
