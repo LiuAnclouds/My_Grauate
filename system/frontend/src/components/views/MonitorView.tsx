@@ -63,6 +63,16 @@ function statusLabel(status?: string) {
   return map[status ?? ""] ?? "未开始";
 }
 
+function stageName(stage: string) {
+  const map: Record<string, string> = {
+    ingestion: "数据接入",
+    graph_construction: "图谱构建",
+    feature_processing: "特征准备",
+    inference: "智能研判"
+  };
+  return map[stage] ?? stage;
+}
+
 function riskTone(score: number) {
   if (score >= 0.75) return "danger";
   if (score >= 0.55) return "warning";
@@ -85,6 +95,7 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
   const [timeline, setTimeline] = useState<TaskTimelineResponse | null>(null);
   const [results, setResults] = useState<InferenceResultItem[]>([]);
   const [loadMessage, setLoadMessage] = useState("");
+  const [currentDatasetStatus, setCurrentDatasetStatus] = useState("");
 
   const nextAction = hasNetwork
     ? { title: "进入智能研判", detail: "网络已就绪，开始识别。", page: "analysis" as AppPage }
@@ -94,7 +105,19 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
   const suspiciousCount = results.filter((item) => item.risk_label === "suspicious" || item.risk_score >= 0.75).length;
   const latestEvent = timeline?.events?.[timeline.events.length - 1];
   const progress = timeline?.task ? `${Math.round(timeline.task.progress * 100)}%` : hasNetwork ? "0%" : "0%";
-  const statusText = !hasNetwork ? "待接入" : suspiciousCount ? "存在风险" : timeline?.task?.status === "completed" ? "已完成" : "待研判";
+  const statusText = !hasNetwork
+    ? "待接入"
+    : currentDatasetStatus === "graph_ready"
+      ? "已构建关系图谱"
+      : currentDatasetStatus === "feature_ready"
+        ? "已完成处理"
+        : currentDatasetStatus === "inference_completed"
+          ? "已生成风险名单"
+          : suspiciousCount
+            ? "存在风险"
+            : timeline?.task?.status === "completed"
+              ? "已完成"
+              : "待研判";
   const statusTone = !hasNetwork ? "pending" : suspiciousCount ? "danger" : "health";
 
   const metrics = useMemo(
@@ -111,7 +134,11 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
     let canceled = false;
     listDatasets()
       .then((items) => {
-        if (!canceled) setNetworkCount(items.length);
+        if (!canceled) {
+          setNetworkCount(items.length);
+          const current = items.find((item) => item.id === selectedDatasetId);
+          setCurrentDatasetStatus(current?.status ?? "");
+        }
       })
       .catch((error) => {
         if (!canceled) setLoadMessage(error instanceof Error ? error.message : "网络统计加载失败");
@@ -119,7 +146,7 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [selectedDatasetId]);
 
   useEffect(() => {
     let canceled = false;
@@ -317,7 +344,7 @@ function TimelinePanel({
           {displayEvents.map((event) => (
             <div key={event.id}>
               <span>{formatTime(event.created_at)}</span>
-              <span>{event.stage}</span>
+              <span>{stageName(event.stage)}</span>
               <strong>{event.title}</strong>
               <em>{Math.round(event.progress * 100)}%</em>
             </div>

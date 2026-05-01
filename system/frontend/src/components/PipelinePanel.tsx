@@ -18,6 +18,7 @@ type Props = {
 const stageLabels = ["对象装载", "关系组织", "特征准备", "时序编码", "风险识别"];
 const stageTitleMap: Record<string, string> = {
   feature_processing: "特征准备",
+  graph_construction: "图谱构建",
   inference: "风险推理",
   ingestion: "数据接入"
 };

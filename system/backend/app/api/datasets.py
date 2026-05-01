@@ -37,6 +37,7 @@ from app.services.pipeline_story import (
     append_event,
     build_dataset_summary,
     build_feature_task_story,
+    build_graph_task_story,
     build_inference_story,
     create_task,
     latest_task,
@@ -286,6 +287,34 @@ def get_graph(dataset_id: int, db: Session = Depends(get_db)) -> GraphResponse:
         edges=graph_edges,
         summary=_presentation_summary(dataset),
     )
+
+
+@router.post("/{dataset_id}/graph-task", response_model=TaskResponse)
+def create_graph_task(dataset_id: int, db: Session = Depends(get_db)) -> TaskResponse:
+    dataset = db.get(DatasetUpload, dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    nodes = db.scalars(select(PersonNode).where(PersonNode.dataset_id == dataset_id)).all()
+    edges = db.scalars(select(GraphEdge).where(GraphEdge.dataset_id == dataset_id)).all()
+    if not nodes:
+        raise HTTPException(status_code=400, detail="dataset has no nodes")
+
+    reset_task_events(db=db, dataset_id=dataset_id, task_type="graph_construction")
+    task = create_task(
+        db=db,
+        dataset_id=dataset_id,
+        task_type="graph_construction",
+        status="running",
+        progress=0.08,
+        current_step="start_graph_construction",
+        message="正在构建关系图谱。",
+        summary=_presentation_summary(dataset),
+    )
+    build_graph_task_story(db=db, dataset_id=dataset_id, task=task, nodes=nodes, edges=edges)
+    dataset.status = "graph_ready"
+    db.commit()
+    db.refresh(task)
+    return _task_response(task)
 
 
 @router.post("/{dataset_id}/feature-task", response_model=TaskResponse)

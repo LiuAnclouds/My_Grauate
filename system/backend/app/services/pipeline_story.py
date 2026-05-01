@@ -230,6 +230,78 @@ def build_feature_task_story(
     )
 
 
+def build_graph_task_story(
+    *,
+    db: Session,
+    dataset_id: int,
+    task: ProcessingTask,
+    nodes: list[PersonNode],
+    edges: list[GraphEdge],
+) -> None:
+    sample_node = nodes[0] if nodes else None
+    sample_neighbors = [edge.target_id for edge in edges[:6]]
+    top_edge_types = Counter(edge.edge_type for edge in edges).most_common(3)
+    append_event(
+        db=db,
+        dataset_id=dataset_id,
+        task_id=task.id,
+        stage="graph_construction",
+        step_key="load_objects",
+        title="装载风险对象",
+        detail=f"已读取 {len(nodes)} 个风险对象，准备组织关系结构。",
+        progress=0.18,
+        focus_node_id=sample_node.node_id if sample_node else None,
+        metrics={"nodes": len(nodes)},
+    )
+    append_event(
+        db=db,
+        dataset_id=dataset_id,
+        task_id=task.id,
+        stage="graph_construction",
+        step_key="load_relations",
+        title="装载关系边",
+        detail=f"已读取 {len(edges)} 条关系边，正在整理指向与类型。",
+        progress=0.42,
+        focus_node_id=sample_node.node_id if sample_node else None,
+        focus_neighbor_ids=sample_neighbors[:4],
+        metrics={"edges": len(edges), "edge_types": dict(top_edge_types)},
+    )
+    append_event(
+        db=db,
+        dataset_id=dataset_id,
+        task_id=task.id,
+        stage="graph_construction",
+        step_key="layout_ready",
+        title="计算图谱布局",
+        detail="已完成节点尺寸、关系方向和风险视觉样式准备。",
+        progress=0.76,
+        focus_node_id=sample_node.node_id if sample_node else None,
+        focus_neighbor_ids=sample_neighbors,
+        metrics={"layout": "ready"},
+    )
+    append_event(
+        db=db,
+        dataset_id=dataset_id,
+        task_id=task.id,
+        stage="graph_construction",
+        step_key="graph_ready",
+        title="关系图谱构建完成",
+        detail="关系图谱已可查看，后续研判会在图中同步标记风险对象。",
+        progress=1.0,
+        focus_node_id=sample_node.node_id if sample_node else None,
+        focus_neighbor_ids=sample_neighbors,
+        metrics={"ready": True, "nodes": len(nodes), "edges": len(edges)},
+    )
+    update_task(
+        task=task,
+        status="completed",
+        progress=1.0,
+        current_step="graph_ready",
+        message="关系图谱构建完成，可以进入图谱查看。",
+        summary={"nodes": len(nodes), "edges": len(edges), "ready": True},
+    )
+
+
 def build_inference_story(
     *,
     db: Session,

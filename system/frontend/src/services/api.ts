@@ -222,6 +222,10 @@ export function fetchGraph(datasetId: number) {
   return request<GraphResponse>(`/datasets/${datasetId}/graph`);
 }
 
+export function createGraphTask(datasetId: number) {
+  return request<TaskResponse>(`/datasets/${datasetId}/graph-task`, { method: "POST" });
+}
+
 export function fetchMapping(datasetId: number) {
   return request<MappingResponse>(`/datasets/${datasetId}/mapping`);
 }

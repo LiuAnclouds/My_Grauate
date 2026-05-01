@@ -29,6 +29,7 @@ function formatStatus(status: string) {
   const map: Record<string, string> = {
     normalized: "已入库",
     official_validation: "可分析",
+    graph_ready: "已构建关系图谱",
     feature_ready: "已完成处理",
     inference_completed: "已生成风险名单"
   };

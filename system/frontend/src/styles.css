@@ -3788,6 +3788,114 @@ tbody tr:hover {
   line-height: 1.6;
 }
 
+.graph-action-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.graph-action-button,
+.graph-state-button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.graph-state-button {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #64748b;
+  background: rgba(248, 250, 252, 0.78);
+}
+
+.graph-state-button.ready {
+  color: #0f766e;
+  border-color: rgba(45, 212, 191, 0.24);
+  background: rgba(240, 253, 250, 0.9);
+}
+
+.graph-state-button.pending {
+  color: #9a6a12;
+  border-color: rgba(245, 158, 11, 0.22);
+  background: rgba(255, 251, 235, 0.88);
+}
+
+.graph-build-panel {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.28fr) minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(147, 197, 253, 0.2);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.72), rgba(255, 255, 255, 0.82)),
+    rgba(255, 255, 255, 0.72);
+}
+
+.graph-build-panel > div:first-child {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+}
+
+.graph-build-panel span {
+  color: #667a91;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.graph-build-panel strong {
+  color: #123352;
+  font-size: 17px;
+}
+
+.graph-build-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.graph-build-step {
+  position: relative;
+  min-height: 86px;
+  overflow: hidden;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.graph-build-step i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2563eb, #14b8a6);
+}
+
+.graph-build-step b {
+  position: relative;
+  color: #17345a;
+  font-size: 13px;
+}
+
+.graph-build-step small {
+  position: relative;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.graph-build-step.complete {
+  border-color: rgba(45, 212, 191, 0.24);
+  background: rgba(240, 253, 250, 0.76);
+}
+
 .graph-page-panel .enterprise-graph-layout {
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 14px;
@@ -3832,6 +3940,14 @@ tbody tr:hover {
   .graph-page-panel .enterprise-graph-layout {
     grid-template-columns: 1fr;
   }
+
+  .graph-build-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-build-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -3839,6 +3955,16 @@ tbody tr:hover {
   .graph-page-panel .enterprise-legend {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .graph-action-controls,
+  .graph-action-button,
+  .graph-state-button {
+    width: 100%;
+  }
+
+  .graph-build-steps {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -6205,6 +6331,12 @@ tbody tr:hover {
   color: #2563eb;
   border-color: rgba(96, 165, 250, 0.22);
   background: rgba(239, 246, 255, 0.88);
+}
+
+.network-status-lamp.status-graph_ready {
+  color: #0f766e;
+  border-color: rgba(45, 212, 191, 0.24);
+  background: rgba(240, 253, 250, 0.86);
 }
 
 .network-status-lamp.status-official_validation,
