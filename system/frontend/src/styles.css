@@ -1000,6 +1000,16 @@ tbody tr:hover {
   color: #1f6a3d;
 }
 
+.risk-chip.warning {
+  background: #fff6df;
+  color: #9a5b00;
+}
+
+.risk-chip.neutral {
+  background: #edf4fb;
+  color: #4f6b86;
+}
+
 @keyframes floatGlow {
   0%,
   100% {
@@ -5990,6 +6000,16 @@ tbody tr:hover {
 .risk-chip.success {
   background: rgba(209, 250, 229, 0.8);
   color: var(--app-success);
+}
+
+.risk-chip.warning {
+  background: rgba(254, 243, 199, 0.74);
+  color: #a16207;
+}
+
+.risk-chip.neutral {
+  background: rgba(226, 239, 252, 0.82);
+  color: #526a84;
 }
 
 .admin-grid {

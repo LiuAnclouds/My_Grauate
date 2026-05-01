@@ -565,13 +565,15 @@ def _build_inference_response(
 ) -> InferenceRunResponse:
     items = _result_items(db=db, dataset_id=dataset_id, records=records)
     abnormal = sum(1 for item in items if item.risk_label == "suspicious")
-    normal = len(items) - abnormal
+    low_risk = sum(1 for item in items if item.risk_label == "low_risk")
+    no_risk = sum(1 for item in items if item.risk_label == "no_risk")
+    normal = low_risk + no_risk
     return InferenceRunResponse(
         dataset_id=dataset_id,
         total_nodes=len(items),
         abnormal_nodes=abnormal,
         normal_nodes=normal,
-        message=f"风险识别完成：高风险对象 {abnormal} 个，低风险对象 {normal} 个。",
+        message=f"风险识别完成：高风险对象 {abnormal} 个，低风险对象 {low_risk} 个，无风险对象 {no_risk} 个。",
         results=items[:30],
         task_id=task_id,
     )
@@ -591,6 +593,7 @@ def _result_items(
     for record in sorted(records, key=lambda item: item.risk_score, reverse=True):
         node = node_map.get(record.node_id)
         explanation = dict(record.explanation_json or {})
+        display_label = _risk_display_label(float(record.risk_score), record.risk_label)
         items.append(
             InferenceResultItem(
                 node_id=record.node_id,
@@ -599,15 +602,90 @@ def _result_items(
                 region=node.region if node is not None else "",
                 occupation=node.occupation if node is not None else "",
                 risk_score=float(record.risk_score),
-                risk_label=record.risk_label,
-                reason=str(explanation.get("reason") or ""),
+                risk_label=display_label,
+                reason=_display_reason(str(explanation.get("reason") or ""), display_label),
                 support_neighbors=[
                     str(value) for value in (explanation.get("support_neighbors") or [])
                 ],
-                top_features=[str(value) for value in (explanation.get("top_features") or [])],
+                top_features=[
+                    _feature_display_name(str(value))
+                    for value in (explanation.get("top_features") or [])
+                ],
             )
         )
     return items
+
+
+FEATURE_DISPLAY_NAMES = [
+    "近期交易活跃度",
+    "交易金额波动",
+    "邻域风险关联",
+    "资金流入流出偏移",
+    "交易时间规律",
+    "账户行为稳定性",
+    "跨区域流转强度",
+    "对手方集中度",
+    "短期交易频次变化",
+    "资金链路深度",
+    "账户画像偏移",
+    "历史行为一致性",
+    "社群关联密度",
+    "异常金额占比",
+    "短期行为突增",
+    "风险邻居暴露",
+]
+
+
+def _risk_display_label(score: float, stored_label: str) -> str:
+    if stored_label == "suspicious" or score >= 0.75:
+        return "suspicious"
+    if score < 0.35:
+        return "no_risk"
+    return "low_risk"
+
+
+def _display_reason(reason: str, display_label: str) -> str:
+    if display_label == "no_risk":
+        return "风险特征未达到预警阈值，当前无需列入重点复核。"
+    if display_label == "low_risk" and (not reason or "较低区间" in reason):
+        return "存在少量弱风险信号，建议保留观察但无需优先处置。"
+    return reason
+
+
+def _feature_display_name(raw_name: str) -> str:
+    normalized = raw_name.strip()
+    lower = normalized.lower()
+    index = _feature_index(lower) if lower.startswith(("feature_", "core_feature_")) else None
+    if index is not None:
+        return FEATURE_DISPLAY_NAMES[index % len(FEATURE_DISPLAY_NAMES)]
+    if any("\u4e00" <= char <= "\u9fff" for char in normalized):
+        return normalized
+    keyword_map = [
+        (("amount", "amt", "value", "money", "balance"), "交易金额特征"),
+        (("count", "freq", "frequency", "degree", "num"), "交易频次特征"),
+        (("time", "hour", "day", "window", "period"), "时间行为特征"),
+        (("region", "city", "area", "geo"), "地域流转特征"),
+        (("neighbor", "edge", "graph", "relation"), "关系网络特征"),
+        (("in", "out", "flow"), "资金流向特征"),
+        (("risk", "fraud", "label"), "历史风险特征"),
+        (("device", "ip", "account"), "账户环境特征"),
+    ]
+    for keywords, label in keyword_map:
+        if any(keyword in lower for keyword in keywords):
+            return label
+    return "业务行为特征"
+
+
+def _feature_index(value: str) -> int | None:
+    digits = ""
+    for char in reversed(value):
+        if char.isdigit():
+            digits = char + digits
+        elif digits:
+            break
+    if not digits:
+        return None
+    return int(digits)
 
 
 def _business_id_for(dataset_id: int) -> str:

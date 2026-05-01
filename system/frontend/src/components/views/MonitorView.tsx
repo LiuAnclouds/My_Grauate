@@ -73,15 +73,15 @@ function stageName(stage: string) {
   return map[stage] ?? stage;
 }
 
-function riskTone(score: number) {
-  if (score >= 0.75) return "danger";
-  if (score >= 0.55) return "warning";
-  return "success";
+function riskTone(score: number, label?: string) {
+  if (label === "suspicious" || score >= 0.75) return "danger";
+  if (label === "no_risk" || score < 0.35) return "success";
+  return "warning";
 }
 
 function riskLabel(score: number, label: string) {
   if (label === "suspicious" || score >= 0.75) return "高风险";
-  if (score >= 0.55) return "中风险";
+  if (label === "no_risk" || score < 0.35) return "无风险";
   return "低风险";
 }
 
@@ -241,7 +241,7 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
                 <span>处理状态</span>
               </div>
               {results.slice(0, 5).map((item) => {
-                const tone = riskTone(item.risk_score);
+                    const tone = riskTone(item.risk_score, item.risk_label);
                 return (
                   <button key={item.node_id} type="button" className="risk-object-row" onClick={() => onOpenPage("cases")}>
                     <span className="risk-object-profile">
