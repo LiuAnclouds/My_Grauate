@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
   createFeatureTask,
@@ -36,58 +36,88 @@ const metricLabelMap: Record<string, string> = {
   display_name: "对象名称"
 };
 
+const featureProgress = [0.12, 0.3, 0.52, 0.72, 0.78];
+
+function makeLocalEvent(title: string, detail: string, progress: number, stepKey: string): ProcessingEventItem {
+  return {
+    id: -Math.round(Date.now() + progress * 1000),
+    stage: "inference",
+    step_key: stepKey,
+    title,
+    detail,
+    progress,
+    focus_neighbor_ids: [],
+    top_features: [],
+    metrics: {},
+    created_at: new Date().toISOString()
+  };
+}
+
+function normalizeFeatureEvents(events: ProcessingEventItem[]) {
+  return events.map((event, index) => ({
+    ...event,
+    progress: featureProgress[index] ?? Math.min(0.78, event.progress * 0.78)
+  }));
+}
+
+function normalizeInferenceEvents(events: ProcessingEventItem[]) {
+  const finalIndex = Math.max(1, events.length - 1);
+  return events.map((event, index) => {
+    const progress = event.progress >= 1
+      ? 1
+      : Math.min(0.96, 0.82 + (index / finalIndex) * 0.14);
+    return { ...event, progress };
+  });
+}
+
+function stageIndexForProgress(progress: number) {
+  if (progress <= 0) return -1;
+  if (progress < 18) return 0;
+  if (progress < 38) return 1;
+  if (progress < 62) return 2;
+  if (progress < 82) return 3;
+  return 4;
+}
+
 export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: Props) {
+  const runTokenRef = useRef(0);
   const [task, setTask] = useState<TaskResponse | null>(null);
   const [timeline, setTimeline] = useState<TaskTimelineResponse | null>(null);
   const [inference, setInference] = useState<InferenceRunResponse | null>(null);
   const [currentEventIndex, setCurrentEventIndex] = useState(0);
+  const [hasStarted, setHasStarted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("等待选择业务网络并启动风险任务。");
 
   const currentEvent = timeline?.events?.[currentEventIndex] ?? null;
-  const progress = Math.round((currentEvent?.progress ?? task?.progress ?? 0) * 100);
+  const progress = hasStarted ? Math.round((currentEvent?.progress ?? 0) * 100) : 0;
 
   useEffect(() => {
+    runTokenRef.current += 1;
+    setTask(null);
+    setTimeline(null);
+    setInference(null);
+    setCurrentEventIndex(0);
+    setHasStarted(false);
+    setBusy(false);
+    onFocusNode(null);
     if (!datasetId) {
-      setTask(null);
-      setTimeline(null);
-      setInference(null);
-      setCurrentEventIndex(0);
-      onFocusNode(null);
+      setMessage("等待选择业务网络并启动风险任务。");
       return;
     }
-    fetchTimeline(datasetId)
-      .then((data) => {
-        setTimeline(data);
-        setTask(data.task ?? null);
-        setCurrentEventIndex(Math.max(0, data.events.length - 1));
-      })
-      .catch(() => undefined);
+    setMessage("点击启动分析任务后，系统会从对象装载开始演示研判流程。");
   }, [datasetId, onFocusNode]);
 
   useEffect(() => {
-    if (!currentEvent?.focus_node_id) return;
+    if (!hasStarted || !currentEvent?.focus_node_id) return;
     onFocusNode(currentEvent.focus_node_id);
-  }, [currentEvent, onFocusNode]);
-
-  useEffect(() => {
-    if (!timeline || timeline.events.length <= 1 || !busy) return;
-    const timer = window.setInterval(() => {
-      setCurrentEventIndex((value) => {
-        if (value >= timeline.events.length - 1) {
-          window.clearInterval(timer);
-          return value;
-        }
-        return value + 1;
-      });
-    }, 900);
-    return () => window.clearInterval(timer);
-  }, [timeline, busy]);
+  }, [currentEvent, hasStarted, onFocusNode]);
 
   const metricPairs = useMemo(() => {
+    if (!hasStarted) return [];
     const metrics = currentEvent?.metrics ?? task?.summary ?? {};
     return Object.entries(metrics).slice(0, 4);
-  }, [currentEvent, task]);
+  }, [currentEvent, hasStarted, task]);
 
   async function refreshTimeline(targetDatasetId: number) {
     const data = await fetchTimeline(targetDatasetId);
@@ -97,34 +127,80 @@ export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: P
     return data;
   }
 
+  async function playEvents(events: ProcessingEventItem[], stepDelay: number, token: number) {
+    if (!datasetId || !events.length) return false;
+    setTimeline({ dataset_id: datasetId, task: null, events });
+    for (let index = 0; index < events.length; index += 1) {
+      if (runTokenRef.current !== token) return false;
+      const event = events[index];
+      setCurrentEventIndex(index);
+      setMessage(event.detail);
+      await delay(stepDelay);
+    }
+    return true;
+  }
+
   async function startPipeline() {
     if (!datasetId || busy) return;
+    const token = runTokenRef.current + 1;
+    runTokenRef.current = token;
     setBusy(true);
+    setHasStarted(true);
     setInference(null);
+    setTask(null);
+    onFocusNode(null);
+    let pulseTimer: number | undefined;
     try {
-      setMessage("正在准备特征与关系上下文。");
+      const bootEvent = makeLocalEvent("启动研判任务", "正在建立本次研判上下文。", 0.03, "start");
+      setTimeline({ dataset_id: datasetId, task: null, events: [bootEvent] });
+      setCurrentEventIndex(0);
+      setMessage(bootEvent.detail);
+      await delay(420);
+
       const createdTask = await createFeatureTask(datasetId);
       setTask(createdTask);
       const featureTimeline = await refreshTimeline(datasetId);
-      setMessage(featureTimeline.task?.message ?? "特征准备完成，准备进入风险识别。");
-      await delay(Math.max(1200, featureTimeline.events.length * 800));
+      const featureEvents = normalizeFeatureEvents(featureTimeline.events);
+      const featurePlayed = await playEvents(featureEvents, 620, token);
+      if (!featurePlayed) return;
 
-      setMessage("正在执行风险识别并生成结果台账。");
+      let pulse = 0;
+      pulseTimer = window.setInterval(() => {
+        if (runTokenRef.current !== token || !datasetId) return;
+        pulse += 1;
+        const progressValue = Math.min(0.94, 0.82 + pulse * 0.012);
+        const event = makeLocalEvent(
+          "风险识别中",
+          "正在聚合邻域关系与关键特征，生成对象级风险判断。",
+          progressValue,
+          "inference_running"
+        );
+        setTimeline({ dataset_id: datasetId, task: null, events: [event] });
+        setCurrentEventIndex(0);
+        setMessage(event.detail);
+      }, 420);
       const result = await runInference(datasetId);
-      setInference(result);
+      if (pulseTimer) window.clearInterval(pulseTimer);
+      pulseTimer = undefined;
+      if (runTokenRef.current !== token) return;
+
       const inferenceTimeline = await refreshTimeline(datasetId);
-      setCurrentEventIndex(0);
+      const inferenceEvents = normalizeInferenceEvents(inferenceTimeline.events);
+      await playEvents(inferenceEvents, 380, token);
+      if (runTokenRef.current !== token) return;
+      setInference(result);
       setMessage(inferenceTimeline.task?.message ?? result.message);
       onInferenceComplete();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "处理失败。");
     } finally {
-      setBusy(false);
+      if (pulseTimer) window.clearInterval(pulseTimer);
+      if (runTokenRef.current === token) setBusy(false);
     }
   }
 
-  const completedStageCount = stageLabels.filter((_, index) => progress >= (index + 1) * 18).length;
-  const taskCompleted = inference || task?.status === "completed";
+  const currentStageIndex = stageIndexForProgress(progress);
+  const taskCompleted = Boolean(inference);
 
   return (
     <section className="panel panel-stack analysis-process-panel analysis-visual-panel app-panel">
@@ -154,7 +230,11 @@ export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: P
         {stageLabels.map((step, index) => (
           <button
             key={step}
-            className={index < completedStageCount ? "analysis-stage-node active" : "analysis-stage-node"}
+            className={[
+              "analysis-stage-node",
+              progress >= [12, 30, 52, 72, 100][index] ? "active" : "",
+              hasStarted && currentStageIndex === index && !taskCompleted ? "current" : ""
+            ].filter(Boolean).join(" ")}
             type="button"
           >
             <span>{index + 1}</span>

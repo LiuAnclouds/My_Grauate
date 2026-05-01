@@ -173,7 +173,7 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
         riskLabel: node.risk_label,
         sourceType: node.source_type,
         featureCount: node.feature_count,
-        focused: node.id === activeNodeId ? "yes" : "no"
+        focused: "no"
       }
     }));
     const edgeElements = graph.edges
@@ -184,7 +184,7 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
           source: edge.source,
           target: edge.target,
           label: edge.edge_type,
-          focused: edge.source === activeNodeId || edge.target === activeNodeId ? "yes" : "no",
+          focused: "no",
           highlighted: edge.highlighted ? "yes" : "no"
         }
       }));
@@ -294,15 +294,31 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
       return;
     }
 
+  }, [graph]);
+
+  useEffect(() => {
     const currentCy = cyRef.current;
-    if (activeNodeId && currentCy) {
+    if (!currentCy) return;
+
+    currentCy.batch(() => {
+      currentCy.nodes().forEach((node) => {
+        node.data("focused", node.id() === activeNodeId ? "yes" : "no");
+      });
+      currentCy.edges().forEach((edge) => {
+        const sourceId = edge.source().id();
+        const targetId = edge.target().id();
+        edge.data("focused", sourceId === activeNodeId || targetId === activeNodeId ? "yes" : "no");
+      });
+    });
+
+    if (activeNodeId) {
       const target = currentCy.getElementById(activeNodeId);
       if (target.nonempty()) {
-        currentCy.animate({ center: { eles: target }, zoom: 1.12 }, { duration: 400 });
+        currentCy.stop();
+        currentCy.animate({ center: { eles: target }, zoom: 1.12 }, { duration: 260 });
       }
     }
-
-  }, [graph, activeNodeId]);
+  }, [activeNodeId, graph]);
 
   useEffect(() => {
     return () => {
