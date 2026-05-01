@@ -3,11 +3,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createGraphTask,
   fetchGraph,
-  fetchTimeline,
   GraphNode,
   GraphResponse,
-  listDatasets,
-  ProcessingEventItem
+  listDatasets
 } from "../services/api";
 
 type Props = {
@@ -50,7 +48,6 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
   const [message, setMessage] = useState("选择业务网络后，这里将展示对象关系结构。");
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [datasetStatus, setDatasetStatus] = useState("");
-  const [buildEvents, setBuildEvents] = useState<ProcessingEventItem[]>([]);
   const [viewRequested, setViewRequested] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -62,14 +59,12 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
       setGraph(null);
       setSelectedNode(null);
       setDatasetStatus("");
-      setBuildEvents([]);
       setViewRequested(false);
       setMessage("选择业务网络后，这里将展示对象关系结构。");
       return;
     }
     setGraph(null);
     setSelectedNode(null);
-    setBuildEvents([]);
     setViewRequested(false);
     listDatasets()
       .then((items) => {
@@ -90,8 +85,15 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
     if (!datasetId || !graphReady || !viewRequested) return;
     fetchGraph(datasetId)
       .then((data) => {
-        setGraph(data);
-        setMessage(`已装载 ${data.nodes.length} 个对象、${data.edges.length} 条关系。`);
+        const nodeIds = new Set(data.nodes.map((node) => node.id));
+        const visibleEdges = data.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+        setGraph({ ...data, edges: visibleEdges });
+        const filteredCount = data.edges.length - visibleEdges.length;
+        setMessage(
+          filteredCount > 0
+            ? `已装载 ${data.nodes.length} 个对象、${visibleEdges.length} 条关系，已隐藏 ${filteredCount} 条跨页关系。`
+            : `已装载 ${data.nodes.length} 个对象、${visibleEdges.length} 条关系。`
+        );
       })
       .catch((error) => setMessage(error.message));
   }, [datasetId, graphReady, refreshKey, viewRequested]);
@@ -110,33 +112,36 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
   useEffect(() => {
     if (!containerRef.current || !graph) return;
     cyRef.current?.destroy();
-    cyRef.current = cytoscape({
-      container: containerRef.current,
-      elements: [
-        ...graph.nodes.map((node) => ({
-          data: {
-            id: node.id,
-            label: node.label,
-            size: node.size,
-            color: node.color,
-            riskScore: node.risk_score,
-            riskLabel: node.risk_label,
-            sourceType: node.source_type,
-            featureCount: node.feature_count,
-            focused: node.id === activeNodeId ? "yes" : "no"
-          }
-        })),
-        ...graph.edges.map((edge) => ({
-          data: {
-            id: edge.id,
-            source: edge.source,
-            target: edge.target,
-            label: edge.edge_type,
-            focused: edge.source === activeNodeId || edge.target === activeNodeId ? "yes" : "no",
-            highlighted: edge.highlighted ? "yes" : "no"
-          }
-        }))
-      ],
+    const nodeIds = new Set(graph.nodes.map((node) => node.id));
+    const nodeElements = graph.nodes.map((node) => ({
+      data: {
+        id: node.id,
+        label: node.label,
+        size: node.size,
+        color: node.color,
+        riskScore: node.risk_score,
+        riskLabel: node.risk_label,
+        sourceType: node.source_type,
+        featureCount: node.feature_count,
+        focused: node.id === activeNodeId ? "yes" : "no"
+      }
+    }));
+    const edgeElements = graph.edges
+      .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+      .map((edge) => ({
+        data: {
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          label: edge.edge_type,
+          focused: edge.source === activeNodeId || edge.target === activeNodeId ? "yes" : "no",
+          highlighted: edge.highlighted ? "yes" : "no"
+        }
+      }));
+    try {
+      cyRef.current = cytoscape({
+        container: containerRef.current,
+        elements: [...nodeElements, ...edgeElements],
       style: [
         {
           selector: "node",
@@ -207,7 +212,11 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
         fit: true,
         padding: 36
       }
-    });
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? `关系图谱渲染失败：${error.message}` : "关系图谱渲染失败。");
+      return;
+    }
 
     cyRef.current.on("tap", "node", (event) => {
       const nodeId = String(event.target.data("id"));
@@ -235,9 +244,7 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
     setMessage("正在构建关系图谱。");
     try {
       const task = await createGraphTask(datasetId);
-      const timeline = await fetchTimeline(datasetId);
       setDatasetStatus("graph_ready");
-      setBuildEvents(timeline.events.filter((event) => event.stage === "graph_construction"));
       setMessage(task.message || "关系图谱构建完成，可以查看。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "关系图谱构建失败。");
@@ -268,7 +275,7 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
         <div>
           <p className="eyebrow">Relationship Network</p>
           <h2>关系网络图</h2>
-          <p>先构建关系图谱，再查看对象关系。</p>
+          <p>{graphStatusLabel(datasetStatus)}</p>
         </div>
         {compact ? (
           <div className="legend-row enterprise-legend">
@@ -297,26 +304,6 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
           </div>
         )}
       </div>
-
-      {!compact ? (
-        <div className="graph-build-panel">
-          <div>
-            <span>图谱状态</span>
-            <strong>{graphStatusLabel(datasetStatus)}</strong>
-          </div>
-          <div className="graph-build-steps">
-            {(buildEvents.length ? buildEvents : [
-              { id: -1, title: "等待构建", detail: datasetId ? "点击构建后生成图谱过程。" : "请先选择业务网络。", progress: 0 }
-            ] as ProcessingEventItem[]).map((event) => (
-              <span key={event.id} className={event.progress >= 1 ? "graph-build-step complete" : "graph-build-step"}>
-                <i style={{ width: `${Math.round(event.progress * 100)}%` }} />
-                <b>{event.title}</b>
-                <small>{event.detail}</small>
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       <div className="graph-layout enterprise-graph-layout">
         <div ref={containerRef} className="graph-canvas enterprise-canvas">

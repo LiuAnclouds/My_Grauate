@@ -3761,45 +3761,52 @@ tbody tr:hover {
 /* P3.1 relationship network page. */
 .graph-page-panel {
   display: grid;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 18px;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(56, 189, 248, 0.11), transparent 0 30%),
+    radial-gradient(circle at 92% 18%, rgba(124, 58, 237, 0.08), transparent 0 26%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.94), rgba(239, 247, 255, 0.88));
+  border-color: rgba(147, 197, 253, 0.28);
 }
 
 .graph-panel-top {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(218, 228, 240, 0.9);
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(186, 209, 232, 0.72);
 }
 
 .graph-panel-top h2 {
-  margin: 3px 0 0;
-  color: #0d1b2f;
-  font-size: 23px;
+  margin: 2px 0 0;
+  color: #102235;
+  font-size: 20px;
   line-height: 1.15;
 }
 
 .graph-panel-top p {
-  margin: 7px 0 0;
-  color: #64748b;
-  line-height: 1.6;
+  margin: 4px 0 0;
+  color: #4f667f;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .graph-action-controls {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 
 .graph-action-button,
 .graph-state-button {
-  min-height: 38px;
-  padding: 0 14px;
+  min-height: 32px;
+  padding: 0 12px;
   border-radius: 999px;
+  font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -3822,89 +3829,21 @@ tbody tr:hover {
   background: rgba(255, 251, 235, 0.88);
 }
 
-.graph-build-panel {
-  display: grid;
-  grid-template-columns: minmax(160px, 0.28fr) minmax(0, 1fr);
-  gap: 14px;
-  padding: 14px;
-  border: 1px solid rgba(147, 197, 253, 0.2);
-  border-radius: 18px;
-  background:
-    linear-gradient(135deg, rgba(239, 246, 255, 0.72), rgba(255, 255, 255, 0.82)),
-    rgba(255, 255, 255, 0.72);
-}
-
-.graph-build-panel > div:first-child {
-  display: grid;
-  align-content: center;
-  gap: 4px;
-}
-
-.graph-build-panel span {
-  color: #667a91;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.graph-build-panel strong {
-  color: #123352;
-  font-size: 17px;
-}
-
-.graph-build-steps {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.graph-build-step {
-  position: relative;
-  min-height: 86px;
-  overflow: hidden;
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  padding: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.graph-build-step i {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 3px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #2563eb, #14b8a6);
-}
-
-.graph-build-step b {
-  position: relative;
-  color: #17345a;
-  font-size: 13px;
-}
-
-.graph-build-step small {
-  position: relative;
-  color: #64748b;
-  line-height: 1.45;
-}
-
-.graph-build-step.complete {
-  border-color: rgba(45, 212, 191, 0.24);
-  background: rgba(240, 253, 250, 0.76);
-}
-
 .graph-page-panel .enterprise-graph-layout {
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 12px;
+  align-items: stretch;
 }
 
 .graph-page-panel .enterprise-canvas {
   position: relative;
-  min-height: 560px;
-  border-radius: 17px;
+  min-height: min(72vh, 760px);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.96), rgba(238, 247, 255, 0.74) 42%, rgba(226, 239, 252, 0.58) 100%),
+    linear-gradient(135deg, rgba(219, 234, 254, 0.6), rgba(236, 253, 245, 0.42));
+  border: 1px solid rgba(147, 197, 253, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 18px 44px rgba(37, 99, 235, 0.08);
 }
 
 .empty-graph-state {
@@ -3915,17 +3854,18 @@ tbody tr:hover {
   gap: 8px;
   padding: 24px;
   text-align: center;
-  color: #64748b;
+  color: #526a84;
 }
 
 .empty-graph-state strong {
-  color: #17345a;
-  font-size: 18px;
+  color: #102235;
+  font-size: 17px;
 }
 
 .graph-page-panel .graph-sidecard {
   border-radius: 17px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(247, 251, 255, 0.78);
+  border-color: rgba(147, 197, 253, 0.2);
 }
 
 .graph-page-panel .graph-sidecard h3 {
@@ -3939,14 +3879,6 @@ tbody tr:hover {
 @media (max-width: 1180px) {
   .graph-page-panel .enterprise-graph-layout {
     grid-template-columns: 1fr;
-  }
-
-  .graph-build-panel {
-    grid-template-columns: 1fr;
-  }
-
-  .graph-build-steps {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -3963,9 +3895,6 @@ tbody tr:hover {
     width: 100%;
   }
 
-  .graph-build-steps {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* P3.2 intelligent analysis page. */
@@ -4450,11 +4379,11 @@ tbody tr:hover {
 
 /* ===== Authenticated App Redesign ===== */
 :root {
-  --app-bg: #edf3f9;
+  --app-bg: #eaf3fb;
   --app-bg-accent: #dbe9f8;
-  --app-surface: rgba(255, 255, 255, 0.94);
-  --app-surface-strong: #ffffff;
-  --app-surface-muted: #f5f8fc;
+  --app-surface: rgba(247, 251, 255, 0.92);
+  --app-surface-strong: #f8fbff;
+  --app-surface-muted: #edf5fc;
   --app-border: rgba(148, 163, 184, 0.24);
   --app-border-strong: rgba(59, 130, 246, 0.24);
   --app-text: #10243b;
@@ -4481,9 +4410,10 @@ tbody tr:hover {
   min-height: 100vh;
   padding: 12px;
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 26%),
-    radial-gradient(circle at right top, rgba(15, 23, 42, 0.06), transparent 22%),
-    linear-gradient(180deg, #f4f8fc 0%, var(--app-bg) 100%);
+    radial-gradient(circle at 12% 10%, rgba(14, 165, 233, 0.18), transparent 0 28%),
+    radial-gradient(circle at 88% 8%, rgba(124, 58, 237, 0.1), transparent 0 24%),
+    radial-gradient(circle at 78% 86%, rgba(20, 184, 166, 0.12), transparent 0 30%),
+    linear-gradient(180deg, #eef7fc 0%, var(--app-bg) 58%, #e4eef8 100%);
 }
 
 .app-shell-grid {

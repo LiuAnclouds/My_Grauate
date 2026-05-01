@@ -245,7 +245,16 @@ def get_graph(dataset_id: int, db: Session = Depends(get_db)) -> GraphResponse:
     if dataset is None:
         raise HTTPException(status_code=404, detail="dataset not found")
     nodes = db.scalars(select(PersonNode).where(PersonNode.dataset_id == dataset_id).limit(300)).all()
-    edges = db.scalars(select(GraphEdge).where(GraphEdge.dataset_id == dataset_id).limit(600)).all()
+    visible_node_ids = {node.node_id for node in nodes}
+    candidate_edges = db.scalars(
+        select(GraphEdge).where(GraphEdge.dataset_id == dataset_id).limit(3000)
+    ).all()
+    edges: list[GraphEdge] = []
+    for edge in candidate_edges:
+        if edge.source_id in visible_node_ids and edge.target_id in visible_node_ids:
+            edges.append(edge)
+        if len(edges) >= 600:
+            break
     inference_records = db.scalars(
         select(InferenceResult).where(InferenceResult.dataset_id == dataset_id)
     ).all()
@@ -281,11 +290,14 @@ def get_graph(dataset_id: int, db: Session = Depends(get_db)) -> GraphResponse:
         )
         for edge in edges
     ]
+    summary = _presentation_summary(dataset)
+    summary["visible_node_count"] = len(graph_nodes)
+    summary["visible_edge_count"] = len(graph_edges)
     return GraphResponse(
         dataset_id=dataset_id,
         nodes=graph_nodes,
         edges=graph_edges,
-        summary=_presentation_summary(dataset),
+        summary=summary,
     )
 
 
@@ -505,7 +517,8 @@ def _graph_node_from_record(
     inference: InferenceResult | None,
     is_recent_focus: bool,
 ) -> GraphNode:
-    color = "#3b82f6" if is_recent_focus else "#5b6b7f"
+    raw = dict(node.raw_json or {})
+    color = _node_palette_color(str(raw.get("gang_id") or node.node_id))
     risk_score = None
     risk_label = None
     if inference is not None:
@@ -527,6 +540,20 @@ def _graph_node_from_record(
         source_type=source_type,
         feature_count=len(node.feature_json or {}),
     )
+
+
+def _node_palette_color(value: str) -> str:
+    palette = [
+        "#2563eb",
+        "#7c3aed",
+        "#0891b2",
+        "#f59e0b",
+        "#4f46e5",
+        "#0ea5e9",
+        "#8b5cf6",
+        "#d97706",
+    ]
+    return palette[_stable_bucket(value, len(palette))]
 
 
 def _build_inference_response(
