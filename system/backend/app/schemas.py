@@ -40,6 +40,7 @@ class AuthResponse(BaseModel):
     email: str
     message: str
     is_admin: bool = False
+    session_expires_at: datetime | None = None
 
 
 class DatasetSummary(BaseModel):

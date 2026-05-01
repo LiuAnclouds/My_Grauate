@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AuthResponse } from "./services/api";
 import { AuthPanel } from "./components/AuthPanel";
 import { AuthenticatedAppShell, NavItem } from "./components/layout/AuthenticatedAppShell";
@@ -27,8 +27,55 @@ const adminCards = [
   { title: "敏感配置", detail: "运行密钥仅存本地。" }
 ];
 
+const SESSION_STORAGE_KEY = "starhubgraph.auth.session";
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+type StoredSession = {
+  session: AuthResponse;
+  expiresAt: number;
+};
+
+function fallbackExpiry() {
+  return Date.now() + SESSION_TTL_MS;
+}
+
+function sessionExpiry(session: AuthResponse) {
+  const serverExpiry = session.session_expires_at ? Date.parse(session.session_expires_at) : NaN;
+  return Number.isFinite(serverExpiry) ? serverExpiry : fallbackExpiry();
+}
+
+function loadStoredSession(): AuthResponse | null {
+  try {
+    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as Partial<StoredSession>;
+    if (!stored.session || typeof stored.expiresAt !== "number" || stored.expiresAt <= Date.now()) {
+      window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      return null;
+    }
+    return { ...stored.session, session_expires_at: new Date(stored.expiresAt).toISOString() };
+  } catch {
+    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    return null;
+  }
+}
+
+function saveStoredSession(session: AuthResponse) {
+  const expiresAt = sessionExpiry(session);
+  const stored: StoredSession = {
+    session: { ...session, session_expires_at: new Date(expiresAt).toISOString() },
+    expiresAt
+  };
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stored));
+  return stored.session;
+}
+
+function clearStoredSession() {
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
 export default function App() {
-  const [session, setSession] = useState<AuthResponse | null>(null);
+  const [session, setSession] = useState<AuthResponse | null>(() => loadStoredSession());
   const [selectedDatasetId, setSelectedDatasetId] = useState<number | null>(null);
   const [selectedNetworkName, setSelectedNetworkName] = useState("");
   const [graphRefreshKey, setGraphRefreshKey] = useState(0);
@@ -46,8 +93,28 @@ export default function App() {
     setActiveTimelineNodeId(null);
   }
 
+  function handleAuthed(nextSession: AuthResponse) {
+    setSession(saveStoredSession(nextSession));
+  }
+
+  function handleLogout() {
+    clearStoredSession();
+    setSession(null);
+  }
+
+  useEffect(() => {
+    if (!session) return;
+    const expiresAt = sessionExpiry(session);
+    const delay = Math.max(0, expiresAt - Date.now());
+    const timer = window.setTimeout(() => {
+      clearStoredSession();
+      setSession(null);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [session]);
+
   if (!session) {
-    return <AuthPanel onAuthed={setSession} />;
+    return <AuthPanel onAuthed={handleAuthed} />;
   }
 
   return (
@@ -61,7 +128,7 @@ export default function App() {
       activeTimelineNodeId={activeTimelineNodeId}
       operationFlow={operationFlow}
       adminCards={adminCards}
-      onLogout={() => setSession(null)}
+      onLogout={handleLogout}
       onBusinessSelect={handleBusinessSelect}
       onGraphRefresh={() => setGraphRefreshKey((value) => value + 1)}
       onHighlightNode={setHighlightedNodeId}

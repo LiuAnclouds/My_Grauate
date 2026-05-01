@@ -3,6 +3,7 @@ export type AuthResponse = {
   email: string;
   message: string;
   is_admin: boolean;
+  session_expires_at?: string | null;
 };
 
 export type LoginCaptchaResponse = {

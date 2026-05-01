@@ -1,4 +1,4 @@
-import { CSSProperties, FormEvent, PointerEvent, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AuthResponse, fetchLoginCaptcha, LoginCaptchaResponse, login, register, requestCode } from "../services/api";
 
 type Props = {
@@ -11,6 +11,14 @@ type MascotTarget = "idle" | "account" | "password" | "captcha" | "error";
 type FeedbackType = "info" | "success" | "error";
 
 const footerFacts = ["面向交易关系的风险识别", "辅助定位异常用户", "支持数据接入与图谱分析"];
+
+function makeFieldName(prefix: string) {
+  const randomPart =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `starhubgraph-${prefix}-${randomPart}`;
+}
 
 function EyeIcon({ open }: { open: boolean }) {
   return (
@@ -183,6 +191,10 @@ function AuthMascot({
 }
 
 export function AuthPanel({ onAuthed }: Props) {
+  const accountInputRef = useRef<HTMLInputElement | null>(null);
+  const passwordInputRef = useRef<HTMLInputElement | null>(null);
+  const accountFieldName = useMemo(() => makeFieldName("account"), []);
+  const passwordFieldName = useMemo(() => makeFieldName("password"), []);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
@@ -257,6 +269,20 @@ export function AuthPanel({ onAuthed }: Props) {
     setMessage(text);
     setMessageType(type);
   }
+
+  useEffect(() => {
+    const clearVisibleAuthFields = () => {
+      setAccount("");
+      setPassword("");
+      setRegisterCode("");
+      setLoginCaptchaCode("");
+      if (accountInputRef.current) accountInputRef.current.value = "";
+      if (passwordInputRef.current) passwordInputRef.current.value = "";
+    };
+    clearVisibleAuthFields();
+    const clearTimers = [80, 320, 900].map((delay) => window.setTimeout(clearVisibleAuthFields, delay));
+    return () => clearTimers.forEach((timer) => window.clearTimeout(timer));
+  }, []);
 
   useEffect(() => {
     if (!isLogin) return;
@@ -390,13 +416,18 @@ export function AuthPanel({ onAuthed }: Props) {
               </div>
             </div>
 
-            <form className="auth-form minimal-form" onSubmit={handleSubmit}>
+            <form className="auth-form minimal-form" onSubmit={handleSubmit} autoComplete="off">
               <label htmlFor="auth-account">
                 邮箱账号
                 <div className="input-shell">
                   <input
+                    ref={accountInputRef}
                     id="auth-account"
-                    autoComplete="email"
+                    name={accountFieldName}
+                    autoComplete="new-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={account}
                     onChange={(event) => setAccount(event.target.value)}
                     onFocus={() => setFocusField("account")}
@@ -410,8 +441,10 @@ export function AuthPanel({ onAuthed }: Props) {
                 {passwordLabel}
                 <div className="input-shell with-action">
                   <input
+                    ref={passwordInputRef}
                     id="auth-password"
-                    autoComplete={isLogin ? "current-password" : "new-password"}
+                    name={passwordFieldName}
+                    autoComplete="new-password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}

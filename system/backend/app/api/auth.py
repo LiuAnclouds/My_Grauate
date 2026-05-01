@@ -20,6 +20,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _LOGIN_CAPTCHA_TTL_SECONDS = 300
 _LOGIN_CAPTCHA_LENGTH = 5
 _LOGIN_CAPTCHA_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+_SESSION_TTL_DAYS = 7
 _login_captcha_store: dict[str, dict[str, str | datetime | bool]] = {}
 
 
@@ -65,7 +66,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> AuthRes
     db.add(user)
     db.commit()
     db.refresh(user)
-    return AuthResponse(user_id=user.id, email=user.email, message="注册成功。", is_admin=user.is_admin)
+    return _auth_response(user=user, message="注册成功。")
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -74,7 +75,17 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
     if user is None or not verify_secret(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="invalid email or password")
     _verify_login_captcha(captcha_id=payload.captcha_id, captcha_code=payload.captcha_code)
-    return AuthResponse(user_id=user.id, email=user.email, message="登录成功。" + ("已进入管理员模式。" if user.is_admin else ""), is_admin=user.is_admin)
+    return _auth_response(user=user, message="登录成功。" + ("已进入管理员模式。" if user.is_admin else ""))
+
+
+def _auth_response(*, user: User, message: str) -> AuthResponse:
+    return AuthResponse(
+        user_id=user.id,
+        email=user.email,
+        message=message,
+        is_admin=user.is_admin,
+        session_expires_at=datetime.utcnow() + timedelta(days=_SESSION_TTL_DAYS),
+    )
 
 
 def _consume_code(*, db: Session, email: str, code: str, purpose: str) -> None:
