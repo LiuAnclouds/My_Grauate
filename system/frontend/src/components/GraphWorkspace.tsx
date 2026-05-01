@@ -35,10 +35,38 @@ function isGraphReadyStatus(status: string) {
 }
 
 function graphStatusLabel(status: string) {
+  if (status === "building") return "正在构建关系图谱";
   if (status === "graph_ready") return "已构建关系图谱";
   if (status === "feature_ready") return "已完成处理";
   if (status === "inference_completed") return "已生成风险名单";
   return "待构建关系图谱";
+}
+
+const buildSteps = [
+  { ratio: 0.18, title: "装载风险对象", detail: "对象节点开始进入图谱画布。" },
+  { ratio: 0.42, title: "组织关系边", detail: "交易方向与关联关系逐步连接。" },
+  { ratio: 0.72, title: "计算图谱布局", detail: "系统正在整理节点位置与关系层次。" },
+  { ratio: 1, title: "图谱构建完成", detail: "最终关系图谱已生成。" }
+];
+
+function sanitizeGraph(data: GraphResponse): GraphResponse {
+  const nodeIds = new Set(data.nodes.map((node) => node.id));
+  return {
+    ...data,
+    edges: data.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+  };
+}
+
+function graphSlice(data: GraphResponse, ratio: number): GraphResponse {
+  const nodeCount = Math.max(1, Math.ceil(data.nodes.length * ratio));
+  const nodes = data.nodes.slice(0, nodeCount);
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = data.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+  return { ...data, nodes, edges };
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timelineNodeId, compact = false }: Props) {
@@ -50,9 +78,12 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
   const [datasetStatus, setDatasetStatus] = useState("");
   const [viewRequested, setViewRequested] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [buildStepIndex, setBuildStepIndex] = useState(-1);
 
   const activeNodeId = timelineNodeId ?? highlightedNodeId;
   const graphReady = isGraphReadyStatus(datasetStatus);
+  const buildStep = buildStepIndex >= 0 ? buildSteps[buildStepIndex] : null;
+  const buildProgress = buildStep ? Math.round(buildStep.ratio * 100) : 0;
 
   useEffect(() => {
     if (!datasetId) {
@@ -60,12 +91,14 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
       setSelectedNode(null);
       setDatasetStatus("");
       setViewRequested(false);
+      setBuildStepIndex(-1);
       setMessage("选择业务网络后，这里将展示对象关系结构。");
       return;
     }
     setGraph(null);
     setSelectedNode(null);
     setViewRequested(false);
+    setBuildStepIndex(-1);
     listDatasets()
       .then((items) => {
         const current = items.find((item) => item.id === datasetId);
@@ -85,14 +118,13 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
     if (!datasetId || !graphReady || !viewRequested) return;
     fetchGraph(datasetId)
       .then((data) => {
-        const nodeIds = new Set(data.nodes.map((node) => node.id));
-        const visibleEdges = data.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
-        setGraph({ ...data, edges: visibleEdges });
-        const filteredCount = data.edges.length - visibleEdges.length;
+        const visibleGraph = sanitizeGraph(data);
+        setGraph(visibleGraph);
+        const filteredCount = data.edges.length - visibleGraph.edges.length;
         setMessage(
           filteredCount > 0
-            ? `已装载 ${data.nodes.length} 个对象、${visibleEdges.length} 条关系，已隐藏 ${filteredCount} 条跨页关系。`
-            : `已装载 ${data.nodes.length} 个对象、${visibleEdges.length} 条关系。`
+            ? `已装载 ${visibleGraph.nodes.length} 个对象、${visibleGraph.edges.length} 条关系，已隐藏 ${filteredCount} 条跨页关系。`
+            : `已装载 ${visibleGraph.nodes.length} 个对象、${visibleGraph.edges.length} 条关系。`
         );
       })
       .catch((error) => setMessage(error.message));
@@ -241,12 +273,26 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
     setBusy(true);
     setGraph(null);
     setViewRequested(false);
+    setSelectedNode(null);
+    setDatasetStatus("building");
+    setBuildStepIndex(0);
     setMessage("正在构建关系图谱。");
     try {
       const task = await createGraphTask(datasetId);
+      const fullGraph = sanitizeGraph(await fetchGraph(datasetId));
+      for (let index = 0; index < buildSteps.length; index += 1) {
+        setBuildStepIndex(index);
+        setMessage(`${buildSteps[index].title}：${buildSteps[index].detail}`);
+        setGraph(graphSlice(fullGraph, buildSteps[index].ratio));
+        await delay(index === buildSteps.length - 1 ? 700 : 950);
+      }
+      setGraph(fullGraph);
       setDatasetStatus("graph_ready");
-      setMessage(task.message || "关系图谱构建完成，可以查看。");
+      setBuildStepIndex(-1);
+      setMessage(task.message || `关系图谱构建完成：${fullGraph.nodes.length} 个对象、${fullGraph.edges.length} 条关系。`);
     } catch (error) {
+      setBuildStepIndex(-1);
+      setDatasetStatus("");
       setMessage(error instanceof Error ? error.message : "关系图谱构建失败。");
     } finally {
       setBusy(false);
@@ -260,12 +306,16 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
 
   const emptyGraphTitle = !datasetId
     ? "尚未选择业务网络"
-    : graphReady
+    : busy
+      ? "正在构建关系图谱"
+      : graphReady
       ? "关系图谱已构建"
       : "关系图谱尚未构建";
   const emptyGraphText = !datasetId
     ? "请先进入“业务网络”栏目选择或导入一个网络。"
-    : graphReady
+    : busy
+      ? "对象和关系会逐步出现在画布中。"
+      : graphReady
       ? "点击“查看关系图谱”载入对象关系。"
       : "请先点击“构建关系图谱”。";
 
@@ -307,6 +357,14 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
 
       <div className="graph-layout enterprise-graph-layout">
         <div ref={containerRef} className="graph-canvas enterprise-canvas">
+          {busy || buildStep ? (
+            <div className="graph-build-overlay">
+              <span>{buildStep?.title ?? "构建关系图谱"}</span>
+              <strong>{buildProgress}%</strong>
+              <i><b style={{ width: `${buildProgress}%` }} /></i>
+              <small>{buildStep?.detail ?? "正在准备对象和关系。"}</small>
+            </div>
+          ) : null}
           {!graph ? (
             <div className="empty-graph-state">
               <strong>{emptyGraphTitle}</strong>
