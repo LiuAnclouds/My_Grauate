@@ -7441,6 +7441,230 @@ tbody tr:hover {
   margin: 0;
 }
 
+.analysis-graph-animator {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.analysis-graph-animator::before {
+  content: "";
+  position: absolute;
+  inset: 9%;
+  border-radius: 34px;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(37, 99, 235, 0.12), transparent 0 28%),
+    radial-gradient(circle at 50% 44%, transparent 0 38%, rgba(20, 184, 166, 0.12) 39% 40%, transparent 41%),
+    linear-gradient(120deg, transparent 0 42%, rgba(59, 130, 246, 0.1) 50%, transparent 58%);
+  opacity: 0.7;
+  mix-blend-mode: multiply;
+  animation: analysisGraphBreath 2.4s ease-in-out infinite;
+}
+
+.analysis-graph-scan {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 12%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.12), rgba(20, 184, 166, 0.84), rgba(245, 158, 11, 0.3), transparent);
+  box-shadow: 0 0 24px rgba(20, 184, 166, 0.28);
+  animation: analysisGraphScan 2.1s ease-in-out infinite;
+}
+
+.analysis-graph-particles i {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2563eb, #0f9fb8);
+  box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.09), 0 8px 22px rgba(15, 159, 184, 0.2);
+  opacity: 0;
+  animation: analysisNodePop 1.8s ease-in-out infinite;
+}
+
+.analysis-graph-particles i:nth-child(1) { left: 14%; top: 22%; animation-delay: 0s; }
+.analysis-graph-particles i:nth-child(2) { left: 28%; top: 15%; animation-delay: 0.12s; }
+.analysis-graph-particles i:nth-child(3) { left: 43%; top: 28%; animation-delay: 0.24s; }
+.analysis-graph-particles i:nth-child(4) { left: 62%; top: 18%; animation-delay: 0.36s; }
+.analysis-graph-particles i:nth-child(5) { left: 78%; top: 31%; animation-delay: 0.48s; }
+.analysis-graph-particles i:nth-child(6) { left: 21%; top: 48%; animation-delay: 0.6s; }
+.analysis-graph-particles i:nth-child(7) { left: 39%; top: 52%; animation-delay: 0.72s; }
+.analysis-graph-particles i:nth-child(8) { left: 55%; top: 43%; animation-delay: 0.84s; }
+.analysis-graph-particles i:nth-child(9) { left: 72%; top: 55%; animation-delay: 0.96s; }
+.analysis-graph-particles i:nth-child(10) { left: 18%; top: 72%; animation-delay: 1.08s; }
+.analysis-graph-particles i:nth-child(11) { left: 35%; top: 77%; animation-delay: 1.2s; }
+.analysis-graph-particles i:nth-child(12) { left: 51%; top: 68%; animation-delay: 1.32s; }
+.analysis-graph-particles i:nth-child(13) { left: 68%; top: 75%; animation-delay: 1.44s; }
+.analysis-graph-particles i:nth-child(14) { left: 84%; top: 67%; animation-delay: 1.56s; }
+
+.analysis-graph-flows span {
+  position: absolute;
+  width: 26%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.12), rgba(37, 99, 235, 0.82), transparent);
+  opacity: 0;
+  transform-origin: left center;
+  animation: analysisEdgeFlow 1.55s ease-in-out infinite;
+}
+
+.analysis-graph-flows span:nth-child(1) { left: 18%; top: 28%; transform: rotate(16deg); animation-delay: 0s; }
+.analysis-graph-flows span:nth-child(2) { left: 42%; top: 27%; transform: rotate(-12deg); animation-delay: 0.18s; }
+.analysis-graph-flows span:nth-child(3) { left: 24%; top: 51%; transform: rotate(-7deg); animation-delay: 0.36s; }
+.analysis-graph-flows span:nth-child(4) { left: 48%; top: 52%; transform: rotate(18deg); animation-delay: 0.54s; }
+.analysis-graph-flows span:nth-child(5) { left: 26%; top: 72%; transform: rotate(10deg); animation-delay: 0.72s; }
+.analysis-graph-flows span:nth-child(6) { left: 58%; top: 69%; transform: rotate(-15deg); animation-delay: 0.9s; }
+
+.analysis-graph-orbit {
+  position: absolute;
+  left: 50%;
+  top: 51%;
+  width: 210px;
+  height: 210px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+}
+
+.analysis-graph-orbit b {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(37, 99, 235, 0.28);
+  border-radius: inherit;
+  animation: analysisOrbit 2.8s linear infinite;
+}
+
+.analysis-graph-orbit b:nth-child(2) {
+  inset: 24px;
+  border-color: rgba(20, 184, 166, 0.34);
+  animation-duration: 2.2s;
+  animation-direction: reverse;
+}
+
+.analysis-graph-orbit b:nth-child(3) {
+  inset: 50px;
+  border-color: rgba(245, 158, 11, 0.3);
+  animation-duration: 1.7s;
+}
+
+.analysis-graph-caption {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  min-width: 220px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(59, 130, 246, 0.12), transparent 0 44%),
+    linear-gradient(135deg, rgba(226, 239, 252, 0.86), rgba(211, 230, 244, 0.72));
+  box-shadow: 0 16px 34px rgba(31, 84, 132, 0.11), inset 0 1px 0 rgba(255, 255, 255, 0.54);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.analysis-graph-caption span {
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.analysis-graph-caption strong {
+  grid-column: 1 / -1;
+  color: #183957;
+  font-size: 13px;
+}
+
+.analysis-graph-caption small {
+  grid-column: 2;
+  grid-row: 1;
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.analysis-graph-animator.stage-0 .analysis-graph-flows,
+.analysis-graph-animator.stage-0 .analysis-graph-orbit {
+  opacity: 0.15;
+}
+
+.analysis-graph-animator.stage-1 .analysis-graph-flows span,
+.analysis-graph-animator.stage-4 .analysis-graph-flows span {
+  opacity: 1;
+}
+
+.analysis-graph-animator.stage-2 .analysis-graph-particles i {
+  animation-name: analysisFeatureGather;
+  animation-duration: 2.05s;
+}
+
+.analysis-graph-animator.stage-2 .analysis-graph-orbit,
+.analysis-graph-animator.stage-3 .analysis-graph-orbit,
+.analysis-graph-animator.stage-4 .analysis-graph-orbit {
+  opacity: 1;
+}
+
+.analysis-graph-animator.stage-3 .analysis-graph-scan {
+  height: 100%;
+  top: 0;
+  left: 50%;
+  right: auto;
+  width: 2px;
+  opacity: 0.72;
+  animation-name: analysisTimeSweep;
+}
+
+.analysis-graph-animator.stage-4::before {
+  background:
+    radial-gradient(circle at 50% 44%, rgba(245, 158, 11, 0.18), transparent 0 20%),
+    radial-gradient(circle at 50% 44%, transparent 0 32%, rgba(220, 38, 38, 0.12) 33% 34%, transparent 35%),
+    linear-gradient(120deg, transparent 0 42%, rgba(37, 99, 235, 0.14) 50%, transparent 58%);
+}
+
+@keyframes analysisGraphBreath {
+  0%, 100% { transform: scale(0.985); opacity: 0.5; }
+  50% { transform: scale(1.015); opacity: 0.84; }
+}
+
+@keyframes analysisGraphScan {
+  0%, 100% { transform: translateY(0); opacity: 0.32; }
+  50% { transform: translateY(58vh); opacity: 0.92; }
+}
+
+@keyframes analysisNodePop {
+  0% { transform: scale(0.35); opacity: 0; }
+  28%, 78% { transform: scale(1); opacity: 0.92; }
+  100% { transform: scale(0.75); opacity: 0.35; }
+}
+
+@keyframes analysisEdgeFlow {
+  0% { clip-path: inset(0 100% 0 0); opacity: 0; }
+  30%, 78% { clip-path: inset(0 0 0 0); opacity: 0.82; }
+  100% { clip-path: inset(0 0 0 100%); opacity: 0; }
+}
+
+@keyframes analysisFeatureGather {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0.2; }
+  45% { opacity: 0.94; }
+  100% { transform: translate(30px, -22px) scale(0.45); opacity: 0; }
+}
+
+@keyframes analysisOrbit {
+  0% { transform: rotate(0deg) scaleX(1.08) scaleY(0.74); }
+  100% { transform: rotate(360deg) scaleX(1.08) scaleY(0.74); }
+}
+
+@keyframes analysisTimeSweep {
+  0%, 100% { transform: translateX(-30vw) rotate(0deg); opacity: 0.24; }
+  50% { transform: translateX(30vw) rotate(0deg); opacity: 0.86; }
+}
+
 @keyframes analysisPulse {
   0% {
     box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.36);

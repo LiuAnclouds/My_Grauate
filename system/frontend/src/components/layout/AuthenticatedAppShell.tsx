@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppPage } from "../../App";
 import { AuthResponse } from "../../services/api";
 import { DataUpload } from "../DataUpload";
 import { GraphWorkspace } from "../GraphWorkspace";
 import { InferenceResults } from "../InferenceResults";
 import { PipelinePanel } from "../PipelinePanel";
+import type { AnalysisFrame } from "../PipelinePanel";
 import { PageSurface } from "./PageSurface";
 import { SidebarNav } from "./SidebarNav";
 import { TopBrandHeader } from "./TopBrandHeader";
@@ -58,6 +59,7 @@ export function AuthenticatedAppShell({
   const [activePage, setActivePage] = useState<AppPage>("monitor");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [analysisFrame, setAnalysisFrame] = useState<AnalysisFrame | null>(null);
 
   const activeNav = useMemo(() => navItems.find((item) => item.key === activePage) ?? navItems[0], [activePage, navItems]);
   const hasNetwork = Boolean(selectedDatasetId);
@@ -65,7 +67,12 @@ export function AuthenticatedAppShell({
   function openPage(nextPage: AppPage) {
     setActivePage(nextPage);
     setMobileNavOpen(false);
+    if (nextPage !== "analysis") setAnalysisFrame(null);
   }
+
+  useEffect(() => {
+    setAnalysisFrame(null);
+  }, [selectedDatasetId]);
 
   return (
     <main className="app-shell enterprise-app-shell nextgen-shell">
@@ -120,9 +127,15 @@ export function AuthenticatedAppShell({
                     refreshKey={graphRefreshKey}
                     highlightedNodeId={highlightedNodeId}
                     timelineNodeId={activeTimelineNodeId}
+                    analysisFrame={analysisFrame}
                     compact
                   />
-                  <PipelinePanel datasetId={selectedDatasetId} onFocusNode={onTimelineNode} onInferenceComplete={onGraphRefresh} />
+                  <PipelinePanel
+                    datasetId={selectedDatasetId}
+                    onFocusNode={onTimelineNode}
+                    onFrameChange={setAnalysisFrame}
+                    onInferenceComplete={onGraphRefresh}
+                  />
                 </div>
               </PageSurface>
             ) : null}

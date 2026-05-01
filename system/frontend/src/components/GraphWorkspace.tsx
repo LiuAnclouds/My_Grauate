@@ -7,12 +7,14 @@ import {
   GraphResponse,
   listDatasets
 } from "../services/api";
+import type { AnalysisFrame } from "./PipelinePanel";
 
 type Props = {
   datasetId: number | null;
   refreshKey: number;
   highlightedNodeId: string | null;
   timelineNodeId: string | null;
+  analysisFrame?: AnalysisFrame | null;
   compact?: boolean;
 };
 
@@ -79,7 +81,7 @@ function disposeCytoscape(cy: Core | null) {
   }
 }
 
-export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timelineNodeId, compact = false }: Props) {
+export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timelineNodeId, analysisFrame, compact = false }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const nodeMapRef = useRef<Map<string, GraphNode>>(new Map());
@@ -95,6 +97,8 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
   const graphReady = isGraphReadyStatus(datasetStatus);
   const buildStep = buildStepIndex >= 0 ? buildSteps[buildStepIndex] : null;
   const buildProgress = buildStep ? Math.round(buildStep.ratio * 100) : 0;
+  const showAnalysisAnimator = compact && Boolean(analysisFrame?.started);
+  const animationStage = Math.max(0, analysisFrame?.stageIndex ?? 0);
 
   useEffect(() => {
     if (!datasetId) {
@@ -417,6 +421,27 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
       <div className="graph-layout enterprise-graph-layout">
         <div className="graph-canvas enterprise-canvas">
           <div ref={containerRef} className="graph-cytoscape-layer" />
+          {showAnalysisAnimator ? (
+            <div className={`analysis-graph-animator stage-${animationStage}`} aria-hidden="true">
+              <div className="analysis-graph-scan" />
+              <div className="analysis-graph-particles">
+                {Array.from({ length: 14 }).map((_, index) => <i key={index} />)}
+              </div>
+              <div className="analysis-graph-flows">
+                {Array.from({ length: 6 }).map((_, index) => <span key={index} />)}
+              </div>
+              <div className="analysis-graph-orbit">
+                <b />
+                <b />
+                <b />
+              </div>
+              <div className="analysis-graph-caption">
+                <span>{analysisFrame?.stageLabel}</span>
+                <strong>{analysisFrame?.title}</strong>
+                <small>{analysisFrame?.progress}%</small>
+              </div>
+            </div>
+          ) : null}
           {busy || buildStep ? (
             <div className="graph-build-overlay">
               <span>{buildStep?.title ?? "构建关系图谱"}</span>

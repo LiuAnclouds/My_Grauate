@@ -14,6 +14,21 @@ type Props = {
   datasetId: number | null;
   onInferenceComplete: () => void;
   onFocusNode: (nodeId: string | null) => void;
+  onFrameChange?: (frame: AnalysisFrame) => void;
+};
+
+export type AnalysisFrame = {
+  started: boolean;
+  progress: number;
+  stageIndex: number;
+  stageLabel: string;
+  title: string;
+  detail: string;
+  stepKey: string;
+  focusNodeId: string | null;
+  neighborCount: number;
+  featureCount: number;
+  completed: boolean;
 };
 
 const stageLabels = ["对象装载", "关系组织", "特征准备", "时序编码", "风险识别"];
@@ -79,7 +94,7 @@ function stageIndexForProgress(progress: number) {
   return 4;
 }
 
-export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: Props) {
+export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode, onFrameChange }: Props) {
   const runTokenRef = useRef(0);
   const [task, setTask] = useState<TaskResponse | null>(null);
   const [timeline, setTimeline] = useState<TaskTimelineResponse | null>(null);
@@ -201,6 +216,22 @@ export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: P
 
   const currentStageIndex = stageIndexForProgress(progress);
   const taskCompleted = Boolean(inference);
+
+  useEffect(() => {
+    onFrameChange?.({
+      started: hasStarted,
+      progress,
+      stageIndex: currentStageIndex,
+      stageLabel: stageLabels[currentStageIndex] ?? "等待启动",
+      title: currentEvent?.title ?? "等待启动",
+      detail: currentEvent?.detail ?? message,
+      stepKey: currentEvent?.step_key ?? "idle",
+      focusNodeId: currentEvent?.focus_node_id ?? null,
+      neighborCount: currentEvent?.focus_neighbor_ids?.length ?? 0,
+      featureCount: currentEvent?.top_features?.length ?? 0,
+      completed: taskCompleted
+    });
+  }, [currentEvent, currentStageIndex, hasStarted, message, onFrameChange, progress, taskCompleted]);
 
   return (
     <section className="panel panel-stack analysis-process-panel analysis-visual-panel app-panel">
