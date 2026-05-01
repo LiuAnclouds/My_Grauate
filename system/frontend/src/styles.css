@@ -3962,8 +3962,12 @@ tbody tr:hover {
 }
 
 .compact-graph-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
   padding: 14px;
   border-radius: 18px;
+  min-height: calc(100vh - var(--app-topbar-height) - 50px);
 }
 
 .compact-graph-panel .graph-panel-top {
@@ -3972,15 +3976,15 @@ tbody tr:hover {
 
 .compact-graph-panel .enterprise-graph-layout {
   grid-template-columns: 1fr;
+  min-height: 0;
 }
 
 .compact-graph-panel .enterprise-canvas {
-  min-height: 420px;
+  min-height: clamp(560px, calc(100vh - var(--app-topbar-height) - 118px), 820px);
 }
 
 .compact-graph-panel .graph-sidecard {
-  max-height: 228px;
-  overflow: auto;
+  display: none;
 }
 
 @media (max-width: 1320px) {
@@ -4917,8 +4921,10 @@ tbody tr:hover {
 }
 
 .analysis-command-grid {
-  grid-template-columns: minmax(360px, 0.92fr) minmax(0, 1.08fr);
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  align-items: stretch;
+  gap: 12px;
+  min-height: calc(100vh - var(--app-topbar-height) - 50px);
 }
 
 .app-page-primary,
@@ -7190,6 +7196,246 @@ tbody tr:hover {
 .graph-state-button {
   background: rgba(226, 239, 252, 0.78) !important;
   border-color: rgba(96, 165, 250, 0.22) !important;
+}
+
+/* Intelligent analysis: large graph canvas + compact process visualizer. */
+.analysis-command-grid .compact-graph-panel {
+  order: 1;
+}
+
+.analysis-command-grid .analysis-visual-panel {
+  order: 2;
+}
+
+.analysis-visual-panel {
+  align-content: start;
+  gap: 10px !important;
+  min-height: calc(100vh - var(--app-topbar-height) - 50px);
+  padding: 14px !important;
+  overflow: hidden;
+}
+
+.analysis-visual-panel .panel-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(119, 171, 221, 0.22);
+}
+
+.analysis-visual-panel .panel-heading h2 {
+  font-size: 20px !important;
+}
+
+.analysis-visual-panel .section-copy {
+  max-width: none;
+  margin-top: 3px;
+}
+
+.analysis-run-button {
+  width: 100%;
+  min-height: 40px !important;
+  border-radius: 14px !important;
+}
+
+.analysis-progress-card {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(59, 130, 246, 0.12), transparent 0 38%),
+    linear-gradient(145deg, rgba(225, 239, 250, 0.84), rgba(211, 230, 244, 0.68));
+}
+
+.analysis-progress-card > div:first-child {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.analysis-progress-card small,
+.analysis-context-strip small {
+  color: #54708b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.analysis-progress-card strong {
+  color: #183957;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.analysis-progress-card > span {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.analysis-stage-lane {
+  --stage-progress: 0%;
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+}
+
+.analysis-stage-lane::before,
+.analysis-stage-lane::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 999px;
+}
+
+.analysis-stage-lane::before {
+  background: rgba(119, 171, 221, 0.22);
+}
+
+.analysis-stage-lane::after {
+  height: var(--stage-progress);
+  bottom: auto;
+  background: linear-gradient(180deg, #2563eb, #0f9fb8, #f59e0b);
+  box-shadow: 0 0 18px rgba(37, 99, 235, 0.22);
+  transition: height 0.5s ease;
+}
+
+.analysis-stage-node {
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid rgba(147, 197, 253, 0.2);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(236, 246, 253, 0.72), rgba(218, 234, 246, 0.54));
+  color: #526a84;
+  text-align: left;
+}
+
+.analysis-stage-node span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.analysis-stage-node strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.analysis-stage-node.active {
+  border-color: rgba(37, 99, 235, 0.28);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(37, 99, 235, 0.12), transparent 0 42%),
+    linear-gradient(145deg, rgba(232, 244, 255, 0.92), rgba(215, 235, 247, 0.74));
+  color: #183957;
+}
+
+.analysis-stage-node.active span {
+  background: linear-gradient(135deg, #2563eb, #0f9fb8);
+  color: #eff6ff;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.2);
+}
+
+.analysis-current-card {
+  padding: 13px !important;
+  border-radius: 16px !important;
+}
+
+.analysis-current-card > strong {
+  color: #10243b;
+  font-size: 15px;
+}
+
+.analysis-current-card p {
+  margin-top: 5px !important;
+  font-size: 12px !important;
+  line-height: 1.42 !important;
+}
+
+.analysis-context-strip {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px;
+}
+
+.analysis-context-strip span {
+  min-height: 58px;
+  padding: 10px !important;
+}
+
+.analysis-context-strip strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.analysis-finish-note {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid rgba(20, 184, 166, 0.26);
+  border-radius: 15px;
+  background: linear-gradient(145deg, rgba(236, 253, 245, 0.76), rgba(211, 230, 244, 0.6));
+}
+
+.analysis-finish-note strong {
+  color: #0f766e;
+  font-size: 13px;
+}
+
+.analysis-finish-note span {
+  color: #526a84;
+  font-size: 12px;
+}
+
+.analysis-visual-panel .process-list {
+  max-height: min(25vh, 220px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.analysis-visual-panel .timeline-item {
+  min-height: auto;
+  padding: 11px 12px !important;
+  gap: 5px;
+}
+
+.analysis-visual-panel .timeline-item small {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.analysis-visual-panel > .hint {
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .analysis-command-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-visual-panel,
+  .analysis-command-grid .compact-graph-panel {
+    min-height: auto;
+  }
+
+  .compact-graph-panel .enterprise-canvas {
+    min-height: 520px;
+  }
 }
 
 /* Risk ledger layout pass + lower-glare system tone. */

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   createFeatureTask,
   fetchTimeline,
@@ -122,33 +123,47 @@ export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: P
     }
   }
 
+  const completedStageCount = stageLabels.filter((_, index) => progress >= (index + 1) * 18).length;
+  const taskCompleted = inference || task?.status === "completed";
+
   return (
-    <section className="panel panel-stack analysis-process-panel app-panel">
+    <section className="panel panel-stack analysis-process-panel analysis-visual-panel app-panel">
       <div className="panel-heading aligned-start split-heading">
         <div>
           <p className="eyebrow">Process Center</p>
           <h2>智能研判流程</h2>
-          <p className="section-copy">启动任务后，系统会按阶段展示处理进度和当前定位对象。</p>
+          <p className="section-copy">启动后，右侧图谱会同步定位当前推理节点。</p>
         </div>
-        <button className="primary" disabled={!datasetId || busy} onClick={startPipeline}>
+        <button className="primary analysis-run-button" disabled={!datasetId || busy} onClick={startPipeline}>
           {busy ? "任务执行中" : "启动分析任务"}
         </button>
       </div>
 
-      <div className="progress-track large dark-track">
-        <div className="progress-fill" style={{ width: `${progress}%` }} />
+      <div className="analysis-progress-card">
+        <div>
+          <small>研判进度</small>
+          <strong>{progress}%</strong>
+        </div>
+        <span>{taskCompleted ? "结果已同步" : busy ? "正在研判" : datasetId ? "等待启动" : "未选择网络"}</span>
+        <div className="progress-track large dark-track">
+          <div className="progress-fill" style={{ width: `${progress}%` }} />
+        </div>
       </div>
 
-      <div className="step-grid enterprise-steps">
+      <div className="analysis-stage-lane" style={{ "--stage-progress": `${progress}%` } as CSSProperties}>
         {stageLabels.map((step, index) => (
-          <div key={step} className={progress >= (index + 1) * 18 ? "step active" : "step"}>
+          <button
+            key={step}
+            className={index < completedStageCount ? "analysis-stage-node active" : "analysis-stage-node"}
+            type="button"
+          >
             <span>{index + 1}</span>
-            {step}
-          </div>
+            <strong>{step}</strong>
+          </button>
         ))}
       </div>
 
-      <div className="timeline-card emphasis-card">
+      <div className="timeline-card emphasis-card analysis-current-card">
         <div className="panel-subheading compact-heading">
           <h3>当前任务节点</h3>
           <span>{progress}%</span>
@@ -163,7 +178,7 @@ export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: P
       </div>
 
       {metricPairs.length ? (
-        <div className="metric-strip four-cols">
+        <div className="metric-strip four-cols analysis-context-strip">
           {metricPairs.map(([key, value]) => (
             <span key={key}>
               <small>{metricLabelMap[key] ?? key}</small>
@@ -174,19 +189,9 @@ export function PipelinePanel({ datasetId, onInferenceComplete, onFocusNode }: P
       ) : null}
 
       {inference ? (
-        <div className="metric-strip">
-          <span>
-            <small>对象总量</small>
-            <strong>{inference.total_nodes}</strong>
-          </span>
-          <span>
-            <small>高风险对象</small>
-            <strong>{inference.abnormal_nodes}</strong>
-          </span>
-          <span>
-            <small>低风险对象</small>
-            <strong>{inference.normal_nodes}</strong>
-          </span>
+        <div className="analysis-finish-note">
+          <strong>研判完成</strong>
+          <span>风险对象已生成，可进入“风险对象”页面复核。</span>
         </div>
       ) : null}
 

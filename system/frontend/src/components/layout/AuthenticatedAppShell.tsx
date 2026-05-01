@@ -115,7 +115,6 @@ export function AuthenticatedAppShell({
             {activePage === "analysis" ? (
               <PageSurface>
                 <div className="analysis-command-grid">
-                  <PipelinePanel datasetId={selectedDatasetId} onFocusNode={onTimelineNode} onInferenceComplete={onGraphRefresh} />
                   <GraphWorkspace
                     datasetId={selectedDatasetId}
                     refreshKey={graphRefreshKey}
@@ -123,6 +122,7 @@ export function AuthenticatedAppShell({
                     timelineNodeId={activeTimelineNodeId}
                     compact
                   />
+                  <PipelinePanel datasetId={selectedDatasetId} onFocusNode={onTimelineNode} onInferenceComplete={onGraphRefresh} />
                 </div>
               </PageSurface>
             ) : null}
