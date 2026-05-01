@@ -7099,14 +7099,31 @@ tbody tr:hover {
 }
 
 .graph-page-panel .enterprise-canvas {
+  position: relative;
+  overflow: hidden;
   background:
     radial-gradient(circle at 50% 42%, rgba(250, 253, 255, 0.9), rgba(225, 240, 252, 0.72) 46%, rgba(212, 230, 244, 0.62) 100%),
     linear-gradient(135deg, rgba(219, 234, 254, 0.62), rgba(204, 251, 241, 0.38)) !important;
 }
 
+.graph-cytoscape-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.graph-page-panel .empty-graph-state {
+  z-index: 3;
+  min-height: 0;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  pointer-events: none;
+}
+
 .graph-build-overlay {
   position: absolute;
-  z-index: 4;
+  z-index: 5;
   left: 18px;
   top: 18px;
   width: min(320px, calc(100% - 36px));

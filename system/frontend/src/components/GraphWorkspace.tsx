@@ -69,9 +69,20 @@ function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function disposeCytoscape(cy: Core | null) {
+  if (!cy) return;
+  try {
+    cy.elements().stop(true, false);
+    cy.destroy();
+  } catch {
+    // Cytoscape may already be tearing down during fast graph updates.
+  }
+}
+
 export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timelineNodeId, compact = false }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
+  const nodeMapRef = useRef<Map<string, GraphNode>>(new Map());
   const [graph, setGraph] = useState<GraphResponse | null>(null);
   const [message, setMessage] = useState("选择业务网络后，这里将展示对象关系结构。");
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -136,14 +147,21 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
   }, [graph]);
 
   useEffect(() => {
+    nodeMapRef.current = nodeMap;
+  }, [nodeMap]);
+
+  useEffect(() => {
     if (activeNodeId) {
       setSelectedNode(nodeMap.get(activeNodeId) ?? null);
     }
   }, [activeNodeId, nodeMap]);
 
   useEffect(() => {
-    if (!containerRef.current || !graph) return;
-    cyRef.current?.destroy();
+    if (!containerRef.current || !graph) {
+      disposeCytoscape(cyRef.current);
+      cyRef.current = null;
+      return;
+    }
     const nodeIds = new Set(graph.nodes.map((node) => node.id));
     const nodeElements = graph.nodes.map((node) => ({
       data: {
@@ -170,103 +188,128 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
           highlighted: edge.highlighted ? "yes" : "no"
         }
       }));
+    const elements = [...nodeElements, ...edgeElements];
     try {
-      cyRef.current = cytoscape({
-        container: containerRef.current,
-        elements: [...nodeElements, ...edgeElements],
-      style: [
-        {
-          selector: "node",
-          style: {
-            "background-color": "data(color)",
-            width: "data(size)",
-            height: "data(size)",
-            label: "data(label)",
-            color: "#122031",
-            "font-size": 10,
-            "text-outline-width": 3,
-            "text-outline-color": "#ffffff"
+      let cy = cyRef.current;
+      if (!cy) {
+        cy = cytoscape({
+          container: containerRef.current,
+          elements: [],
+          style: [
+            {
+              selector: "node",
+              style: {
+                "background-color": "data(color)",
+                width: "data(size)",
+                height: "data(size)",
+                label: "data(label)",
+                color: "#122031",
+                "font-size": 10,
+                "text-outline-width": 3,
+                "text-outline-color": "#ffffff"
+              }
+            },
+            {
+              selector: 'node[riskLabel = "suspicious"]',
+              style: {
+                "border-color": "#7f1d1d",
+                "border-width": 4
+              }
+            },
+            {
+              selector: 'node[riskLabel = "normal"]',
+              style: {
+                "border-color": "#14532d",
+                "border-width": 3
+              }
+            },
+            {
+              selector: 'node[focused = "yes"]',
+              style: {
+                "background-color": "#2563eb",
+                "border-color": "#0f3d91",
+                "border-width": 6
+              }
+            },
+            {
+              selector: "edge",
+              style: {
+                width: 1.5,
+                "line-color": "#b7c3d0",
+                "target-arrow-color": "#b7c3d0",
+                "target-arrow-shape": "triangle",
+                "curve-style": "bezier",
+                opacity: 0.85
+              }
+            },
+            {
+              selector: 'edge[highlighted = "yes"]',
+              style: {
+                width: 3,
+                "line-color": "#3b82f6",
+                "target-arrow-color": "#3b82f6"
+              }
+            },
+            {
+              selector: 'edge[focused = "yes"]',
+              style: {
+                width: 3.6,
+                "line-color": "#2563eb",
+                "target-arrow-color": "#2563eb"
+              }
+            }
+          ],
+          layout: { name: "preset" }
+        });
+        cy.on("tap", "node", (event) => {
+          const nodeId = String(event.target.data("id"));
+          setSelectedNode(nodeMapRef.current.get(nodeId) ?? null);
+        });
+        cyRef.current = cy;
+      }
+
+      const nextElementIds = new Set(elements.map((element) => element.data.id));
+      cy.batch(() => {
+        cy.elements()
+          .filter((element) => !nextElementIds.has(element.id()))
+          .remove();
+        elements.forEach((element) => {
+          const existing = cy.getElementById(element.data.id);
+          if (existing.nonempty()) {
+            existing.data(element.data);
+          } else {
+            cy.add(element);
           }
-        },
-        {
-          selector: 'node[riskLabel = "suspicious"]',
-          style: {
-            "border-color": "#7f1d1d",
-            "border-width": 4
-          }
-        },
-        {
-          selector: 'node[riskLabel = "normal"]',
-          style: {
-            "border-color": "#14532d",
-            "border-width": 3
-          }
-        },
-        {
-          selector: 'node[focused = "yes"]',
-          style: {
-            "background-color": "#2563eb",
-            "border-color": "#0f3d91",
-            "border-width": 6
-          }
-        },
-        {
-          selector: "edge",
-          style: {
-            width: 1.5,
-            "line-color": "#b7c3d0",
-            "target-arrow-color": "#b7c3d0",
-            "target-arrow-shape": "triangle",
-            "curve-style": "bezier",
-            opacity: 0.85
-          }
-        },
-        {
-          selector: 'edge[highlighted = "yes"]',
-          style: {
-            width: 3,
-            "line-color": "#3b82f6",
-            "target-arrow-color": "#3b82f6"
-          }
-        },
-        {
-          selector: 'edge[focused = "yes"]',
-          style: {
-            width: 3.6,
-            "line-color": "#2563eb",
-            "target-arrow-color": "#2563eb"
-          }
-        }
-      ],
-      layout: {
+        });
+      });
+
+      cy.layout({
         name: "cose",
-        animate: true,
+        animate: false,
         fit: true,
         padding: 36
-      }
-      });
+      }).run();
     } catch (error) {
       setMessage(error instanceof Error ? `关系图谱渲染失败：${error.message}` : "关系图谱渲染失败。");
       return;
     }
 
-    cyRef.current.on("tap", "node", (event) => {
-      const nodeId = String(event.target.data("id"));
-      setSelectedNode(nodeMap.get(nodeId) ?? null);
-    });
-
-    if (activeNodeId) {
-      const target = cyRef.current.getElementById(activeNodeId);
+    const currentCy = cyRef.current;
+    if (activeNodeId && currentCy) {
+      const target = currentCy.getElementById(activeNodeId);
       if (target.nonempty()) {
-        cyRef.current.animate({ center: { eles: target }, zoom: 1.12 }, { duration: 400 });
+        currentCy.animate({ center: { eles: target }, zoom: 1.12 }, { duration: 400 });
       }
     }
 
+  }, [graph, activeNodeId]);
+
+  useEffect(() => {
     return () => {
-      cyRef.current?.destroy();
+      disposeCytoscape(cyRef.current);
       cyRef.current = null;
     };
-  }, [graph, activeNodeId, nodeMap]);
+  }, []);
 
   async function handleBuildGraph() {
     if (!datasetId || graphReady || busy) return;
@@ -356,7 +399,8 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
       </div>
 
       <div className="graph-layout enterprise-graph-layout">
-        <div ref={containerRef} className="graph-canvas enterprise-canvas">
+        <div className="graph-canvas enterprise-canvas">
+          <div ref={containerRef} className="graph-cytoscape-layer" />
           {busy || buildStep ? (
             <div className="graph-build-overlay">
               <span>{buildStep?.title ?? "构建关系图谱"}</span>
