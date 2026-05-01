@@ -6984,3 +6984,138 @@ tbody tr:hover {
     min-height: 66px;
   }
 }
+
+/* Low-glare product surface pass: keep every module aligned with the graph page. */
+.nextgen-shell {
+  background:
+    radial-gradient(circle at 12% 9%, rgba(14, 165, 233, 0.2), transparent 0 27%),
+    radial-gradient(circle at 88% 11%, rgba(124, 58, 237, 0.1), transparent 0 24%),
+    radial-gradient(circle at 70% 88%, rgba(20, 184, 166, 0.13), transparent 0 30%),
+    linear-gradient(180deg, #edf7fd 0%, #e8f2fb 48%, #dfeaf5 100%);
+}
+
+.app-topbar-shell,
+.app-panel,
+.app-page-grid,
+.risk-workbench-hero,
+.risk-context-strip,
+.risk-kpi-card,
+.risk-board-panel,
+.network-directory-panel,
+.network-import-card,
+.analysis-process-panel,
+.graph-page-panel,
+.graph-investigation-panel,
+.risk-ledger-panel,
+.admin-rule-card,
+.admin-governance-card,
+.admin-note-panel,
+.app-secondary-rail-card,
+.enterprise-table-wrap {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(59, 130, 246, 0.08), transparent 0 34%),
+    radial-gradient(circle at 92% 4%, rgba(20, 184, 166, 0.08), transparent 0 30%),
+    linear-gradient(180deg, rgba(246, 251, 255, 0.88), rgba(234, 244, 252, 0.78)) !important;
+  border-color: rgba(147, 197, 253, 0.26) !important;
+  box-shadow: 0 18px 46px rgba(37, 99, 235, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(20px) saturate(1.04);
+}
+
+.risk-context-item,
+.risk-action-card,
+.risk-object-row,
+.risk-mini-table div,
+.network-row,
+.registry-item,
+.timeline-item,
+.timeline-card,
+.analysis-process-panel .step,
+.metric-strip span,
+.network-search-box input,
+.network-edit-field input,
+.network-edit-field select,
+.network-file-picker,
+.network-import-intro,
+.network-import-status,
+.empty-network-state,
+.empty-ledger-state,
+.empty-graph-state,
+.ledger-header .enterprise-summary span,
+.result-summary.enterprise-summary span {
+  background:
+    linear-gradient(145deg, rgba(241, 248, 255, 0.82), rgba(229, 241, 251, 0.64)) !important;
+  border-color: rgba(147, 197, 253, 0.22) !important;
+}
+
+.risk-workbench-hero {
+  min-height: 90px;
+  padding: 18px 22px;
+}
+
+.risk-workbench-hero h2,
+.graph-panel-top h2,
+.business-module-heading h2,
+.panel-heading h2,
+.ledger-header h2,
+.app-section-heading h2 {
+  font-size: clamp(20px, 1.75vw, 24px) !important;
+  line-height: 1.14;
+  letter-spacing: 0;
+}
+
+.risk-workbench-hero p:not(.eyebrow),
+.graph-panel-top p,
+.business-module-heading p,
+.panel-heading p,
+.ledger-header p,
+.section-copy,
+.admin-rule-card p,
+.admin-governance-card p,
+.risk-kpi-card p,
+.risk-action-card small,
+.empty-network-state span,
+.empty-ledger-state span,
+.hint {
+  color: #465f78 !important;
+  font-size: 12px !important;
+  line-height: 1.42 !important;
+}
+
+.risk-kpi-card {
+  min-height: 132px;
+  padding: 16px 18px;
+}
+
+.risk-kpi-card strong {
+  margin-top: 6px;
+  font-size: clamp(23px, 1.8vw, 30px);
+}
+
+.risk-board-panel,
+.analysis-process-panel,
+.risk-ledger-panel,
+.graph-page-panel {
+  padding: 16px;
+}
+
+.graph-page-panel .enterprise-canvas {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(250, 253, 255, 0.9), rgba(225, 240, 252, 0.72) 46%, rgba(212, 230, 244, 0.62) 100%),
+    linear-gradient(135deg, rgba(219, 234, 254, 0.62), rgba(204, 251, 241, 0.38)) !important;
+}
+
+.enterprise-table-wrap thead th {
+  background: rgba(229, 241, 251, 0.94);
+}
+
+.account-pill,
+.role-pill,
+.status-badge,
+.subtle-tag,
+.directory-count,
+.network-id,
+.text-link-button,
+.graph-state-button {
+  background: rgba(226, 239, 252, 0.78) !important;
+  border-color: rgba(96, 165, 250, 0.22) !important;
+}
