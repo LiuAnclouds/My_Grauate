@@ -7869,3 +7869,142 @@ tbody tr:hover {
     justify-self: start;
   }
 }
+.admin-code-field {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-portal-shell {
+  min-height: 100vh;
+  padding: clamp(18px, 3vw, 34px);
+}
+
+.admin-portal-frame {
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+}
+
+.admin-portal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  border-radius: 22px;
+}
+
+.admin-portal-header h1 {
+  margin: 4px 0 6px;
+  font-size: clamp(24px, 3vw, 36px);
+  color: var(--ink-strong);
+}
+
+.admin-portal-header span,
+.admin-portal-header p {
+  color: var(--ink-muted);
+}
+
+.admin-portal-user {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-kpi-grid .admin-rule-card strong {
+  font-size: 28px;
+}
+
+.admin-management-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(520px, 1.6fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.admin-directory-panel,
+.admin-detail-panel {
+  min-height: 560px;
+}
+
+.admin-analyst-list,
+.admin-network-list {
+  display: grid;
+  gap: 10px;
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.admin-analyst-row {
+  width: 100%;
+  border: 1px solid rgba(92, 120, 150, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--ink-strong);
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.admin-analyst-row:hover,
+.admin-analyst-row.active {
+  transform: translateY(-1px);
+  border-color: rgba(64, 116, 216, 0.34);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 14px 32px rgba(38, 74, 120, 0.12);
+}
+
+.admin-analyst-row span {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-analyst-row small,
+.admin-analyst-row em {
+  color: var(--ink-muted);
+  font-style: normal;
+}
+
+.admin-network-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+@media (max-width: 960px) {
+  .admin-portal-header,
+  .admin-management-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-portal-header {
+    display: grid;
+  }
+
+  .admin-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-network-row {
+    grid-template-columns: 1fr;
+  }
+}

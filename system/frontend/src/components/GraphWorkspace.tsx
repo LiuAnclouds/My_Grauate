@@ -11,6 +11,7 @@ import type { AnalysisFrame } from "./PipelinePanel";
 
 type Props = {
   datasetId: number | null;
+  ownerId?: number | null;
   refreshKey: number;
   highlightedNodeId: string | null;
   timelineNodeId: string | null;
@@ -81,7 +82,7 @@ function disposeCytoscape(cy: Core | null) {
   }
 }
 
-export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timelineNodeId, analysisFrame, compact = false }: Props) {
+export function GraphWorkspace({ datasetId, ownerId, refreshKey, highlightedNodeId, timelineNodeId, analysisFrame, compact = false }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const nodeMapRef = useRef<Map<string, GraphNode>>(new Map());
@@ -114,7 +115,7 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
     setSelectedNode(null);
     setViewRequested(false);
     setBuildStepIndex(-1);
-    listDatasets()
+    listDatasets(ownerId)
       .then((items) => {
         const current = items.find((item) => item.id === datasetId);
         const status = current?.status ?? "";
@@ -127,7 +128,7 @@ export function GraphWorkspace({ datasetId, refreshKey, highlightedNodeId, timel
         }
       })
       .catch((error) => setMessage(error.message));
-  }, [compact, datasetId, refreshKey]);
+  }, [compact, datasetId, ownerId, refreshKey]);
 
   useEffect(() => {
     if (!datasetId || !graphReady || !viewRequested) return;

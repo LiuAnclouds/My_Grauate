@@ -14,12 +14,38 @@ export type LoginCaptchaResponse = {
 
 export type DatasetSummary = {
   id: number;
+  owner_id?: number | null;
   name: string;
   original_filename: string;
   row_count: number;
   status: string;
   created_at: string;
   summary: Record<string, unknown>;
+};
+
+export type AnalystNetworkSummary = {
+  id: number;
+  business_id: string;
+  business_name: string;
+  status: string;
+  row_count: number;
+  node_count: number;
+  edge_count: number;
+  created_at: string;
+};
+
+export type AnalystSummary = {
+  user_id: number;
+  email: string;
+  is_admin: boolean;
+  is_active: boolean;
+  created_at: string;
+  network_count: number;
+  node_count: number;
+  edge_count: number;
+  latest_network_name?: string | null;
+  latest_network_at?: string | null;
+  networks: AnalystNetworkSummary[];
 };
 
 export type MappingResponse = {
@@ -117,6 +143,9 @@ const API_BASE = "/api";
 
 function normalizeApiError(message: string, status?: number) {
   const text = message.trim();
+  if (text.includes("invalid admin authorization code")) {
+    return "管理员授权码错误，请确认后重新输入。";
+  }
   if (!text || text === "Failed to fetch" || text === "NetworkError when attempting to fetch resource.") {
     return "服务暂时无法连接，请确认后端已启动后重试。";
   }
@@ -170,10 +199,10 @@ export function fetchLoginCaptcha() {
   return request<LoginCaptchaResponse>("/auth/login-captcha");
 }
 
-export function register(email: string, password: string, code: string) {
+export function register(email: string, password: string, code: string, adminAuthorizationCode = "") {
   return request<AuthResponse>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, code })
+    body: JSON.stringify({ email, password, code, admin_authorization_code: adminAuthorizationCode.trim() || null })
   });
 }
 
@@ -184,14 +213,22 @@ export function login(email: string, password: string, captchaId: string, captch
   });
 }
 
-export function listDatasets() {
-  return request<DatasetSummary[]>("/datasets");
+export function listAnalysts(adminUserId: number) {
+  return request<AnalystSummary[]>(`/auth/analysts?admin_user_id=${encodeURIComponent(String(adminUserId))}`);
 }
 
-export function uploadDataset(file: File, useLlm = false, networkName = "", eventName = "") {
+export function listDatasets(ownerId?: number | null) {
+  const query = ownerId ? `?owner_id=${encodeURIComponent(String(ownerId))}` : "";
+  return request<DatasetSummary[]>(`/datasets${query}`);
+}
+
+export function uploadDataset(file: File, useLlm = false, networkName = "", eventName = "", ownerId?: number | null) {
   const form = new FormData();
   form.append("file", file);
   form.append("use_llm", String(useLlm));
+  if (ownerId) {
+    form.append("owner_id", String(ownerId));
+  }
   if (networkName.trim()) {
     form.append("network_name", networkName.trim());
   }

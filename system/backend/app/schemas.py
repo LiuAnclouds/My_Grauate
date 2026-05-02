@@ -26,6 +26,7 @@ class RegisterRequest(BaseModel):
     email: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=128)
     code: str = Field(min_length=4, max_length=12)
+    admin_authorization_code: str | None = Field(default=None, max_length=128)
 
 
 class LoginRequest(BaseModel):
@@ -45,12 +46,38 @@ class AuthResponse(BaseModel):
 
 class DatasetSummary(BaseModel):
     id: int
+    owner_id: int | None = None
     name: str
     original_filename: str
     row_count: int
     status: str
     created_at: datetime
     summary: dict[str, Any] = {}
+
+
+class AnalystNetworkSummary(BaseModel):
+    id: int
+    business_id: str
+    business_name: str
+    status: str
+    row_count: int
+    node_count: int
+    edge_count: int
+    created_at: datetime
+
+
+class AnalystSummary(BaseModel):
+    user_id: int
+    email: str
+    is_admin: bool = False
+    is_active: bool = True
+    created_at: datetime
+    network_count: int = 0
+    node_count: int = 0
+    edge_count: int = 0
+    latest_network_name: str | None = None
+    latest_network_at: datetime | None = None
+    networks: list[AnalystNetworkSummary] = []
 
 
 class DatasetUpdateRequest(BaseModel):

@@ -5,7 +5,7 @@ type Props = {
   onAuthed: (session: AuthResponse) => void;
 };
 
-type FocusField = "account" | "password" | "register-code" | "login-captcha" | null;
+type FocusField = "account" | "password" | "register-code" | "login-captcha" | "admin-code" | null;
 type MascotMode = "idle" | "peek" | "cover" | "error";
 type MascotTarget = "idle" | "account" | "password" | "captcha" | "error";
 type FeedbackType = "info" | "success" | "error";
@@ -199,6 +199,7 @@ export function AuthPanel({ onAuthed }: Props) {
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [registerCode, setRegisterCode] = useState("");
+  const [adminCode, setAdminCode] = useState("");
   const [loginCaptchaCode, setLoginCaptchaCode] = useState("");
   const [loginCaptcha, setLoginCaptcha] = useState<LoginCaptchaResponse | null>(null);
   const [captchaRefreshing, setCaptchaRefreshing] = useState(false);
@@ -222,7 +223,7 @@ export function AuthPanel({ onAuthed }: Props) {
     if (shakeError) return "error";
     if (focusField === "account") return "account";
     if (focusField === "password") return "password";
-    if (focusField === "login-captcha" || focusField === "register-code") return "captcha";
+    if (focusField === "login-captcha" || focusField === "register-code" || focusField === "admin-code") return "captcha";
     return "idle";
   }, [focusField, shakeError]);
   const captchaChars = useMemo(() => (loginCaptcha?.captcha_text ?? "-----").split(""), [loginCaptcha]);
@@ -275,6 +276,7 @@ export function AuthPanel({ onAuthed }: Props) {
       setAccount("");
       setPassword("");
       setRegisterCode("");
+      setAdminCode("");
       setLoginCaptchaCode("");
       if (accountInputRef.current) accountInputRef.current.value = "";
       if (passwordInputRef.current) passwordInputRef.current.value = "";
@@ -352,7 +354,7 @@ export function AuthPanel({ onAuthed }: Props) {
     try {
       const result = isLogin
         ? await login(account, password, loginCaptcha?.captcha_id ?? "", loginCaptchaCode)
-        : await register(account, password, registerCode);
+        : await register(account, password, registerCode, adminCode);
       showMessage(result.message, "success");
       onAuthed(result);
     } catch (error) {
@@ -373,6 +375,7 @@ export function AuthPanel({ onAuthed }: Props) {
   function switchMode(nextMode: "login" | "register") {
     setMode(nextMode);
     setRegisterCode("");
+    setAdminCode("");
     setLoginCaptchaCode("");
     setCountdown(0);
     setFocusField(null);
@@ -498,6 +501,7 @@ export function AuthPanel({ onAuthed }: Props) {
                   </button>
                 </div>
               ) : (
+                <>
                 <div className="captcha-row register-row">
                   <label htmlFor="register-code">
                     邮箱验证码
@@ -517,6 +521,21 @@ export function AuthPanel({ onAuthed }: Props) {
                     {countdown > 0 ? `${countdown}s 后重试` : "发送邮箱验证码"}
                   </button>
                 </div>
+                <label htmlFor="admin-code" className="admin-code-field">
+                  管理员授权码
+                  <div className="input-shell">
+                    <input
+                      id="admin-code"
+                      type="password"
+                      value={adminCode}
+                      onChange={(event) => setAdminCode(event.target.value)}
+                      onFocus={() => setFocusField("admin-code")}
+                      onBlur={() => setFocusField(null)}
+                      placeholder="不填写则注册为分析员"
+                    />
+                  </div>
+                </label>
+                </>
               )}
 
               <button className="primary auth-submit" type="submit" disabled={busy}>

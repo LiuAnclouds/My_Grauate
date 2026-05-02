@@ -12,6 +12,7 @@ import {
 type OperationStep = { title: string; detail: string };
 
 type Props = {
+  ownerId?: number | null;
   currentNetwork: string;
   selectedDatasetId: number | null;
   hasNetwork: boolean;
@@ -90,7 +91,7 @@ function formatTime(value?: string) {
   return value.replace("T", " ").slice(0, 19);
 }
 
-export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, operationFlow, onOpenPage }: Props) {
+export function MonitorView({ ownerId, currentNetwork, selectedDatasetId, hasNetwork, operationFlow, onOpenPage }: Props) {
   const [networkCount, setNetworkCount] = useState(0);
   const [timeline, setTimeline] = useState<TaskTimelineResponse | null>(null);
   const [results, setResults] = useState<InferenceResultItem[]>([]);
@@ -132,7 +133,7 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
 
   useEffect(() => {
     let canceled = false;
-    listDatasets()
+    listDatasets(ownerId)
       .then((items) => {
         if (!canceled) {
           setNetworkCount(items.length);
@@ -146,7 +147,7 @@ export function MonitorView({ currentNetwork, selectedDatasetId, hasNetwork, ope
     return () => {
       canceled = true;
     };
-  }, [selectedDatasetId]);
+  }, [ownerId, selectedDatasetId]);
 
   useEffect(() => {
     let canceled = false;

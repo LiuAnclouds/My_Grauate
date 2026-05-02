@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     inference_timeout_seconds: int = 900
     demo_admin_email: str = "root"
     demo_admin_password: str = "root"
+    admin_registration_code: str = "starhub-admin"
 
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_ROOT / ".env"),

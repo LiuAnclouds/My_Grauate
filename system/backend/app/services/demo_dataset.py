@@ -43,6 +43,7 @@ def seed_official_validation_dataset(
     db: Session,
     dataset_name: str,
     limit: int = 120,
+    owner_id: int | None = None,
 ) -> DatasetUpload:
     if dataset_name not in OFFICIAL_DATASET_LABELS:
         supported = ", ".join(sorted(OFFICIAL_DATASET_LABELS))
@@ -51,6 +52,7 @@ def seed_official_validation_dataset(
     existing = db.scalar(
         select(DatasetUpload).where(
             DatasetUpload.name == f"demo_{dataset_name}_validation",
+            DatasetUpload.owner_id == owner_id,
             DatasetUpload.status.in_(["official_validation", "feature_ready", "inference_completed"]),
         )
     )
@@ -67,6 +69,7 @@ def seed_official_validation_dataset(
     node_ids = np.asarray(val_ids[: max(1, int(limit))], dtype=np.int32)
 
     dataset = DatasetUpload(
+        owner_id=owner_id,
         name=f"demo_{dataset_name}_validation",
         original_filename=f"{dataset_name}_validation.csv",
         storage_path=str(analysis_root / "recommended_split.json"),

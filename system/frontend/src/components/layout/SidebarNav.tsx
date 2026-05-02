@@ -19,8 +19,7 @@ type Props = {
 };
 
 const navGroups: Array<{ title: string; tone: string; keys: AppPage[] }> = [
-  { title: "业务分析", tone: "analysis", keys: ["monitor", "access", "network", "analysis", "cases"] },
-  { title: "系统", tone: "system", keys: ["admin"] }
+  { title: "业务分析", tone: "analysis", keys: ["monitor", "access", "network", "analysis", "cases"] }
 ];
 
 function StarHubMark() {

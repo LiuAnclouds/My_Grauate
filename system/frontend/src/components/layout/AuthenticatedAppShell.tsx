@@ -9,7 +9,6 @@ import type { AnalysisFrame } from "../PipelinePanel";
 import { PageSurface } from "./PageSurface";
 import { SidebarNav } from "./SidebarNav";
 import { TopBrandHeader } from "./TopBrandHeader";
-import { AdminView } from "../views/AdminView";
 import { MonitorView } from "../views/MonitorView";
 
 export type NavItem = {
@@ -21,7 +20,6 @@ export type NavItem = {
 };
 
 type OperationStep = { title: string; detail: string };
-type AdminCard = { title: string; detail: string };
 
 type Props = {
   session: AuthResponse;
@@ -32,7 +30,6 @@ type Props = {
   highlightedNodeId: string | null;
   activeTimelineNodeId: string | null;
   operationFlow: OperationStep[];
-  adminCards: AdminCard[];
   onLogout: () => void;
   onBusinessSelect: (datasetId: number | null, networkName?: string) => void;
   onGraphRefresh: () => void;
@@ -49,7 +46,6 @@ export function AuthenticatedAppShell({
   highlightedNodeId,
   activeTimelineNodeId,
   operationFlow,
-  adminCards,
   onLogout,
   onBusinessSelect,
   onGraphRefresh,
@@ -99,12 +95,12 @@ export function AuthenticatedAppShell({
 
           <div className="app-page-stack">
             {activePage === "monitor" ? (
-              <MonitorView currentNetwork={currentNetwork} selectedDatasetId={selectedDatasetId} hasNetwork={hasNetwork} operationFlow={operationFlow} onOpenPage={openPage} />
+              <MonitorView ownerId={session.user_id} currentNetwork={currentNetwork} selectedDatasetId={selectedDatasetId} hasNetwork={hasNetwork} operationFlow={operationFlow} onOpenPage={openPage} />
             ) : null}
 
             {activePage === "access" ? (
               <PageSurface>
-                <DataUpload selectedDatasetId={selectedDatasetId} onSelect={onBusinessSelect} onOpenPage={openPage} />
+                <DataUpload session={session} selectedDatasetId={selectedDatasetId} onSelect={onBusinessSelect} onOpenPage={openPage} />
               </PageSurface>
             ) : null}
 
@@ -112,6 +108,7 @@ export function AuthenticatedAppShell({
               <PageSurface>
                 <GraphWorkspace
                   datasetId={selectedDatasetId}
+                  ownerId={session.user_id}
                   refreshKey={graphRefreshKey}
                   highlightedNodeId={highlightedNodeId}
                   timelineNodeId={activeTimelineNodeId}
@@ -124,6 +121,7 @@ export function AuthenticatedAppShell({
                 <div className="analysis-command-grid">
                   <GraphWorkspace
                     datasetId={selectedDatasetId}
+                    ownerId={session.user_id}
                     refreshKey={graphRefreshKey}
                     highlightedNodeId={highlightedNodeId}
                     timelineNodeId={activeTimelineNodeId}
@@ -146,11 +144,6 @@ export function AuthenticatedAppShell({
               </PageSurface>
             ) : null}
 
-            {activePage === "admin" ? (
-              <PageSurface>
-                <AdminView cards={adminCards} />
-              </PageSurface>
-            ) : null}
           </div>
         </section>
       </div>

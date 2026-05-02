@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  AuthResponse,
   DatasetSummary,
   deleteDataset,
   listDatasets,
@@ -7,6 +8,7 @@ import {
 } from "../services/api";
 
 type Props = {
+  session: AuthResponse;
   selectedDatasetId: number | null;
   onSelect: (datasetId: number | null, networkName?: string) => void;
   onOpenPage?: (page: "network" | "analysis") => void;
@@ -58,7 +60,7 @@ function countText(value: unknown, fallback = "-") {
   return value === null || value === undefined ? fallback : String(value);
 }
 
-export function DataUpload({ selectedDatasetId, onSelect }: Props) {
+export function DataUpload({ session, selectedDatasetId, onSelect }: Props) {
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [query, setQuery] = useState("");
   const [networkName, setNetworkName] = useState("");
@@ -87,7 +89,7 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
   }, [datasets, query]);
 
   async function refresh() {
-    const items = await listDatasets();
+    const items = await listDatasets(session.user_id);
     setDatasets(items);
     return items;
   }
@@ -103,7 +105,7 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
     }
     setBusy(true);
     try {
-      const dataset = await uploadDataset(pendingFile, useLlm, networkName, eventName);
+      const dataset = await uploadDataset(pendingFile, useLlm, networkName, eventName, session.user_id);
       setLastImported(dataset);
       setMessage(`接入完成：${displayNameFor(dataset)}。`);
       await refresh();
@@ -141,7 +143,7 @@ export function DataUpload({ selectedDatasetId, onSelect }: Props) {
 
   useEffect(() => {
     refresh().catch((error) => setMessage(error.message));
-  }, []);
+  }, [session.user_id]);
 
   return (
     <section className="business-network-page app-module-page">

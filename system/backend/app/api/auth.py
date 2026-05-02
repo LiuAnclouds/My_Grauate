@@ -4,13 +4,21 @@ from datetime import datetime, timedelta
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.database import get_db
-from app.models import User, VerificationCode
-from app.schemas import AuthResponse, LoginCaptchaResponse, LoginRequest, RegisterRequest, VerificationCodeRequest
+from app.models import DatasetUpload, GraphEdge, PersonNode, User, VerificationCode
+from app.schemas import (
+    AnalystNetworkSummary,
+    AnalystSummary,
+    AuthResponse,
+    LoginCaptchaResponse,
+    LoginRequest,
+    RegisterRequest,
+    VerificationCodeRequest,
+)
 from app.services.emailer import send_verification_email
 from app.services.security import generate_verification_code, hash_secret, verify_secret
 
@@ -62,11 +70,12 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> AuthRes
     if existing is not None:
         raise HTTPException(status_code=409, detail="email already registered")
     _consume_code(db=db, email=str(payload.email), code=payload.code, purpose="register")
-    user = User(email=str(payload.email), password_hash=hash_secret(payload.password), is_admin=False)
+    is_admin = _is_admin_registration(payload.admin_authorization_code)
+    user = User(email=str(payload.email), password_hash=hash_secret(payload.password), is_admin=is_admin)
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _auth_response(user=user, message="注册成功。")
+    return _auth_response(user=user, message="注册成功。" + ("已开通管理员权限。" if user.is_admin else ""))
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -78,6 +87,15 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
     return _auth_response(user=user, message="登录成功。" + ("已进入管理员模式。" if user.is_admin else ""))
 
 
+@router.get("/analysts", response_model=list[AnalystSummary])
+def list_analysts(admin_user_id: int, db: Session = Depends(get_db)) -> list[AnalystSummary]:
+    admin = db.get(User, admin_user_id)
+    if admin is None or not admin.is_admin:
+        raise HTTPException(status_code=403, detail="admin permission required")
+    users = db.scalars(select(User).order_by(User.created_at.desc())).all()
+    return [_analyst_summary(user=user, db=db) for user in users if not user.is_admin]
+
+
 def _auth_response(*, user: User, message: str) -> AuthResponse:
     return AuthResponse(
         user_id=user.id,
@@ -85,6 +103,65 @@ def _auth_response(*, user: User, message: str) -> AuthResponse:
         message=message,
         is_admin=user.is_admin,
         session_expires_at=datetime.utcnow() + timedelta(days=_SESSION_TTL_DAYS),
+    )
+
+
+def _is_admin_registration(admin_code: str | None) -> bool:
+    code = (admin_code or "").strip()
+    if not code:
+        return False
+    expected_code = settings.admin_registration_code.strip()
+    if not expected_code or not secrets.compare_digest(code, expected_code):
+        raise HTTPException(status_code=400, detail="invalid admin authorization code")
+    return True
+
+
+def _analyst_summary(*, user: User, db: Session) -> AnalystSummary:
+    datasets = db.scalars(
+        select(DatasetUpload)
+        .where(DatasetUpload.owner_id == user.id)
+        .order_by(DatasetUpload.created_at.desc())
+    ).all()
+    networks = [_network_summary(dataset=dataset, db=db) for dataset in datasets]
+    latest = networks[0] if networks else None
+    return AnalystSummary(
+        user_id=user.id,
+        email=user.email,
+        is_admin=user.is_admin,
+        is_active=user.is_active,
+        created_at=user.created_at,
+        network_count=len(networks),
+        node_count=sum(item.node_count for item in networks),
+        edge_count=sum(item.edge_count for item in networks),
+        latest_network_name=latest.business_name if latest else None,
+        latest_network_at=latest.created_at if latest else None,
+        networks=networks,
+    )
+
+
+def _network_summary(*, dataset: DatasetUpload, db: Session) -> AnalystNetworkSummary:
+    summary = dict(dataset.summary_json or {})
+    business_id = str(summary.get("business_id") or f"BN-{dataset.id:04d}")
+    business_name = str(summary.get("business_name") or dataset.name)
+    node_count = int(
+        summary.get("node_count")
+        or db.scalar(select(func.count()).select_from(PersonNode).where(PersonNode.dataset_id == dataset.id))
+        or 0
+    )
+    edge_count = int(
+        summary.get("edge_count")
+        or db.scalar(select(func.count()).select_from(GraphEdge).where(GraphEdge.dataset_id == dataset.id))
+        or 0
+    )
+    return AnalystNetworkSummary(
+        id=dataset.id,
+        business_id=business_id,
+        business_name=business_name,
+        status=dataset.status,
+        row_count=dataset.row_count,
+        node_count=node_count,
+        edge_count=edge_count,
+        created_at=dataset.created_at,
     )
 
 

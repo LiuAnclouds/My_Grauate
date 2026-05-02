@@ -65,8 +65,11 @@ FRAUD_EVENT_PROFILES = [
 
 
 @router.get("", response_model=list[DatasetSummary])
-def list_datasets(db: Session = Depends(get_db)) -> list[DatasetSummary]:
-    datasets = db.scalars(select(DatasetUpload).order_by(DatasetUpload.created_at.desc())).all()
+def list_datasets(owner_id: int | None = None, db: Session = Depends(get_db)) -> list[DatasetSummary]:
+    query = select(DatasetUpload)
+    if owner_id is not None:
+        query = query.where(DatasetUpload.owner_id == owner_id)
+    datasets = db.scalars(query.order_by(DatasetUpload.created_at.desc())).all()
     return [_dataset_summary(item, db=db) for item in datasets]
 
 
@@ -75,6 +78,7 @@ def upload_dataset(
     file: UploadFile = File(...),
     network_name: str | None = Form(None),
     event_name: str | None = Form(None),
+    owner_id: int | None = Form(None),
     use_llm: bool = Form(False),
     db: Session = Depends(get_db),
 ) -> DatasetSummary:
@@ -107,6 +111,7 @@ def upload_dataset(
     business_name = _normalize_business_name(network_name) or _business_name_for_upload(storage_path.stem)
     fraud_event = _normalize_event_name(event_name, seed=storage_path.stem)
     dataset = DatasetUpload(
+        owner_id=owner_id,
         name=storage_path.stem,
         original_filename=safe_name,
         storage_path=str(storage_path),
@@ -224,6 +229,7 @@ def get_mapping(dataset_id: int, db: Session = Depends(get_db)) -> MappingRespon
 def create_demo_dataset(
     dataset_name: str,
     limit: int = 120,
+    owner_id: int | None = None,
     db: Session = Depends(get_db),
 ) -> DatasetSummary:
     if dataset_name not in OFFICIAL_DATASET_LABELS:
@@ -233,6 +239,7 @@ def create_demo_dataset(
             db=db,
             dataset_name=dataset_name,
             limit=max(20, min(int(limit), 180)),
+            owner_id=owner_id,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -458,6 +465,7 @@ def list_inference_results(
 def _dataset_summary(dataset: DatasetUpload, *, db: Session | None = None) -> DatasetSummary:
     return DatasetSummary(
         id=dataset.id,
+        owner_id=dataset.owner_id,
         name=dataset.name,
         original_filename=dataset.original_filename,
         row_count=dataset.row_count,
